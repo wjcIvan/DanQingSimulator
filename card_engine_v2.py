@@ -461,12 +461,11 @@ class HanBingJian(Card):
 # --- The Refactored Engine ---0
 
 class RaceCombatEngine:
-    def __init__(self, deck, base_atk=8000.0, base_dps=35000.0, base_core=38500):
+    def __init__(self, deck, base_atk=8000.0, base_dps=35000.0):
         self.deck = deck
         self.total_core = sum(c.core for c in deck)
         self.base_atk = base_atk
         self.base_dps = base_dps
-        self.base_core = base_core
         self.total_dmg = 0.0
         self.time = 0.0
 
@@ -567,8 +566,12 @@ class RaceCombatEngine:
             xdx_rate = self.get_dynamic_rate()
             self.total_dmg += (dmg_add * xdx_rate) + (self.base_dps / 10 * xdx_rate)
 
-        return (self.base_dps * self.time * (self.atk_mul - 1) + self.total_dmg * self.atk_mul) * self.core_mod * (
-                1 + self.total_core / self.base_core)
+        base_atk_dmg = self.base_dps * self.time
+        core_inc_percent = self.total_core / 5.0 / self.base_atk
+        core_inc_benefit = (base_atk_dmg + self.total_dmg) * core_inc_percent
+        mul_benefit = (base_atk_dmg + self.total_dmg + core_inc_benefit) * (self.core_mod * self.atk_mul - 1)
+        dmg_benefit = self.total_dmg * (1 + core_inc_percent) * self.core_mod * self.atk_mul
+        return dmg_benefit + core_inc_benefit + mul_benefit
 
 
 if __name__ == "__main__":
