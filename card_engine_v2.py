@@ -570,8 +570,7 @@ class RaceCombatEngine:
         core_inc_percent = self.total_core / 5.0 / self.base_atk
         core_inc_benefit = (base_atk_dmg + self.total_dmg) * core_inc_percent
         mul_benefit = (base_atk_dmg + self.total_dmg + core_inc_benefit) * (self.core_mod * self.atk_mul - 1)
-        dmg_benefit = self.total_dmg * (1 + core_inc_percent) * self.core_mod * self.atk_mul
-        return dmg_benefit + core_inc_benefit + mul_benefit
+        return self.total_dmg + core_inc_benefit + mul_benefit
 
 
 if __name__ == "__main__":
