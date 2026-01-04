@@ -321,7 +321,7 @@ class MuJian(Card):
 
 class ZheShan(Card):
     def __init__(self, level=6):
-        super().__init__("折扇", "Tool", 2, level)
+        super().__init__("折扇", "Tool", 1, level)
         self.dmg_r = 0.4 + 0.02 * self.level
 
     def check(self, type):
