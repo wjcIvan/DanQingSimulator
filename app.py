@@ -1,8 +1,11 @@
 import streamlit as st
+
+import card_engine_v2
 from card_engine_v2 import *
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
+import inspect
 
 # ======================================================
 # 1. 页面配置与全局样式 (现代 UI 设计)
@@ -99,14 +102,32 @@ div[data-testid="stSlider"] [data-baseweb="typography"] {
 # ======================================================
 @st.cache_resource
 def get_lib():
-    return {
-        "人族": [("小环", XiaoHuan), ("燕虹", YanHong), ("周一仙", ZhouYiXian), ("文敏", WenMin),
-               ("上官策", ShangGuanCe), ("林峰", LinFeng), ("左归", ZuoGui), ("齐昊", QiHao)],
-        "兽族": [("猩红巨蚁", ScarletGiantAnt), ("猛虎", MengHu), ("二尾妖狐", TwoTailedFox),
-               ("岁兽", SuiShou), ("雪地熊", XueDiXiong), ("六尾魔狐", SixTailedFox)],
-        "器族": [("木剑", MuJian), ("折扇", ZheShan), ("仙人布幡", XianRenBuFan),
-               ("神木骰", ShenMuTou), ("寒冰箭", HanBingJian), ("六合镜", LiuHeJing)]
+    lib = {"人族": [], "兽族": [], "器族": []}
+
+    race_map = {
+        "Human": "人族",
+        "Beast": "兽族",
+        "Tool": "器族"
     }
+
+    # 获取当前模块命名空间中所有的类
+    for name, obj in inspect.getmembers(card_engine_v2):
+        if inspect.isclass(obj) and issubclass(obj, Card) and obj not in [Card, PassiveBoostCard]:
+            try:
+                # 实例化一个 1 级的对象来获取其 race 属性
+                instance = obj(level=1)
+                race_label = race_map.get(instance.race)
+
+                if race_label in lib:
+                    lib[race_label].append((instance.name, obj))
+            except Exception:
+                # 忽略那些初始化可能失败的辅助类
+                continue
+    # 对每一组卡牌按费用从低到高排序，方便 UI 显示
+    for key in lib:
+        lib[key].sort(key=lambda x: x[1](level=1).fee)
+
+    return lib
 
 
 library = get_lib()
