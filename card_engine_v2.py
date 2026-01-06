@@ -309,7 +309,7 @@ class FengZheng(PassiveBoostCard):
 
 class XianRenBuFan(Card):
     def __init__(self, level=6):
-        super().__init__("仙人布帆", "Tool", 2, level)
+        super().__init__("仙人布幡", "Tool", 2, level)
         self.mul = 0.0056 + 0.0004 * self.level
 
     def check(self, type):
