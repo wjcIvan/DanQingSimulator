@@ -31,15 +31,23 @@ class Card:
         pass
 
 
-class XiaoHuan(Card):
-    def __init__(self, level=6):
-        # Zuo Gui is a passive card that increases the effect_mod.
-        # It doesn't need to trigger on events.
-        super().__init__("小环", "Human", 1, level)
-        self.mul_xh = 0.0056 + 0.0004 * self.level
+class PassiveBoostCard(Card):
+    """
+        通用被动增益卡类。
+        适用于：小环、海龟、风筝等仅提供被动数值加成的卡牌。
+    """
+
+    def __init__(self, name, race, fee, level=6):
+        super().__init__(name, race, fee, level)
+        self.mul = 0.0056 + 0.0004 * self.level
 
     def check(self, type):
         return False
+
+
+class XiaoHuan(PassiveBoostCard):
+    def __init__(self, level=6):
+        super().__init__("小环", "Human", 1, level)
 
 
 class YanHong(Card):
@@ -57,7 +65,7 @@ class YanHong(Card):
     def trigger(self, engine, _):
         self.internal_timer = 0.0  # 重置计时器
         dmg = engine.base_atk * self.dmg_r
-        engine.total_dmg += dmg * engine.effect_mod
+        engine.card_total_dmg += dmg * engine.effect_mod
         engine.queue_event((ICE, dmg))
 
 
@@ -75,7 +83,7 @@ class WenMin(Card):
         self.internal_timer = 0
         for _ in range(3):
             dmg = engine.base_atk * engine.ice_rate
-            engine.total_dmg += dmg * engine.effect_mod
+            engine.card_total_dmg += dmg * engine.effect_mod
             engine.queue_event((ICE, dmg))
 
 
@@ -95,7 +103,7 @@ class QiHao(Card):
     def trigger(self, engine, _):
         # Heavy burst: 10 hits
         dmg = (engine.base_atk * self.dmg_r) * 10
-        engine.total_dmg += dmg * engine.effect_mod
+        engine.card_total_dmg += dmg * engine.effect_mod
         engine.queue_event((SNOW_MAN, dmg))
 
         self.internal_timer -= 60.0
@@ -103,8 +111,6 @@ class QiHao(Card):
 
 class LinFeng(Card):
     def __init__(self, level=6):
-        # Lin Feng is a passive buff; he doesn't 'trigger' himself,
-        # but other cards check for his presence.
         super().__init__("林峰", "Human", 3, level)
         self.last = ICE
         self.ice_r = 0.3 - 0.05 * self.level
@@ -121,7 +127,7 @@ class LinFeng(Card):
 
     def trigger(self, engine, event_dmg):
         if self.last == ICE:
-            engine.total_dmg += event_dmg * engine.effect_mod
+            engine.card_total_dmg += event_dmg * engine.effect_mod
             engine.queue_event((ICE_D, event_dmg))
             return
 
@@ -147,6 +153,11 @@ class ShangGuanCe(Card):
         if engine.current_burn_layers < 12:
             engine.current_burn_layers += 1
         engine.queue_event((BURN, 0))
+
+
+class HaiGui(PassiveBoostCard):
+    def __init__(self, level=6):
+        super().__init__("海龟", "Beast", 1, level)
 
 
 class ScarletGiantAnt(Card):
@@ -182,7 +193,7 @@ class TwoTailedFox(Card):
 
     def trigger(self, engine, _):
         # Two-Tail opening burst / response damage
-        engine.total_dmg += (engine.base_atk * self.dmg_r)
+        engine.card_total_dmg += (engine.base_atk * self.dmg_r)
 
 
 class SixTailedFox(Card):
@@ -200,7 +211,7 @@ class SixTailedFox(Card):
         self.explode_timer -= 0.1
         if self.explode_timer <= 0:
             self.explode_timer = 1.5
-            engine.total_dmg += (engine.current_burn_layers * self.dmg_r * engine.base_atk)
+            engine.card_total_dmg += (engine.current_burn_layers * self.dmg_r * engine.base_atk)
             engine.current_burn_layers = 0
             engine.burn_tick_timer = 0
             engine.is_burn_active = False
@@ -208,8 +219,6 @@ class SixTailedFox(Card):
 
 class ZuoGui(Card):
     def __init__(self, level=6):
-        # Zuo Gui is a passive card that increases the effect_mod.
-        # It doesn't need to trigger on events.
         super().__init__("左归", "Human", 4, level)
         self.dmg_r = 1 + 0.28 + 0.02 * self.level
 
@@ -219,8 +228,6 @@ class ZuoGui(Card):
 
 class ZhouYiXian(Card):
     def __init__(self, level=6):
-        # Zuo Gui is a passive card that increases the effect_mod.
-        # It doesn't need to trigger on events.
         super().__init__("周一仙", "Human", 2, level)
         self.mul = 0.0056 + 0.0004 * self.level
 
@@ -230,8 +237,6 @@ class ZhouYiXian(Card):
 
 class MengHu(Card):
     def __init__(self, level=6):
-        # Zuo Gui is a passive card that increases the effect_mod.
-        # It doesn't need to trigger on events.
         super().__init__("猛虎", "Beast", 2, level)
         self.mul = 0.0056 + 0.0004 * self.level
 
@@ -297,10 +302,13 @@ class SuiShou(Card):
             engine.queue_event((BURN, 0))
 
 
+class FengZheng(PassiveBoostCard):
+    def __init__(self, level=6):
+        super().__init__("风筝", "Tool", 1, level)
+
+
 class XianRenBuFan(Card):
     def __init__(self, level=6):
-        # Zuo Gui is a passive card that increases the effect_mod.
-        # It doesn't need to trigger on events.
         super().__init__("仙人布帆", "Tool", 2, level)
         self.mul = 0.0056 + 0.0004 * self.level
 
@@ -310,8 +318,6 @@ class XianRenBuFan(Card):
 
 class MuJian(Card):
     def __init__(self, level=6):
-        # Zuo Gui is a passive card that increases the effect_mod.
-        # It doesn't need to trigger on events.
         super().__init__("木剑", "Tool", 1, level)
         self.mul = 0.0056 + 0.0004 * self.level
 
@@ -332,7 +338,7 @@ class ZheShan(Card):
     def trigger(self, engine, _):
         self.internal_timer = 0
         dmg = engine.base_atk * self.dmg_r
-        engine.total_dmg += dmg * engine.effect_mod
+        engine.card_total_dmg += dmg * engine.effect_mod
         engine.queue_event((PULSE, dmg))
 
 
@@ -363,7 +369,7 @@ class ShenMuTou(Card):
             for _ in range(3):
                 # 投递脉冲事件，这会通过下面的 情况 B 激活/刷新神木骰状态
                 dmg = engine.base_atk * engine.pulse_rate
-                engine.total_dmg += dmg * engine.effect_mod
+                engine.card_total_dmg += dmg * engine.effect_mod
                 engine.queue_event((PULSE, dmg))
             return
 
@@ -383,7 +389,7 @@ class ShenMuTou(Card):
                 # 1. 结算每 0.1s 的固定伤害：0.7% 攻击力
                 # 按照 100% 攻击力在 10s 内摊薄，这里直接使用 0.007 (0.7%)
                 dmg = engine.base_atk * self.dmg_r
-                engine.total_dmg += dmg
+                engine.card_total_dmg += dmg
 
                 # 2. 倒计时
                 self.duration_timer = round(self.duration_timer - 0.1, 1)
@@ -423,7 +429,7 @@ class LiuHeJing(Card):
                 self.fire_shot(engine)
                 self.timer = 0.0  # 重置间隔计时
 
-            # 6秒时间到或4次射击完成，关闭状态
+            # 4秒时间到或4次射击完成，关闭状态
             if self.shots_fired >= 4:
                 self.is_active = False
 
@@ -431,7 +437,7 @@ class LiuHeJing(Card):
         """执行单次伤害结算"""
         # 此处 实际倍率为2倍
         dmg = engine.base_atk * engine.pulse_rate * self.dmg_r
-        engine.total_dmg += dmg
+        engine.card_total_dmg += dmg
         engine.queue_event((PULSE_D, dmg))
         self.shots_fired += 1
 
@@ -454,7 +460,7 @@ class HanBingJian(Card):
         if self.arrow_count >= self.threshold:
             self.arrow_count = 0  # 计数清零
             dmg = engine.base_atk * engine.pulse_rate
-            engine.total_dmg += dmg * engine.effect_mod
+            engine.card_total_dmg += dmg * engine.effect_mod
             engine.queue_event((PULSE, dmg))
 
 
@@ -466,7 +472,7 @@ class RaceCombatEngine:
         self.total_core = sum(c.core for c in deck)
         self.base_atk = base_atk
         self.base_dps = base_dps
-        self.total_dmg = 0.0
+        self.card_total_dmg = 0.0
         self.time = 0.0
 
         # State Variables
@@ -480,10 +486,16 @@ class RaceCombatEngine:
         mu = self.get_card("木剑")
         yi = self.get_card("猩红巨蚁")
         shan = self.get_card("折扇")
-        huan = self.get_card("小环")
+
         self.effect_mod = 1.0 if not zuo else zuo.dmg_r
-        self.core_mod = 1.0 if not mu else mu.mul
-        self.core_mod = self.core_mod if not huan else self.core_mod + huan.mul_xh
+        self.core_mod = 1.0 if not mu else 1 + mu.mul
+
+        self.passive_mod = 1.0
+        # 遍历所有被动卡累加 mul (包含小环、海龟、风筝)
+        for card in self.deck:
+            if isinstance(card, PassiveBoostCard):
+                self.passive_mod += card.mul
+
         self.ice_rate = 0.26 if not yan else yan.dmg_r
         self.burn_rate = 0.013 if not yi else yi.dmg_r
         self.pulse_rate = 0.38 if not shan else shan.dmg_r
@@ -493,12 +505,10 @@ class RaceCombatEngine:
         t_count = sum(1 for c in deck if c.race == "Tool")
 
         self.atk_mul = 1.0
-        if self.has_card("周一仙"):
-            self.atk_mul += h_count * self.get_card("周一仙").mul
-        if self.has_card("猛虎"):
-            self.atk_mul += b_count * self.get_card("猛虎").mul
-        if self.has_card("仙人布幡"):
-            self.atk_mul += t_count * self.get_card("仙人布幡").mul
+        # 兼容旧代码种族判定
+        for card_name, race_cnt in [("周一仙", h_count), ("猛虎", b_count), ("仙人布幡", t_count)]:
+            c = self.get_card(card_name)
+            if c: self.atk_mul += race_cnt * c.mul
 
         self.event_queue = []
 
@@ -535,13 +545,11 @@ class RaceCombatEngine:
 
         # 3. 核心：处理链式反应 (ICE -> BURN 等)
         while len(self.event_queue) > 0:
-            # 必须用 [:] 切片创建副本，否则循环内修改原列表会导致不可预知的无限循环
             current_events = self.event_queue[:]
             self.event_queue = []  # 立即清空，用于接收下一级触发
 
             for e_type, e_dmg in current_events:
                 for card in self.deck:
-                    # 严防死守：这里的触发绝对不能包含 TIME
                     if e_type != TIME and card.check(e_type):
                         card.trigger(self, e_dmg)
 
@@ -552,25 +560,25 @@ class RaceCombatEngine:
         if self.is_burn_active:
             self.burn_tick_timer = round(self.burn_tick_timer + 0.1, 1)
             if self.burn_tick_timer >= 3.0:
-                self.total_dmg += ((self.base_atk * (
+                self.card_total_dmg += ((self.base_atk * (
                         self.current_burn_layers * self.burn_rate)) * self.effect_mod)
                 self.burn_tick_timer = 0
 
     def simulate(self, time_limit):
         while self.time <= time_limit:
-            dmg_before = self.total_dmg
+            dmg_before = self.card_total_dmg
             self.run_tick()
             self.time = round(self.time + 0.1, 1)
             # 每0.1s的 丹青伤害 和 秒伤 乘以雪地熊系数
-            dmg_add = self.total_dmg - dmg_before
+            dmg_add = self.card_total_dmg - dmg_before
             xdx_rate = self.get_dynamic_rate()
-            self.total_dmg += (dmg_add * xdx_rate) + (self.base_dps / 10 * xdx_rate)
+            self.card_total_dmg += (dmg_add * xdx_rate) + (self.base_dps * self.passive_mod / 10 * xdx_rate)
 
-        base_atk_dmg = self.base_dps * self.time
-        core_inc_percent = self.total_core / 5.0 / self.base_atk
-        core_inc_benefit = (base_atk_dmg + self.total_dmg) * core_inc_percent
-        mul_benefit = (base_atk_dmg + self.total_dmg + core_inc_benefit) * (self.core_mod * self.atk_mul - 1)
-        return self.total_dmg + core_inc_benefit + mul_benefit
+        # PassiveBoostCard的加成 作用于基础秒伤
+        base_atk_dmg = self.base_dps * self.time * self.passive_mod
+        core_inc_benefit = (base_atk_dmg + self.card_total_dmg) * (self.total_core / 5.0 / self.base_atk)
+        mul_benefit = (base_atk_dmg + self.card_total_dmg + core_inc_benefit) * (self.core_mod * self.atk_mul - 1)
+        return self.card_total_dmg + core_inc_benefit + mul_benefit
 
 
 if __name__ == "__main__":
