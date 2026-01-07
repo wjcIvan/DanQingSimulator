@@ -1,4 +1,5 @@
 import random
+import numpy as np
 
 # Event constants
 ICE = "ice"
@@ -488,12 +489,13 @@ class RaceCombatEngine:
         shan = self.get_card("折扇")
 
         self.effect_mod = 1.0 if not zuo else zuo.dmg_r
-        self.core_mod = 1.0 if not mu else 1 + mu.mul
+        self.mu_mod = 1.0 if not mu else 1 + mu.mul
 
         self.passive_mod = 1.0
         # 遍历所有被动卡累加 mul (包含小环、海龟、风筝)
         for card in self.deck:
-            if isinstance(card, PassiveBoostCard):
+            is_passive = any(base.__name__ == "PassiveBoostCard" for base in card.__class__.__mro__)
+            if is_passive:
                 self.passive_mod += card.mul
 
         self.ice_rate = 0.26 if not yan else yan.dmg_r
@@ -565,20 +567,62 @@ class RaceCombatEngine:
                 self.burn_tick_timer = 0
 
     def simulate(self, time_limit):
+        dynamic_base_boost = 0.0
         while self.time <= time_limit:
             dmg_before = self.card_total_dmg
             self.run_tick()
             self.time = round(self.time + 0.1, 1)
-            # 每0.1s的 丹青伤害 和 秒伤 乘以雪地熊系数
-            dmg_add = self.card_total_dmg - dmg_before
-            xdx_rate = self.get_dynamic_rate()
-            self.card_total_dmg += (dmg_add * xdx_rate) + (self.base_dps * self.passive_mod / 10 * xdx_rate)
 
-        # PassiveBoostCard的加成 作用于基础秒伤
-        base_atk_dmg = self.base_dps * self.time * self.passive_mod
-        core_inc_benefit = (base_atk_dmg + self.card_total_dmg) * (self.total_core / 5.0 / self.base_atk)
-        mul_benefit = (base_atk_dmg + self.card_total_dmg + core_inc_benefit) * (self.core_mod * self.atk_mul - 1)
-        return self.card_total_dmg + core_inc_benefit + mul_benefit
+            # 记录基础部分受到的动态加成（雪地熊）
+            xdx_rate = self.get_dynamic_rate()
+            # 基础秒伤在这一帧产生的动态增益量
+            dynamic_base_boost += (self.base_dps * self.passive_mod / 10 * xdx_rate)
+
+            # 处理卡牌主动技能增量
+            dmg_add = self.card_total_dmg - dmg_before
+            self.card_total_dmg += (dmg_add * xdx_rate)
+
+        # --- 收益拆分逻辑：通过累加增量计算 ---
+
+        # 定义基础系数
+        core_inc_pct = self.total_core / 5.0 / self.base_atk
+        total_mul_mod = self.mu_mod * self.atk_mul
+
+        # 1. 裸奔总基础 (Raw)
+        absolute_raw_total = self.base_dps * self.time
+
+        # 2. 属性提升 (Boost) - 逐步累加法
+        # a) 被动卡加成产生的增量 (海龟、小环、风筝等)
+        passive_card_inc = absolute_raw_total * (self.passive_mod - 1.0)
+
+        # b) 包含被动卡和动态加成后的“基础部分”总额
+        base_with_passive_and_dynamic = absolute_raw_total + passive_card_inc + dynamic_base_boost
+
+        # c) 核心加成对“基础部分”产生的增量
+        core_inc_on_base = base_with_passive_and_dynamic * core_inc_pct
+
+        # d) 倍率加成(木剑/种族)对“基础部分”产生的增量
+        # (基础 + 被动 + 动态 + 核心) * (总倍率 - 1)
+        mul_inc_on_base = (base_with_passive_and_dynamic + core_inc_on_base) * (total_mul_mod - 1.0)
+
+        # 属性提升总额 = 被动卡增量 + 动态增量 + 核心对基础增量 + 倍率对基础增量
+        boost_total_dmg = passive_card_inc + dynamic_base_boost + core_inc_on_base + mul_inc_on_base
+
+        # 3. 卡牌技能总伤害 (Card)
+        # 技能伤害本身及其受到的核心、倍率放大
+        card_skill_final = self.card_total_dmg * (1 + core_inc_pct) * total_mul_mod
+
+        # 4. 最终总数校验
+        card_total = boost_total_dmg + card_skill_final
+        final_total = absolute_raw_total + card_total
+
+        return {
+            "total": np.round(final_total / self.time, 2),
+            "card_total": np.round(card_total / self.time, 2),
+            "card_dps": np.round(card_skill_final / self.time, 2),
+            "boost_dps": np.round(boost_total_dmg / self.time, 2),
+            "raw_base_dps": np.round(self.base_dps, 2)
+        }
 
 
 if __name__ == "__main__":

@@ -102,28 +102,29 @@ div[data-testid="stSlider"] [data-baseweb="typography"] {
 # ======================================================
 @st.cache_resource
 def get_lib():
+    import inspect
+    import card_engine_v2
+
+    # 建立 race 到中文分类的映射
     lib = {"人族": [], "兽族": [], "器族": []}
+    race_map = {"Human": "人族", "Beast": "兽族", "Tool": "器族"}
 
-    race_map = {
-        "Human": "人族",
-        "Beast": "兽族",
-        "Tool": "器族"
-    }
-
-    # 获取当前模块命名空间中所有的类
+    # 遍历 card_engine_v2 中定义的所有类
     for name, obj in inspect.getmembers(card_engine_v2):
+        # 排除基类和非类对象
         if inspect.isclass(obj) and issubclass(obj, Card) and obj not in [Card, PassiveBoostCard]:
             try:
-                # 实例化一个 1 级的对象来获取其 race 属性
+                # 实例化一个 1 级的对象来获取其 race 和 name
                 instance = obj(level=1)
-                race_label = race_map.get(instance.race)
+                race_label = race_map.get(instance.race, "其他")
 
                 if race_label in lib:
+                    # 关键：确保保存的是 obj (类本身)，而不是字符串
                     lib[race_label].append((instance.name, obj))
-            except Exception:
-                # 忽略那些初始化可能失败的辅助类
+            except:
                 continue
-    # 对每一组卡牌按费用从低到高排序，方便 UI 显示
+
+    # 按费用排序
     for key in lib:
         lib[key].sort(key=lambda x: x[1](level=1).fee)
 
@@ -239,29 +240,32 @@ def main_simulator_area():
                     # engine = RaceCombatEngine(instances, base_dps=base_dps, base_atk=base_atk)
                     # 使用多线程优化部署环境下的计算延迟
                     with ThreadPoolExecutor() as executor:
-                        # 将参数传给辅助函数，在每个线程内部实例化 engine
                         futures = [
                             executor.submit(run_single_sim, instances, base_dps, base_atk, sim_time)
                             for _ in range(sim_count)
                         ]
                         results = [f.result() for f in futures]
 
-                    # 2. 统计计算 (转化为 DPS)
-                    dps_list = np.array(results) / sim_time
-                    avg_dps = np.mean(dps_list)
-                    std_dev = np.std(dps_list)  # 标准差
+                    # 提取各项平均值
+                    avg_total = np.round(np.mean([r['total'] for r in results]), 0)
+                    avg_card_total = np.round(np.mean([r['card_total'] for r in results]), 0)
+                    avg_card = np.round(np.mean([r['card_dps'] for r in results]), 0)
+                    avg_boost = np.round(np.mean([r['boost_dps'] for r in results]), 0)
+                    avg_raw = np.round(np.mean([r['raw_base_dps'] for r in results]), 0)
 
-                    # 计算 95% 置信区间: z=1.96
-                    # CI = 1.96 * (标准差 / sqrt(样本数))
-                    ci_95 = 1.96 * (std_dev / np.sqrt(sim_count))
+                    # 统计误差 (基于总 DPS)
+                    card_dps = np.array([r['card_total'] for r in results])
+                    ci_95 = 1.96 * (np.std(card_dps) / np.sqrt(sim_count))
 
-                    # 3. 存储结果
                     st.session_state.sim_result = {
-                        "avg": avg_dps,
+                        "avg": avg_total,
+                        "card_total_avg": avg_card_total,
+                        "card_avg": avg_card,
+                        "boost_avg": avg_boost,
+                        "raw_avg": avg_raw,
                         "ci": ci_95,
-                        "max": np.max(dps_list),
-                        "min": np.min(dps_list),
-                        "std": std_dev
+                        "max": np.max(card_dps),
+                        "min": np.min(card_dps)
                     }
 
                     sorted_deck = sorted(instances, key=lambda c: c.fee, reverse=True)
@@ -269,7 +273,7 @@ def main_simulator_area():
                     # app.py 中的修改点
                     st.session_state.sim_history.insert(0, {
                         "时间": pd.Timestamp.now(tz='Asia/Shanghai').strftime("%H:%M:%S"),
-                        "DPS": round(avg_dps),
+                        "DPS": round(avg_card_total),
                         "误差": f"±{ci_95:,.0f}",  # 必须添加这一行，对应 column_config 中的 "误差"
                         "阵容": " + ".join([f"{obj.name}({obj.level}★)" if obj.level != 6 else obj.name
                                           for obj in sorted_deck])
@@ -278,26 +282,27 @@ def main_simulator_area():
         if st.session_state.sim_result:
             res = st.session_state.sim_result
 
-            # 布局：上方主指标，下方波动细节
-            m_col1, m_col2 = st.columns(2)
-            with m_col1:
-                st.metric("平均秒伤 (Avg)", f"{res['avg']:,.0f}")
-            with m_col2:
-                # 计算变异系数 (CV) 来衡量稳定性
-                cv = res['std'] / res['avg'] if res['avg'] > 0 else 0
-                stability = "极高" if cv < 0.05 else "稳定" if cv < 0.15 else "看脸"
-                st.metric("波动偏差 (±95%)", f"±{res['ci']:,.0f}", help=f"稳定性评价：{stability}")
+            # 主指标展示
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.metric("丹青总提升", f"{res['card_total_avg']:,.0f}")
+            with c2:
+                st.metric("丹青技能提升", f"{res['card_avg']:,.0f}",
+                          delta=f"{res['card_avg'] / res['avg']:.1%}", delta_color="normal")
+            with c3:
+                st.metric("丹青属性提升", f"{res['boost_avg']:,.0f}",
+                          delta=f"{res['boost_avg'] / res['avg']:.1%}", delta_color="normal")
 
             # 绘制简单的分布可视化 (使用 CSS 模拟进度条范围)
             st.markdown(f"""
             <div style="background: #fdf2f2; padding: 12px; border-radius: 8px; border: 1px solid #fee2e2; margin: 10px 0;">
                 <div style="display: flex; justify-content: space-between; font-size: 12px; color: #991b1b;">
                     <span>最低: {res['min']:,.0f}</span>
-                    <span>预期范围: {res['avg'] - res['ci']:,.0f} ~ {res['avg'] + res['ci']:,.0f}</span>
+                    <span>预期范围: {res['card_total_avg'] - res['ci']:,.0f} ~ {res['card_total_avg'] + res['ci']:,.0f}</span>
                     <span>最高: {res['max']:,.0f}</span>
                 </div>
                 <div style="height: 6px; background: #fee2e2; border-radius: 3px; margin-top: 8px; position: relative;">
-                    <div style="position: absolute; left: {max(0, (res['avg'] - res['ci'] - res['min']) / (res['max'] - res['min'] + 1) * 100)}%; 
+                    <div style="position: absolute; left: {max(0, (res['card_total_avg'] - res['ci'] - res['min']) / (res['max'] - res['min'] + 1) * 100)}%; 
                                 width: {min(100, (2 * res['ci']) / (res['max'] - res['min'] + 1) * 100)}%; 
                                 height: 100%; background: #ff4b4b; opacity: 0.6; border-radius: 3px;"></div>
                 </div>
