@@ -160,9 +160,9 @@ if "deck_state" not in st.session_state:
     st.session_state.sim_result = None
 
 
-# 定义一个辅助函数，用于单次独立的模拟
-def run_single_sim(instances, base_dps, base_atk, sim_time):
-    # 每次模拟都重新实例化所有卡牌和引擎，确保随机种子和状态完全独立
+def run_single_sim(card_classes_with_lv, base_dps, base_atk, sim_time):
+    # 【关键】在线程内部实例化，确保状态独立
+    instances = [cls(level=lv) for cls, lv in card_classes_with_lv]
     engine = RaceCombatEngine(instances, base_dps=base_dps, base_atk=base_atk)
     return engine.simulate(float(sim_time))
 
@@ -231,17 +231,17 @@ def main_simulator_area():
             else:
                 with st.spinner("正在进行多线程演算..."):
                     # 仅在此时进行类实例化
-                    instances = []
+                    card_configs = []
                     for cat in library.values():
                         for name, cls in cat:
                             if st.session_state.deck_state[name]["selected"]:
-                                instances.append(cls(level=st.session_state[f"lvl_{name}"]))
+                                card_configs.append((cls, st.session_state[f"lvl_{name}"]))
 
                     # engine = RaceCombatEngine(instances, base_dps=base_dps, base_atk=base_atk)
                     # 使用多线程优化部署环境下的计算延迟
                     with ThreadPoolExecutor() as executor:
                         futures = [
-                            executor.submit(run_single_sim, instances, base_dps, base_atk, sim_time)
+                            executor.submit(run_single_sim, card_configs, base_dps, base_atk, sim_time)
                             for _ in range(sim_count)
                         ]
                         results = [f.result() for f in futures]
@@ -268,9 +268,9 @@ def main_simulator_area():
                         "min": np.min(card_dps)
                     }
 
-                    sorted_deck = sorted(instances, key=lambda c: c.fee, reverse=True)
+                    card_configs.sort(key=lambda x: x[0](level=1).fee, reverse=True)
+                    sorted_deck = [cls(level=lv) for cls, lv in card_configs]
                     # 历史记录
-                    # app.py 中的修改点
                     st.session_state.sim_history.insert(0, {
                         "时间": pd.Timestamp.now(tz='Asia/Shanghai').strftime("%H:%M:%S"),
                         "DPS": round(avg_card_total),
