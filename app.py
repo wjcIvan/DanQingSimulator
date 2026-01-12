@@ -285,13 +285,12 @@ def main_simulator_area():
             # 主指标展示
             c1, c2, c3 = st.columns(3)
             with c1:
-                st.metric("丹青总提升", f"{res['card_total_avg']:,.0f}")
+                st.metric("丹青总提升", f"{res['card_total_avg']:,.0f}",
+                          delta=f"{res['card_total_avg'] / res['raw_avg']:.1%}", delta_color="normal")
             with c2:
-                st.metric("丹青技能提升", f"{res['card_avg']:,.0f}",
-                          delta=f"{res['card_avg'] / res['avg']:.1%}", delta_color="normal")
+                st.metric("丹青技能提升", f"{res['card_avg']:,.0f}")
             with c3:
-                st.metric("丹青属性提升", f"{res['boost_avg']:,.0f}",
-                          delta=f"{res['boost_avg'] / res['avg']:.1%}", delta_color="normal")
+                st.metric("丹青属性提升", f"{res['boost_avg']:,.0f}")
 
             # 绘制简单的分布可视化 (使用 CSS 模拟进度条范围)
             st.markdown(f"""
