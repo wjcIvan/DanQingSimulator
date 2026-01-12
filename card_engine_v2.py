@@ -585,7 +585,8 @@ class RaceCombatEngine:
         # --- 收益拆分逻辑：通过累加增量计算 ---
 
         # 定义基础系数
-        core_inc_pct = self.total_core / 5.0 / self.base_atk
+        # 默认法宝满精炼增加4%的核心
+        core_inc_pct = self.total_core * 1.04 / 5.0 / self.base_atk
         total_mul_mod = self.mu_mod * self.atk_mul
 
         # 1. 裸奔总基础 (Raw)
