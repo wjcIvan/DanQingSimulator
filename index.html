@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>丹青模拟器 Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 基础样式与 Python 版对齐 */
+        .card-box {
+            height: 100px; /* 增加并固定高度 */
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start; /* 顶部对齐 */
+            overflow: hidden; /* 防止内容溢出导致位移 */
+            transition: transform 0.1s, box-shadow 0.2s;
+        }
+        .card-box.selected { border-color: #ef4444; background-color: #fef2f2; border-top-width: 4px; box-shadow: 0 8px 20px rgba(239, 68, 68, 0.1); }
+        .accent-red { accent-color: #ef4444; }
+
+        /* 种族视觉标识 */
+        .race-human { border-top: 4px solid #3b82f6; }
+        .race-beast { border-top: 4px solid #f59e0b; }
+        .race-tool { border-top: 4px solid #10b981; }
+        .tag-human { background-color: #eff6ff; color: #1e40af; }
+        .tag-beast { background-color: #fffbeb; color: #92400e; }
+        .tag-tool { background-color: #ecfdf5; color: #065f46; }
+
+        /* 布局控制 */
+        .race-section {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .race-title {
+            grid-column: 1 / -1;
+            font-size: 1rem;
+            font-weight: 800;
+            color: #64748b;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #f1f5f9;
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+        }
+
+        /* 右侧结果卡片 */
+        .metric-card { background: white; padding: 1.25rem; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 1rem; }
+        .metric-label { font-size: 0.75rem; color: #64748b; font-weight: bold; margin-bottom: 0.25rem; }
+        .metric-value { font-size: 1.875rem; font-weight: 900; color: #ef4444; line-height: 1; }
+
+        /* 预期范围条样式 */
+        .range-container {
+            background: #fdf2f2;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid #fee2e2;
+            margin-top: 1rem;
+        }
+        .range-bar-bg {
+            height: 6px;
+            background: #fee2e2;
+            border-radius: 99px;
+            position: relative;
+            margin-top: 8px;
+        }
+        .range-bar-fill {
+            position: absolute;
+            background: #ef4444;
+            opacity: 0.6;
+            height: 100%;
+            border-radius: 99px;
+            transition: all 0.5s ease;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+
+    <header class="bg-white border-b px-8 py-4 sticky top-0 z-10 flex justify-between items-center">
+        <h1 class="text-xl font-black text-red-600">🎴 丹青模拟器 Pro</h1>
+        <div class="flex gap-4">
+            <button onclick="reset()" class="text-sm font-bold text-slate-400 hover:text-red-500">清空阵容</button>
+            <button onclick="doSim()" class="bg-red-500 text-white px-6 py-2 rounded-full font-bold hover:bg-red-600 transition-all shadow-lg shadow-red-200">🔥 开始演算</button>
+        </div>
+    </header>
+
+    <div class="flex flex-col lg:flex-row gap-6 p-6 max-w-[1600px] mx-auto">
+
+        <div class="flex-1 lg:w-3/5">
+
+            <div class="bg-white p-6 rounded-3xl shadow-sm border mb-6 grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">基础攻击(无丹青)</label>
+                    <input type="number" id="baseAtk" value="8000" class="w-full border-b font-bold py-1 outline-none focus:border-red-400">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">初始秒伤(无丹青)</label>
+                    <input type="number" id="baseDps" value="35000" class="w-full border-b font-bold py-1 outline-none focus:border-red-400">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">战斗时长: <span id="timeVal">180</span>s</label>
+                    <input type="range" id="simTime" min="30" max="600" value="180" class="w-full accent-red">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">迭代次数: <span id="iterVal">50</span></label>
+                    <input type="range" id="simIter" min="1" max="200" value="50" class="w-full accent-red">
+                </div>
+            </div>
+
+            <div class="flex justify-between items-center mb-4 px-2">
+                <h2 class="font-bold text-slate-700">阵容编成 <span id="feeLabel" class="ml-2 text-sm font-normal text-slate-400">0/25 费</span></h2>
+                <div class="flex gap-2">
+                    <button onclick="batchSetStars(0)" class="text-[10px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">全员 0★</button>
+                    <button onclick="batchSetStars(1)" class="text-[10px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">1★</button>
+                    <button onclick="batchSetStars(2)" class="text-[10px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">2★</button>
+                    <button onclick="batchSetStars(3)" class="text-[10px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">3★</button>
+                    <button onclick="batchSetStars(4)" class="text-[10px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">4★</button>
+                    <button onclick="batchSetStars(5)" class="text-[10px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">5★</button>
+                    <button onclick="batchSetStars(6)" class="text-[10px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">6★</button>
+                </div>
+            </div>
+
+            <div id="cardGrid"></div>
+        </div>
+
+        <div class="w-full lg:w-[450px] xl:w-[500px] space-y-6">
+
+            <section>
+                <h3 class="text-sm font-bold text-slate-500 mb-4 flex items-center gap-2">
+                    <span class="w-1 h-4 bg-red-500 rounded-full"></span> 📊 模拟报告
+                </h3>
+
+                <div class="metric-card shadow-sm">
+                    <div class="metric-label">当前DPS</div>
+                    <div id="resTotal" class="metric-value">0</div>
+                    <div id="resPercent" class="text-xs font-bold text-green-500 mt-2">+0.0%</div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-white p-4 rounded-xl border">
+                        <div class="text-[10px] font-bold text-slate-400 uppercase">丹青技能伤害</div>
+                        <div id="resCardDps" class="text-lg font-black text-slate-700">0</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl border">
+                        <div class="text-[10px] font-bold text-slate-400 uppercase">丹青属性增益</div>
+                        <div id="resBoostDps" class="text-lg font-black text-slate-700">0</div>
+                    </div>
+                </div>
+                <div id="rangeInfo" class="range-container hidden">
+                    <div class="flex justify-between text-[10px] text-red-800 font-bold">
+                        <span>最低: <span id="resMin">0</span></span>
+                        <span>预期波动: ±<span id="resErr">0</span></span>
+                        <span>最高: <span id="resMax">0</span></span>
+                    </div>
+                    <div class="range-bar-bg">
+                        <div id="rangeBar" class="range-bar-fill" style="left: 0%; width: 0%;"></div>
+                    </div>
+                    <p class="text-[9px] text-slate-400 mt-2 text-center italic">基于 95% 置信区间</p>
+                </div>
+            </section>
+
+            <section>
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-sm font-bold text-slate-500 flex items-center gap-2">
+                        <span class="w-1 h-4 bg-slate-400 rounded-full"></span> 📜 历史记录
+                    </h3>
+                    <button onclick="clearHistory()" class="text-[10px] text-blue-500">清空</button>
+                </div>
+                <div class="bg-white rounded-2xl border shadow-sm overflow-hidden text-xs">
+                    <div class="max-h-[400px] overflow-y-auto" id="historyList">
+                        <div class="p-8 text-center text-slate-300">暂无模拟数据</div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </div>
+
+    <script src="engine.js"></script>
+    <script>
+        const CARDS = [
+            { name: "小环", fee: 1, race: "人" }, { name: "燕虹", fee: 1, race: "人" },
+            { name: "文敏", fee: 2, race: "人" }, { name: "上官策", fee: 2, race: "人" },
+            { name: "周一仙", fee: 2, race: "人" }, { name: "林峰", fee: 3, race: "人" },
+            { name: "左归", fee: 4, race: "人" },  { name: "齐昊", fee: 5, race: "人" },
+            { name: "海龟", fee: 1, race: "兽" }, { name: "猩红巨蚁", fee: 1, race: "兽" },
+            { name: "猛虎", fee: 2, race: "兽" }, { name: "二尾妖狐", fee: 2, race: "兽" },
+            { name: "岁兽", fee: 3, race: "兽" },  { name: "雪地熊", fee: 4, race: "兽" },
+            { name: "六尾魔狐", fee: 5, race: "兽" },
+            { name: "风筝", fee: 1, race: "器" }, { name: "木剑", fee: 1, race: "器" },
+            { name: "折扇", fee: 1, race: "器" }, { name: "神木骰", fee: 2, race: "器" },
+            { name: "仙人布幡", fee: 2, race: "器" }, { name: "寒冰箭", fee: 3, race: "器" },
+            { name: "六合镜", fee: 5, race: "器" }
+        ];
+
+        let selected = new Map();
+
+        function init() {
+            const grid = document.getElementById('cardGrid');
+            const races = ["人", "兽", "器"];
+            const raceConfig = {
+                "人": { border: "race-human", tag: "tag-human", title: "Human / 人族" },
+                "兽": { border: "race-beast", tag: "tag-beast", title: "Beast / 兽族" },
+                "器": { border: "race-tool", tag: "tag-tool", title: "Tool / 器族" }
+            };
+
+            grid.innerHTML = races.map(race => {
+                const raceCards = CARDS.filter(c => c.race === race);
+                const conf = raceConfig[race];
+                return `
+                    <div class="race-section">
+                        ${raceCards.map(c => `
+                            <div id="c-${c.name}" class="card-box p-4 rounded-2xl bg-white shadow-sm ${conf.border}" onclick="toggle('${c.name}')">
+                                <div class="flex justify-between items-start mb-1">
+                                    <span class="font-bold text-slate-700 text-sm">${c.name}</span>
+                                    <span class="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-mono">${c.fee}F</span>
+                                </div>
+                                <div class="flex mb-3"><div class="text-[9px] px-2 py-0.5 rounded-full font-black ${conf.tag}">${c.race}</div></div>
+                                <div id="star-ui-${c.name}" class="star-ui hidden" onclick="event.stopPropagation()">
+                                    <div class="flex items-center gap-2">
+                                        <input type="range" min="0" max="6" value="6" class="flex-1 accent-red h-1" oninput="updateLv('${c.name}', this.value)">
+                                        <span class="text-[10px] font-black text-red-500 w-4"><span id="lv-${c.name}">6</span>★</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function toggle(name) {
+            const node = document.getElementById(`c-${name}`);
+            const starUi = document.getElementById(`star-ui-${name}`);
+            if(selected.has(name)) {
+                selected.delete(name);
+                node.classList.remove('selected');
+                starUi.classList.add('hidden');
+            } else {
+                selected.set(name, { name, level: 6 });
+                node.classList.add('selected');
+                starUi.classList.remove('hidden');
+            }
+            updateFee();
+        }
+
+        function updateLv(name, val) {
+            if(selected.has(name)) {
+                selected.get(name).level = parseInt(val);
+                document.getElementById(`lv-${name}`).innerText = val;
+            }
+        }
+
+        function updateFee() {
+            let total = 0;
+            selected.forEach(v => {
+                const info = CARDS.find(c => c.name === v.name);
+                total += info.fee;
+            });
+            const label = document.getElementById('feeLabel');
+            label.innerText = `${total} / 25 费`;
+            label.className = total > 25 ? "ml-2 text-sm font-bold text-red-500" : "ml-2 text-sm font-normal text-slate-400";
+        }
+
+
+        function doSim() {
+            if(selected.size === 0) return alert("请先选卡");
+
+            const baseAtk = parseInt(document.getElementById('baseAtk').value);
+            const baseDps = parseInt(document.getElementById('baseDps').value);
+            const simTime = parseInt(document.getElementById('simTime').value);
+            const iterations = parseInt(document.getElementById('simIter').value);
+
+            let results = [];
+            for(let i = 0; i < iterations; i++) {
+                const engine = new RaceCombatEngine(Array.from(selected.values()), baseAtk, baseDps);
+                results.push(engine.simulate(simTime));
+            }
+
+            // 统计计算
+            const totals = results.map(r => r.total);
+            const avgTotal = totals.reduce((a, b) => a + b, 0) / iterations;
+            const avgCard = results.reduce((a, b) => a + b.card_dps, 0) / iterations;
+            const avgBoost = results.reduce((a, b) => a + b.boost_dps, 0) / iterations;
+
+            const minVal = Math.min(...totals);
+            const maxVal = Math.max(...totals);
+
+            // 计算标准差和 95% 置信区间 (CI = 1.96 * std / sqrt(n))
+            const stdDev = Math.sqrt(totals.map(x => Math.pow(x - avgTotal, 2)).reduce((a, b) => a + b) / iterations);
+            const ci95 = 1.96 * (stdDev / Math.sqrt(iterations));
+
+            // 更新 UI
+            document.getElementById('resTotal').innerText = Math.round(avgTotal).toLocaleString();
+            document.getElementById('resCardDps').innerText = Math.round(avgCard).toLocaleString();
+            document.getElementById('resBoostDps').innerText = Math.round(avgBoost).toLocaleString();
+
+            const increaseDps = Math.round(avgTotal - baseDps).toLocaleString();
+            document.getElementById('resPercent').innerText = `相比无丹青提升 +${(avgTotal - baseDps/baseDps*100).toFixed(1)}% (${increaseDps})`;
+
+            // 更新波动范围条
+            document.getElementById('rangeInfo').classList.remove('hidden');
+            document.getElementById('resMin').innerText = Math.round(minVal).toLocaleString();
+            document.getElementById('resMax').innerText = Math.round(maxVal).toLocaleString();
+            document.getElementById('resErr').innerText = Math.round(ci95).toLocaleString();
+
+            // 渲染进度条位置 (对齐 Python 逻辑)
+            const rangePercent = ((2 * ci95) / (maxVal - minVal + 1)) * 100;
+            const leftPercent = ((avgTotal - ci95 - minVal) / (maxVal - minVal + 1)) * 100;
+            document.getElementById('rangeBar').style.left = Math.max(0, leftPercent) + "%";
+            document.getElementById('rangeBar').style.width = Math.min(100, rangePercent) + "%";
+
+            addHistory(Math.round(avgTotal), ci95);
+        }
+
+        function addHistory(dps, error) {
+            const list = document.getElementById('historyList');
+            if (list.innerText.includes("暂无")) list.innerHTML = '';
+
+            const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+
+            // 处理阵容文字 (默认 6 星不显示星级)
+            const lineup = Array.from(selected.values()).map(card => {
+                return card.level === 6 ? card.name : `${card.name}(${card.level}★)`;
+            }).join(" + ");
+
+            const item = `
+                <div class="p-3 border-b hover:bg-slate-50 transition-colors bg-white rounded-xl mb-1 border border-slate-100">
+                    <div class="flex justify-between items-center mb-1">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-black text-red-500">${dps.toLocaleString()}</span>
+                            <span class="text-[9px] text-slate-400 font-bold">±${Math.round(error).toLocaleString()}</span>
+                        </div>
+                        <span class="text-[9px] text-slate-300 font-mono">${time}</span>
+                    </div>
+                    <div class="text-[10px] text-slate-500 truncate">${lineup}</div>
+                </div>
+            `;
+            list.insertAdjacentHTML('afterbegin', item);
+        }
+
+        function batchSetStars(s) {
+            selected.forEach((v, k) => {
+                v.level = s;
+                document.getElementById(`lv-${k}`).innerText = s;
+                document.querySelector(`#star-ui-${k} input`).value = s;
+            });
+        }
+
+        function reset() { selected.clear(); init(); updateFee(); }
+
+        document.getElementById('simTime').oninput = function() { document.getElementById('timeVal').innerText = this.value; };
+        document.getElementById('simIter').oninput = function() { document.getElementById('iterVal').innerText = this.value; };
+
+        init();
+    </script>
+</body>
+</html>
