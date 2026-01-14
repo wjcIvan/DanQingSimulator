@@ -295,7 +295,7 @@
             document.getElementById('resBoostDps').innerText = Math.round(avgBoost).toLocaleString();
 
             const increaseDps = Math.round(avgTotal - baseDps).toLocaleString();
-            document.getElementById('resPercent').innerText = `相比无丹青提升 +${(avgTotal - baseDps/baseDps*100).toFixed(1)}% (${increaseDps})`;
+            document.getElementById('resPercent').innerText = `相比无丹青提升 +${((avgTotal - baseDps)/baseDps*100).toFixed(1)}% (${increaseDps})`;
 
             // 更新波动范围条
             document.getElementById('rangeInfo').classList.remove('hidden');
@@ -354,4 +354,5 @@
         init();
     </script>
 </body>
+
 </html>
