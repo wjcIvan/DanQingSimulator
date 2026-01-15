@@ -183,6 +183,13 @@ class SuiShou extends Card {
 }
 
 // --- 3. 器族 (Tool) ---
+class MuJian extends Card {
+    constructor(lv) {
+        super("木剑", "Tool", 1, lv);
+        this.mul = 0.0056 + 0.0004 * lv
+    }
+}
+
 class ZheShan extends Card {
     constructor(lv) { super("折扇", "Tool", 1, lv); this.dmg_r = 0.4 + 0.02 * lv; }
     check(t) { return t === EVENTS.TIME && this.internal_timer >= 15.0; }
@@ -274,7 +281,7 @@ class PassiveBoostCard extends Card {
 const XiaoHuan = class extends PassiveBoostCard { constructor(lv) { super("小环", "Human", 1, lv); } };
 const HaiGui = class extends PassiveBoostCard { constructor(lv) { super("海龟", "Beast", 1, lv); } };
 const FengZheng = class extends PassiveBoostCard { constructor(lv) { super("风筝", "Tool", 1, lv); } };
-const MuJian = class extends PassiveBoostCard { constructor(lv) { super("木剑", "Tool", 1, lv); } };
+
 const ZhouYiXian = class extends PassiveBoostCard { constructor(lv) { super("周一仙", "Human", 2, lv); } };
 const MengHu = class extends PassiveBoostCard { constructor(lv) { super("猛虎", "Beast", 2, lv); } };
 const XianRenBuFan = class extends PassiveBoostCard { constructor(lv) { super("仙人布幡", "Tool", 2, lv); } };
@@ -411,4 +418,5 @@ class RaceCombatEngine {
             raw_base_dps: this.baseDps
         };
     }
+
 }
