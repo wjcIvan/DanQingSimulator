@@ -180,7 +180,28 @@ class ScarletGiantAnt(Card):
         if engine.current_burn_layers < 12:
             engine.current_burn_layers += 1
         engine.queue_event((BURN, 0))
-        self.internal_timer -= 8
+        self.internal_timer = 0
+
+
+class YouMingQuan(Card):
+    def __init__(self, level=6):
+        super().__init__("幽冥犬", "Beast", 2, level)
+        self.trigger_interval = 10 - (level * 1.0)
+        self.internal_timer = self.trigger_interval
+
+    def check(self, type):
+        if type != TIME:
+            return False
+        return self.internal_timer >= self.trigger_interval
+
+    def trigger(self, engine, _):
+        if not engine.is_burn_active or engine.current_burn_layers == 0:
+            engine.current_burn_layers = 0
+            engine.is_burn_active = True
+        if engine.current_burn_layers < 12:
+            engine.current_burn_layers += 1
+        engine.queue_event((BURN, 0))
+        self.internal_timer = 0
 
 
 class TwoTailedFox(Card):

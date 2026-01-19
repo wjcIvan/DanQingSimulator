@@ -12,8 +12,9 @@ const EVENTS = {
 const BASE_CORE = [225, 449, 674, 898, 1123];
 const INCREMENTS = [11, 22, 33, 44, 55];
 
-// 辅助工具：对齐 Python 的 round(val, 1)
 const pyRound = (val) => Math.round(val * 10) / 10;
+
+const ALL_CARD_CLASSES = [];
 
 class Card {
     constructor(name, race, fee, level = 6) {
@@ -56,30 +57,22 @@ class WenMin extends Card {
 class QiHao extends Card {
     constructor(lv) {
         super("齐昊", "Human", 5, lv);
-        // 初始设为 60.0 确保进场可触发，或对齐 Python 的初始状态
         this.internal_timer = 60.0;
         this.dmg_r = 1.04 + 0.06 * lv;
     }
 
     check(t) {
-        // 核心逻辑：ICE 事件减少 CD（计时器增加）
         if (t === EVENTS.ICE || t === EVENTS.ICE_D) {
             this.internal_timer += 1.0;
             return false;
         }
-        // 只有达到 60 秒阈值才在时间驱动下触发
         return t === EVENTS.TIME && this.internal_timer >= 60.0;
     }
 
     trigger(e) {
-        // 10 次连击爆发计算
         let dmg = (e.baseAtk * this.dmg_r) * 10;
-        e.cardTotalDmg += dmg * e.effectMod; // 乘上左归倍率
-
-        // 投递雪人事件
+        e.cardTotalDmg += dmg * e.effectMod;
         e.addEvent(EVENTS.SNOW_MAN, dmg);
-
-        // 对齐 Python：计时器减去 60（保留溢出部分实现 CDR 连续性）
         this.internal_timer -= 60.0;
     }
 }
@@ -98,12 +91,11 @@ class LinFeng extends Card {
     }
     trigger(e, event_dmg) {
         if (this.lastType === EVENTS.ICE) {
-            // 对齐 Python: 冰箭伤害受 effectMod 影响
             e.cardTotalDmg += event_dmg * e.effectMod;
             e.addEvent(EVENTS.ICE_D, event_dmg);
         } else {
             if (e.burnLayers < 12) e.burnLayers++;
-            e.addEvent(EVENTS.BURN_D, 0); // 触发燃烧联动
+            e.addEvent(EVENTS.BURN_D, 0);
         }
     }
 }
@@ -146,7 +138,7 @@ class ScarletGiantAnt extends Card {
         if (!e.isBurnActive || e.burnLayers === 0) { e.burnLayers = 0; e.isBurnActive = true; }
         if (e.burnLayers < 12) e.burnLayers++;
         e.addEvent(EVENTS.BURN, 0);
-        this.internal_timer -= 8.0;
+        this.internal_timer = 0;
     }
 }
 
@@ -154,6 +146,23 @@ class TwoTailedFox extends Card {
     constructor(lv) { super("二尾妖狐", "Beast", 2, lv); this.dmg_r = 0.28 + 0.02 * lv; }
     check(t) { return t === EVENTS.BURN || t === EVENTS.BURN_D; }
     trigger(e) { e.cardTotalDmg += (e.baseAtk * this.dmg_r); }
+}
+
+class YouMingQuan extends Card {
+    constructor(lv) {
+        super("幽冥犬", "Beast", 2, lv);
+        this.trigger_interval = 10.0 - (lv * 1.0);
+        this.internal_timer = this.trigger_interval;
+    }
+    check(t) {
+        return t === EVENTS.TIME && this.internal_timer >= this.trigger_interval;
+    }
+    trigger(e) {
+        if (!e.isBurnActive || e.burnLayers === 0) { e.burnLayers = 0; e.isBurnActive = true; }
+        if (e.burnLayers < 12) e.burnLayers++;
+        e.addEvent(EVENTS.BURN, 0);
+        this.internal_timer = 0;
+    }
 }
 
 class SixTailedFox extends Card {
@@ -232,10 +241,10 @@ class ShenMuTou extends Card {
             }
             return;
         }
-        if (event_dmg > 0) { // 响应脉冲
+        if (event_dmg > 0) {
             this.is_active = true;
             this.duration_timer = 10.0;
-        } else if (this.is_active) { // 时间驱动
+        } else if (this.is_active) {
             e.cardTotalDmg += e.baseAtk * this.dmg_r;
             this.duration_timer = pyRound(this.duration_timer - 0.1);
             if (this.duration_timer <= 0) {
@@ -306,10 +315,12 @@ class RaceCombatEngine {
         this.burnTickTimer = 0.0;
 
         const mapping = {
-            "燕虹": YanHong, "寒冰箭": HanBingJian, "文敏": WenMin, "齐昊": QiHao, "林峰": LinFeng, "上官策": ShangGuanCe,
-            "雪地熊": XueDiXiong, "猩红巨蚁": ScarletGiantAnt, "二尾妖狐": TwoTailedFox, "六尾魔狐": SixTailedFox, "岁兽": SuiShou,
-            "折扇": ZheShan, "神木骰": ShenMuTou, "六合镜": LiuHeJing, "小环": XiaoHuan, "海龟": HaiGui, "风筝": FengZheng,
-            "木剑": MuJian, "周一仙": ZhouYiXian, "猛虎": MengHu, "仙人布幡": XianRenBuFan, "左归": ZuoGui
+            "木剑": MuJian, "小环": XiaoHuan, "燕虹": YanHong, "周一仙": ZhouYiXian, "文敏": WenMin,
+            "林峰": LinFeng, "上官策": ShangGuanCe, "左归": ZuoGui, "齐昊": QiHao,
+            "猩红巨蚁": ScarletGiantAnt, "海龟": HaiGui, "猛虎": MengHu, "二尾妖狐": TwoTailedFox,
+            "幽冥犬": YouMingQuan, "岁兽": SuiShou,"雪地熊": XueDiXiong, "六尾魔狐": SixTailedFox,
+            "风筝": FengZheng, "折扇": ZheShan, "神木骰": ShenMuTou, "仙人布幡": XianRenBuFan,
+            "寒冰箭": HanBingJian, "六合镜": LiuHeJing
         };
         this.deck = deckConfig.map(c => new (mapping[c.name] || Card)(c.level));
         this.initModifiers();
@@ -331,7 +342,6 @@ class RaceCombatEngine {
             }
         });
 
-        // 种族增益对齐 Python
         const counts = { Human: 0, Beast: 0, Tool: 0 };
         this.deck.forEach(c => counts[c.race]++);
 
@@ -340,7 +350,6 @@ class RaceCombatEngine {
         const tiger = getC("猛虎"); if (tiger) this.atkMul += counts.Beast * tiger.mul;
         const fan = getC("仙人布幡"); if (fan) this.atkMul += counts.Tool * fan.mul;
 
-        // 基础率对齐
         const yan = getC("燕虹"); this.iceRate = yan ? yan.dmg_r : 0.26;
         const ant = getC("猩红巨蚁"); this.burnRate = ant ? ant.dmg_r : 0.013;
         const shan = getC("折扇"); this.pulseRate = shan ? shan.dmg_r : 0.38;
@@ -392,10 +401,8 @@ class RaceCombatEngine {
         return this.finalize(duration, dynamicBaseBoost);
     }
 
-    // 修正 finalize 中的核心加成逻辑
     finalize(duration, dynamicBaseBoost) {
         const totalCore = this.deck.reduce((s, c) => s + c.core, 0);
-        // 对齐 Python: 核心增益百分比
         const coreIncPct = (totalCore * 1.04) / 5.0 / this.baseAtk;
         const totalMulMod = this.muMod * this.atkMul;
 
@@ -406,7 +413,6 @@ class RaceCombatEngine {
         const coreIncOnBase = baseWithPassiveAndDynamic * coreIncPct;
         const mulIncOnBase = (baseWithPassiveAndDynamic + coreIncOnBase) * (totalMulMod - 1.0);
 
-        // Python 逻辑: card_skill_final = self.card_total_dmg * (1 + core_inc_pct) * total_mul_mod
         const skillFinal = this.cardTotalDmg * (1 + coreIncPct) * totalMulMod;
 
         const finalTotalDmg = (baseWithPassiveAndDynamic + coreIncOnBase + mulIncOnBase + skillFinal);
@@ -420,3 +426,32 @@ class RaceCombatEngine {
     }
 
 }
+
+ALL_CARD_CLASSES.push(
+    XiaoHuan, YanHong, WenMin, ZhouYiXian, ZuoGui, QiHao, LinFeng, ShangGuanCe,
+    HaiGui, MengHu, XueDiXiong, ScarletGiantAnt, TwoTailedFox, YouMingQuan, SixTailedFox, SuiShou,
+    FengZheng, MuJian, ZheShan, HanBingJian, ShenMuTou, XianRenBuFan, LiuHeJing
+);
+
+/**
+ * 自动转换类引用为 UI 所需的元数据，并排序
+ */
+function getSortedCardDatabase() {
+    return ALL_CARD_CLASSES.map(Cls => {
+        const sample = new Cls(6); // 实例化一个样本获取元数据
+        return {
+            className: Cls.name,
+            name: sample.name,
+            fee: sample.fee,
+            race: sample.race,
+            classRef: Cls
+        };
+    }).sort((a, b) => a.fee - b.fee || a.name.localeCompare(a.name));
+}
+
+// 导出全局供 HTML 使用
+window.CARD_DATABASE = getSortedCardDatabase();
+
+window.CARD_NAME_MAP = Object.fromEntries(
+    window.CARD_DATABASE.map(c => [c.className, c.name])
+);

@@ -5,13 +5,12 @@
     <title>丹青模拟器 Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* 基础样式与 Python 版对齐 */
         .card-box {
-            height: 100px; /* 增加并固定高度 */
+            height: 100px;
             display: flex;
             flex-direction: column;
-            justify-content: flex-start; /* 顶部对齐 */
-            overflow: hidden; /* 防止内容溢出导致位移 */
+            justify-content: flex-start;
+            overflow: hidden;
             transition: transform 0.1s, box-shadow 0.2s;
         }
         .card-box.selected { border-color: #ef4444; background-color: #fef2f2; border-top-width: 4px; box-shadow: 0 8px 20px rgba(239, 68, 68, 0.1); }
@@ -89,25 +88,25 @@
 
             <div class="bg-white p-6 rounded-3xl shadow-sm border mb-6 grid grid-cols-2 md:grid-cols-4 gap-6">
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">基础攻击(无丹青)</label>
+                    <label class="block text-[15px] font-bold text-slate-400 uppercase mb-1">基础攻击(无丹青)</label>
                     <input type="number" id="baseAtk" value="8000" class="w-full border-b font-bold py-1 outline-none focus:border-red-400">
                 </div>
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">初始秒伤(无丹青)</label>
+                    <label class="block text-[15px] font-bold text-slate-400 uppercase mb-1">初始秒伤(无丹青)</label>
                     <input type="number" id="baseDps" value="35000" class="w-full border-b font-bold py-1 outline-none focus:border-red-400">
                 </div>
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">战斗时长: <span id="timeVal">180</span>s</label>
+                    <label class="block text-[15px] font-bold text-slate-400 uppercase mb-1">战斗时长: <span id="timeVal">180</span>s</label>
                     <input type="range" id="simTime" min="30" max="600" value="180" class="w-full accent-red">
                 </div>
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">迭代次数: <span id="iterVal">50</span></label>
+                    <label class="block text-[15px] font-bold text-slate-400 uppercase mb-1">迭代次数: <span id="iterVal">50</span></label>
                     <input type="range" id="simIter" min="1" max="200" value="50" class="w-full accent-red">
                 </div>
             </div>
 
             <div class="flex justify-between items-center mb-4 px-2">
-                <h2 class="font-bold text-slate-700">阵容编成 <span id="feeLabel" class="ml-2 text-sm font-normal text-slate-400">0/25 费</span></h2>
+                <h2 class="font-bold text-slate-700">阵容编成 <span id="feeLabel" class="ml-2 text-sm font-bold text-green-500">0 / 25 费</span></h2>
                 <div class="flex gap-2">
                     <button onclick="batchSetStars(0)" class="text-[10px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">全员 0★</button>
                     <button onclick="batchSetStars(1)" class="text-[10px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">1★</button>
@@ -125,9 +124,9 @@
         <div class="w-full lg:w-[450px] xl:w-[500px] space-y-6">
 
             <section>
-                <h3 class="text-sm font-bold text-slate-500 mb-4 flex items-center gap-2">
+                <h2 class="font-bold text-slate-500 mb-4 flex items-center gap-2">
                     <span class="w-1 h-4 bg-red-500 rounded-full"></span> 📊 模拟报告
-                </h3>
+                </h2>
 
                 <div class="metric-card shadow-sm">
                     <div class="metric-label">当前DPS</div>
@@ -137,11 +136,11 @@
 
                 <div class="grid grid-cols-2 gap-4">
                     <div class="bg-white p-4 rounded-xl border">
-                        <div class="text-[10px] font-bold text-slate-400 uppercase">丹青技能伤害</div>
+                        <div class="text-[12px] font-bold text-slate-400 uppercase">丹青技能伤害</div>
                         <div id="resCardDps" class="text-lg font-black text-slate-700">0</div>
                     </div>
                     <div class="bg-white p-4 rounded-xl border">
-                        <div class="text-[10px] font-bold text-slate-400 uppercase">丹青属性增益</div>
+                        <div class="text-[12px] font-bold text-slate-400 uppercase">丹青属性增益</div>
                         <div id="resBoostDps" class="text-lg font-black text-slate-700">0</div>
                     </div>
                 </div>
@@ -160,9 +159,9 @@
 
             <section>
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-sm font-bold text-slate-500 flex items-center gap-2">
+                    <h2 class="font-bold text-slate-500 flex items-center gap-2">
                         <span class="w-1 h-4 bg-slate-400 rounded-full"></span> 📜 历史记录
-                    </h3>
+                    </h2>
                     <button onclick="clearHistory()" class="text-[10px] text-blue-500">清空</button>
                 </div>
                 <div class="bg-white rounded-2xl border shadow-sm overflow-hidden text-xs">
@@ -177,31 +176,18 @@
 
     <script src="engine.js"></script>
     <script>
-        const CARDS = [
-            { name: "小环", fee: 1, race: "人" }, { name: "燕虹", fee: 1, race: "人" },
-            { name: "文敏", fee: 2, race: "人" }, { name: "上官策", fee: 2, race: "人" },
-            { name: "周一仙", fee: 2, race: "人" }, { name: "林峰", fee: 3, race: "人" },
-            { name: "左归", fee: 4, race: "人" },  { name: "齐昊", fee: 5, race: "人" },
-            { name: "海龟", fee: 1, race: "兽" }, { name: "猩红巨蚁", fee: 1, race: "兽" },
-            { name: "猛虎", fee: 2, race: "兽" }, { name: "二尾妖狐", fee: 2, race: "兽" },
-            { name: "岁兽", fee: 3, race: "兽" },  { name: "雪地熊", fee: 4, race: "兽" },
-            { name: "六尾魔狐", fee: 5, race: "兽" },
-            { name: "风筝", fee: 1, race: "器" }, { name: "木剑", fee: 1, race: "器" },
-            { name: "折扇", fee: 1, race: "器" }, { name: "神木骰", fee: 2, race: "器" },
-            { name: "仙人布幡", fee: 2, race: "器" }, { name: "寒冰箭", fee: 3, race: "器" },
-            { name: "六合镜", fee: 5, race: "器" }
-        ];
-
         let selected = new Map();
 
+        const races = ["Human", "Beast", "Tool"];
+        const raceConfig = {
+            "Human": { border: "race-human", tag: "tag-human", title: "人"  },
+            "Beast": { border: "race-beast", tag: "tag-beast", title: "兽"  },
+            "Tool": { border: "race-tool", tag: "tag-tool", title: "器"  }
+        };
+
+        const CARDS = window.CARD_DATABASE;
         function init() {
             const grid = document.getElementById('cardGrid');
-            const races = ["人", "兽", "器"];
-            const raceConfig = {
-                "人": { border: "race-human", tag: "tag-human", title: "Human / 人族" },
-                "兽": { border: "race-beast", tag: "tag-beast", title: "Beast / 兽族" },
-                "器": { border: "race-tool", tag: "tag-tool", title: "Tool / 器族" }
-            };
 
             grid.innerHTML = races.map(race => {
                 const raceCards = CARDS.filter(c => c.race === race);
@@ -209,16 +195,16 @@
                 return `
                     <div class="race-section">
                         ${raceCards.map(c => `
-                            <div id="c-${c.name}" class="card-box p-4 rounded-2xl bg-white shadow-sm ${conf.border}" onclick="toggle('${c.name}')">
+                            <div id="c-${c.className}" class="card-box p-4 rounded-2xl bg-white shadow-sm ${conf.border}" onclick="toggle('${c.className}')">
                                 <div class="flex justify-between items-start mb-1">
-                                    <span class="font-bold text-slate-700 text-sm">${c.name}</span>
-                                    <span class="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-mono">${c.fee}F</span>
+                                    <span class="font-bold text-slate-700">${c.name}</span>
+                                    <span class="text-[12px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-mono">${c.fee}F</span>
                                 </div>
-                                <div class="flex mb-3"><div class="text-[9px] px-2 py-0.5 rounded-full font-black ${conf.tag}">${c.race}</div></div>
-                                <div id="star-ui-${c.name}" class="star-ui hidden" onclick="event.stopPropagation()">
+                                <div class="flex mb-3"><div class="text-[12px] px-2 py-0.5 rounded-full font-black ${conf.tag}">${conf.title}</div></div>
+                                <div id="star-ui-${c.className}" class="star-ui hidden" onclick="event.stopPropagation()">
                                     <div class="flex items-center gap-2">
-                                        <input type="range" min="0" max="6" value="6" class="flex-1 accent-red h-1" oninput="updateLv('${c.name}', this.value)">
-                                        <span class="text-[10px] font-black text-red-500 w-4"><span id="lv-${c.name}">6</span>★</span>
+                                        <input type="range" min="0" max="6" value="6" class="flex-1 accent-red h-1" oninput="updateLv('${c.className}', this.value)">
+                                        <span class="text-[10px] font-black text-red-500 w-4"><span id="lv-${c.className}">6</span>★</span>
                                     </div>
                                 </div>
                             </div>
@@ -253,17 +239,26 @@
         function updateFee() {
             let total = 0;
             selected.forEach(v => {
-                const info = CARDS.find(c => c.name === v.name);
+                const info = CARDS.find(c => c.className === v.name);
                 total += info.fee;
             });
             const label = document.getElementById('feeLabel');
             label.innerText = `${total} / 25 费`;
-            label.className = total > 25 ? "ml-2 text-sm font-bold text-red-500" : "ml-2 text-sm font-normal text-slate-400";
+            label.className = total > 25 ? "ml-2 text-sm font-bold text-red-500" : "ml-2 text-sm font-bold text-green-500";
         }
 
 
         function doSim() {
             if(selected.size === 0) return alert("请先选卡");
+            const deckClasses = [];
+            selected.forEach((val, key) => {
+                // 从数据库中找到对应的类引用
+                const cardMeta = CARDS.find(c => c.className === key);
+                if (cardMeta) {
+                    // 动态创建实例，传入等级
+                    deckClasses.push(new cardMeta.classRef(val.level));
+                }
+            });
 
             const baseAtk = parseInt(document.getElementById('baseAtk').value);
             const baseDps = parseInt(document.getElementById('baseDps').value);
@@ -272,7 +267,7 @@
 
             let results = [];
             for(let i = 0; i < iterations; i++) {
-                const engine = new RaceCombatEngine(Array.from(selected.values()), baseAtk, baseDps);
+                const engine = new RaceCombatEngine(deckClasses, baseAtk, baseDps);
                 results.push(engine.simulate(simTime));
             }
 
@@ -303,7 +298,7 @@
             document.getElementById('resMax').innerText = Math.round(maxVal).toLocaleString();
             document.getElementById('resErr').innerText = Math.round(ci95).toLocaleString();
 
-            // 渲染进度条位置 (对齐 Python 逻辑)
+            // 渲染进度条位置
             const rangePercent = ((2 * ci95) / (maxVal - minVal + 1)) * 100;
             const leftPercent = ((avgTotal - ci95 - minVal) / (maxVal - minVal + 1)) * 100;
             document.getElementById('rangeBar').style.left = Math.max(0, leftPercent) + "%";
@@ -320,7 +315,8 @@
 
             // 处理阵容文字 (默认 6 星不显示星级)
             const lineup = Array.from(selected.values()).map(card => {
-                return card.level === 6 ? card.name : `${card.name}(${card.level}★)`;
+                const chineseName = window.CARD_NAME_MAP[card.name] || card.name;
+                return card.level === 6 ? chineseName : `${chineseName}(${card.level}★)`;
             }).join(" + ");
 
             const item = `
