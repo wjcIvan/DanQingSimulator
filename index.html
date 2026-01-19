@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <title>丹青模拟器 Pro</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         .card-box {
             height: 100px;
@@ -74,7 +75,7 @@
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen">
 
-    <header class="bg-white border-b px-8 py-4 sticky top-0 z-10 flex justify-between items-center">
+    <header class="bg-white px-8 py-4 sticky top-0 z-10 flex justify-between items-center">
         <h1 class="text-xl font-black text-red-600">🎴 丹青模拟器 Pro</h1>
         <div class="flex gap-4">
             <button onclick="reset()" class="text-sm font-bold text-slate-400 hover:text-red-500">清空阵容</button>
@@ -86,7 +87,7 @@
 
         <div class="flex-1 lg:w-3/5">
 
-            <div class="bg-white p-6 rounded-3xl shadow-sm border mb-6 grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div class="bg-white p-6 rounded-3xl shadow-sm mb-6 grid grid-cols-2 md:grid-cols-4 gap-6">
                 <div>
                     <label class="block text-[15px] font-bold text-slate-400 uppercase mb-1">基础攻击(无丹青)</label>
                     <input type="number" id="baseAtk" value="8000" class="w-full border-b font-bold py-1 outline-none focus:border-red-400">
@@ -96,8 +97,8 @@
                     <input type="number" id="baseDps" value="35000" class="w-full border-b font-bold py-1 outline-none focus:border-red-400">
                 </div>
                 <div>
-                    <label class="block text-[15px] font-bold text-slate-400 uppercase mb-1">战斗时长: <span id="timeVal">180</span>s</label>
-                    <input type="range" id="simTime" min="30" max="600" value="180" class="w-full accent-red">
+                    <label class="block text-[15px] font-bold text-slate-400 uppercase mb-1">战斗时长: <span id="timeVal">300</span>s</label>
+                    <input type="range" id="simTime" min="30" max="600" value="300" class="w-full accent-red">
                 </div>
                 <div>
                     <label class="block text-[15px] font-bold text-slate-400 uppercase mb-1">迭代次数: <span id="iterVal">50</span></label>
@@ -108,13 +109,13 @@
             <div class="flex justify-between items-center mb-4 px-2">
                 <h2 class="font-bold text-slate-700">阵容编成 <span id="feeLabel" class="ml-2 text-sm font-bold text-green-500">0 / 25 费</span></h2>
                 <div class="flex gap-2">
-                    <button onclick="batchSetStars(0)" class="text-[10px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">全员 0★</button>
-                    <button onclick="batchSetStars(1)" class="text-[10px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">1★</button>
-                    <button onclick="batchSetStars(2)" class="text-[10px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">2★</button>
-                    <button onclick="batchSetStars(3)" class="text-[10px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">3★</button>
-                    <button onclick="batchSetStars(4)" class="text-[10px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">4★</button>
-                    <button onclick="batchSetStars(5)" class="text-[10px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">5★</button>
-                    <button onclick="batchSetStars(6)" class="text-[10px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">6★</button>
+                    <button onclick="batchSetStars(0)" class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">全员 0★</button>
+                    <button onclick="batchSetStars(1)" class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">1★</button>
+                    <button onclick="batchSetStars(2)" class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">2★</button>
+                    <button onclick="batchSetStars(3)" class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">3★</button>
+                    <button onclick="batchSetStars(4)" class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">4★</button>
+                    <button onclick="batchSetStars(5)" class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">5★</button>
+                    <button onclick="batchSetStars(6)" class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">6★</button>
                 </div>
             </div>
 
@@ -135,11 +136,11 @@
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
-                    <div class="bg-white p-4 rounded-xl border">
+                    <div class="bg-white p-4 rounded-xl">
                         <div class="text-[12px] font-bold text-slate-400 uppercase">丹青技能伤害</div>
                         <div id="resCardDps" class="text-lg font-black text-slate-700">0</div>
                     </div>
-                    <div class="bg-white p-4 rounded-xl border">
+                    <div class="bg-white p-4 rounded-xl">
                         <div class="text-[12px] font-bold text-slate-400 uppercase">丹青属性增益</div>
                         <div id="resBoostDps" class="text-lg font-black text-slate-700">0</div>
                     </div>
@@ -155,6 +156,10 @@
                     </div>
                     <p class="text-[9px] text-slate-400 mt-2 text-center italic">基于 95% 置信区间</p>
                 </div>
+                <div id="dpsChartInfo" class="bg-white p-4 rounded-xl mt-4 h-[250px] hidden">
+                    <div class="text-[10px] font-bold text-slate-400 uppercase mb-2">DPS 演进曲线 (平均值)</div>
+                    <canvas id="dpsChart"></canvas>
+                </div>
             </section>
 
             <section>
@@ -164,7 +169,7 @@
                     </h2>
                     <button onclick="clearHistory()" class="text-[10px] text-blue-500">清空</button>
                 </div>
-                <div class="bg-white rounded-2xl border shadow-sm overflow-hidden text-xs">
+                <div class="bg-white rounded-2xl shadow-sm overflow-hidden text-xs">
                     <div class="max-h-[400px] overflow-y-auto" id="historyList">
                         <div class="p-8 text-center text-slate-300">暂无模拟数据</div>
                     </div>
@@ -186,6 +191,9 @@
         };
 
         const CARDS = window.CARD_DATABASE;
+
+        let dpsChartInstance = null;
+
         function init() {
             const grid = document.getElementById('cardGrid');
 
@@ -294,6 +302,7 @@
 
             // 更新波动范围条
             document.getElementById('rangeInfo').classList.remove('hidden');
+            document.getElementById('dpsChartInfo').classList.remove('hidden');
             document.getElementById('resMin').innerText = Math.round(minVal).toLocaleString();
             document.getElementById('resMax').innerText = Math.round(maxVal).toLocaleString();
             document.getElementById('resErr').innerText = Math.round(ci95).toLocaleString();
@@ -305,6 +314,64 @@
             document.getElementById('rangeBar').style.width = Math.min(100, rangePercent) + "%";
 
             addHistory(Math.round(avgTotal), ci95);
+
+            // 计算平均 DPS 曲线 ---
+            const historyLength = results[0].dpsHistory.length;
+            let averageCurve = new Array(historyLength).fill(0);
+
+            for (let i = 0; i < historyLength; i++) {
+                let sum = 0;
+                for (let j = 0; j < iterations; j++) {
+                    sum += results[j].dpsHistory[i];
+                }
+                averageCurve[i] = Math.round(sum / iterations);
+            }
+            renderChart(averageCurve, simTime);
+        }
+
+        function renderChart(curveData, totalTime) {
+            const ctx = document.getElementById('dpsChart').getContext('2d');
+            if (dpsChartInstance) dpsChartInstance.destroy();
+
+            // 生成 X 轴标签 (1s, 2s, ...)
+            const labels = curveData.map((_, i) => (i + 1) + 's');
+
+            dpsChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '平均 DPS',
+                        data: curveData,
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.05)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    layout: {
+                        padding: {
+                            left: 10,
+                            right: 20,
+                            top: 10,
+                            bottom: 10
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { mode: 'index', intersect: false }
+                    },
+                    scales: {
+                        x: { display: true, grid: { display: false }, ticks: { maxTicksLimit: 10 } },
+                        y: { beginAtZero: false, grid: { color: '#f1f5f9' } }
+                    }
+                }
+            });
         }
 
         function addHistory(dps, error) {

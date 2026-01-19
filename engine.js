@@ -361,6 +361,8 @@ class RaceCombatEngine {
         let dynamicBaseBoost = 0.0;
         const steps = Math.round(duration / 0.1);
 
+        let dpsHistory = [];
+
         for (let i = 0; i <= steps; i++) {
             this.time = pyRound(i * 0.1);
 
@@ -397,8 +399,15 @@ class RaceCombatEngine {
             dynamicBaseBoost += (this.baseDps * this.passiveMod / 10 * xdxRate);
             let dmgAdd = this.cardTotalDmg - dmgBefore;
             this.cardTotalDmg += (dmgAdd * xdxRate);
+
+            if (i % 10 === 0 && i > 0) {
+                const currentRes = this.finalize(this.time, dynamicBaseBoost);
+                dpsHistory.push(currentRes.total);
+            }
         }
-        return this.finalize(duration, dynamicBaseBoost);
+        const finalRes = this.finalize(duration, dynamicBaseBoost);
+        finalRes.dpsHistory = dpsHistory;
+        return finalRes;
     }
 
     finalize(duration, dynamicBaseBoost) {
