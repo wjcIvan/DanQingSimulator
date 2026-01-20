@@ -5,6 +5,7 @@
     <title>丹青模拟器 Pro</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
     <style>
         .card-box {
             height: 100px;
@@ -178,7 +179,18 @@
 
         </div>
     </div>
-
+    <footer class="mt-12 py-8 border-t border-slate-200 text-center" hidden>
+        <div class="text-[12px] text-slate-400 font-medium flex justify-center gap-4">
+            <span id="busuanzi_container_site_pv">
+                本站总访问量 <span id="busuanzi_value_site_pv" class="text-slate-900 font-bold">--</span> 次
+            </span>
+            <span class="text-slate-200">|</span>
+            <span id="busuanzi_container_site_uv">
+                共有 <span id="busuanzi_value_site_uv" class="text-slate-900 font-bold">--</span> 位猪白到访
+            </span>
+        </div>
+    </footer>
+    
     <script src="engine.js"></script>
     <script>
         let selected = new Map();
@@ -425,5 +437,6 @@
 </body>
 
 </html>
+
 
 
