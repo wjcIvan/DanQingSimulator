@@ -401,6 +401,11 @@
             list.insertAdjacentHTML('afterbegin', item);
         }
 
+        function clearHistory() {
+            const list = document.getElementById('historyList');
+            list.innerHTML = '<div class="p-8 text-center text-slate-300">暂无模拟数据</div>';
+        }
+
         function batchSetStars(s) {
             selected.forEach((v, k) => {
                 v.level = s;
