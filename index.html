@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <title>丹青模拟器 Pro</title>
@@ -13,18 +14,51 @@
             flex-direction: column;
             justify-content: flex-start;
             overflow: hidden;
-            transition: transform 0.1s, box-shadow 0.2s;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid transparent;
         }
-        .card-box.selected { border-color: #ef4444; background-color: #fef2f2; border-top-width: 4px; box-shadow: 0 8px 20px rgba(239, 68, 68, 0.1); }
-        .accent-red { accent-color: #ef4444; }
 
-        /* 种族视觉标识 */
-        .race-human { border-top: 4px solid #3b82f6; }
-        .race-beast { border-top: 4px solid #f59e0b; }
-        .race-tool { border-top: 4px solid #10b981; }
-        .tag-human { background-color: #eff6ff; color: #1e40af; }
-        .tag-beast { background-color: #fffbeb; color: #92400e; }
-        .tag-tool { background-color: #ecfdf5; color: #065f46; }
+        .card-box:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        .card-box.selected {
+            border-color: #8b5cf6;
+            background-color: #f5f3ff;
+            box-shadow: 0 10px 25px -5px rgba(139, 92, 246, 0.15), 0 0 0 1px #8b5cf6;
+        }
+
+        .accent-red {
+            accent-color: #8b5cf6;
+        }
+
+        .race-human {
+            border-top: 4px solid #128cf0;
+        }
+
+        .tag-human {
+            background-color: #ecf6ff;
+            color: #1d4ed8;
+        }
+
+        .race-beast {
+            border-top: 4px solid #f59e0b;
+        }
+
+        .tag-beast {
+            background-color: #fffbeb;
+            color: #b45309;
+        }
+
+        .race-tool {
+            border-top: 4px solid #10b981;
+        }
+
+        .tag-tool {
+            background-color: #ecfdf5;
+            color: #047857;
+        }
 
         /* 布局控制 */
         .race-section {
@@ -33,6 +67,7 @@
             gap: 1rem;
             margin-bottom: 2rem;
         }
+
         .race-title {
             grid-column: 1 / -1;
             font-size: 1rem;
@@ -45,42 +80,62 @@
         }
 
         /* 右侧结果卡片 */
-        .metric-card { background: white; padding: 1.25rem; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 1rem; }
-        .metric-label { font-size: 0.75rem; color: #64748b; font-weight: bold; margin-bottom: 0.25rem; }
-        .metric-value { font-size: 1.875rem; font-weight: 900; color: #ef4444; line-height: 1; }
+        .metric-card {
+            background: white;
+            padding: 1.25rem;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 1rem;
+        }
+
+        .metric-label {
+            font-size: 0.75rem;
+            color: #64748b;
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+        }
+
+        .metric-value {
+            font-size: 1.875rem;
+            font-weight: 900;
+            color: #334155;
+            line-height: 1;
+        }
 
         /* 预期范围条样式 */
         .range-container {
-            background: #fdf2f2;
+            background: #f8fafc;
             padding: 12px;
             border-radius: 12px;
-            border: 1px solid #fee2e2;
+            border: 1px solid #e2e8f0;
             margin-top: 1rem;
         }
+
         .range-bar-bg {
             height: 6px;
-            background: #fee2e2;
+            background: #e2e8f0;
             border-radius: 99px;
             position: relative;
             margin-top: 8px;
         }
+
         .range-bar-fill {
             position: absolute;
-            background: #ef4444;
-            opacity: 0.6;
+            background: #64748b;
+            opacity: 0.8;
             height: 100%;
             border-radius: 99px;
             transition: all 0.5s ease;
         }
     </style>
 </head>
+
 <body class="bg-slate-50 text-slate-900 min-h-screen">
 
     <header class="bg-white px-8 py-4 sticky top-0 z-10 flex justify-between items-center">
         <h1 class="text-xl font-black text-red-600">🎴 丹青模拟器 Pro</h1>
         <div class="flex gap-4">
-            <button onclick="reset()" class="text-sm font-bold text-slate-400 hover:text-red-500">清空阵容</button>
-            <button onclick="doSim()" class="bg-red-500 text-white px-6 py-2 rounded-full font-bold hover:bg-red-600 transition-all shadow-lg shadow-red-200">🔥 开始演算</button>
+
         </div>
     </header>
 
@@ -91,32 +146,48 @@
             <div class="bg-white p-6 rounded-3xl shadow-sm mb-6 grid grid-cols-2 md:grid-cols-4 gap-6">
                 <div>
                     <label class="block text-[15px] font-bold text-slate-400 uppercase mb-1">基础攻击(无丹青)</label>
-                    <input type="number" id="baseAtk" value="8000" class="w-full border-b font-bold py-1 outline-none focus:border-red-400">
+                    <input type="number" id="baseAtk" value="8000"
+                        class="w-full border-b font-bold py-1 outline-none focus:border-red-400">
                 </div>
                 <div>
                     <label class="block text-[15px] font-bold text-slate-400 uppercase mb-1">初始秒伤(无丹青)</label>
-                    <input type="number" id="baseDps" value="35000" class="w-full border-b font-bold py-1 outline-none focus:border-red-400">
+                    <input type="number" id="baseDps" value="35000"
+                        class="w-full border-b font-bold py-1 outline-none focus:border-red-400">
                 </div>
                 <div>
-                    <label class="block text-[15px] font-bold text-slate-400 uppercase mb-1">战斗时长: <span id="timeVal">300</span>s</label>
+                    <label class="block text-[15px] font-bold text-slate-400 uppercase mb-1">战斗时长: <span
+                            id="timeVal">300</span>s</label>
                     <input type="range" id="simTime" min="30" max="600" value="300" class="w-full accent-red">
                 </div>
                 <div>
-                    <label class="block text-[15px] font-bold text-slate-400 uppercase mb-1">迭代次数: <span id="iterVal">50</span></label>
+                    <label class="block text-[15px] font-bold text-slate-400 uppercase mb-1">迭代次数: <span
+                            id="iterVal">50</span></label>
                     <input type="range" id="simIter" min="1" max="200" value="50" class="w-full accent-red">
                 </div>
             </div>
 
             <div class="flex justify-between items-center mb-4 px-2">
-                <h2 class="font-bold text-slate-700">阵容编成 <span id="feeLabel" class="ml-2 text-sm font-bold text-green-500">0 / 25 费</span></h2>
+                <h2 class="font-bold text-slate-700">阵容编成 <span id="feeLabel"
+                        class="ml-2 text-sm font-bold text-green-500">0 / 25 费</span></h2>
                 <div class="flex gap-2">
-                    <button onclick="batchSetStars(0)" class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">全员 0★</button>
-                    <button onclick="batchSetStars(1)" class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">1★</button>
-                    <button onclick="batchSetStars(2)" class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">2★</button>
-                    <button onclick="batchSetStars(3)" class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">3★</button>
-                    <button onclick="batchSetStars(4)" class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">4★</button>
-                    <button onclick="batchSetStars(5)" class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">5★</button>
-                    <button onclick="batchSetStars(6)" class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">6★</button>
+                    <button onclick="selectAll()"
+                        class="text-[12px] bg-blue-50 text-blue-500 font-bold border border-blue-100 px-2 py-1 rounded shadow-sm hover:bg-blue-100">全选</button>
+                    <button onclick="reset()"
+                        class="text-[12px] bg-red-50 text-red-500 font-bold border border-red-100 px-2 py-1 rounded shadow-sm hover:bg-red-100">清空</button>
+                    <button onclick="batchSetStars(0)"
+                        class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">全员 0★</button>
+                    <button onclick="batchSetStars(1)"
+                        class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">1★</button>
+                    <button onclick="batchSetStars(2)"
+                        class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">2★</button>
+                    <button onclick="batchSetStars(3)"
+                        class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">3★</button>
+                    <button onclick="batchSetStars(4)"
+                        class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">4★</button>
+                    <button onclick="batchSetStars(5)"
+                        class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">5★</button>
+                    <button onclick="batchSetStars(6)"
+                        class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">6★</button>
                 </div>
             </div>
 
@@ -125,57 +196,148 @@
 
         <div class="w-full lg:w-[450px] xl:w-[500px] space-y-6">
 
-            <section>
-                <h2 class="font-bold text-slate-500 mb-4 flex items-center gap-2">
-                    <span class="w-1 h-4 bg-red-500 rounded-full"></span> 📊 模拟报告
-                </h2>
+            <!-- 选项卡导航 -->
+            <div class="flex p-1 bg-slate-100 rounded-xl mb-6">
+                <button onclick="switchTab('basic')" id="btn-tab-basic"
+                    class="flex-1 py-2 rounded-lg text-sm font-bold text-slate-700 bg-white shadow-sm transition-all">基础模拟</button>
+                <button onclick="switchTab('advanced')" id="btn-tab-advanced"
+                    class="flex-1 py-2 rounded-lg text-sm font-bold text-slate-400 hover:text-slate-600 transition-all">高级推演</button>
+            </div>
 
-                <div class="metric-card shadow-sm">
-                    <div class="metric-label">当前DPS</div>
-                    <div id="resTotal" class="metric-value">0</div>
-                    <div id="resPercent" class="text-xs font-bold text-green-500 mt-2">+0.0%</div>
-                </div>
+            <div id="tab-basic">
+                <section class="space-y-4">
+                    <!-- 顶部操作区 -->
+                    <button onclick="doSim()"
+                        class="w-full bg-slate-800 text-white py-4 rounded-xl font-black text-lg shadow-xl shadow-slate-200 hover:bg-slate-700 hover:shadow-slate-300 hover:scale-[1.02] active:scale-[0.98] transition-all flex justify-center items-center gap-2 group">
+                        <span class="group-hover:rotate-12 transition-transform">🔥</span>
+                        <span>开始基础模拟</span>
+                    </button>
 
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="bg-white p-4 rounded-xl">
-                        <div class="text-[12px] font-bold text-slate-400 uppercase">丹青技能伤害</div>
-                        <div id="resCardDps" class="text-lg font-black text-slate-700">0</div>
-                    </div>
-                    <div class="bg-white p-4 rounded-xl">
-                        <div class="text-[12px] font-bold text-slate-400 uppercase">丹青属性增益</div>
-                        <div id="resBoostDps" class="text-lg font-black text-slate-700">0</div>
-                    </div>
-                </div>
-                <div id="rangeInfo" class="range-container hidden">
-                    <div class="flex justify-between text-[10px] text-red-800 font-bold">
-                        <span>最低: <span id="resMin">0</span></span>
-                        <span>预期波动: ±<span id="resErr">0</span></span>
-                        <span>最高: <span id="resMax">0</span></span>
-                    </div>
-                    <div class="range-bar-bg">
-                        <div id="rangeBar" class="range-bar-fill" style="left: 0%; width: 0%;"></div>
-                    </div>
-                    <p class="text-[9px] text-slate-400 mt-2 text-center italic">基于 95% 置信区间</p>
-                </div>
-                <div id="dpsChartInfo" class="bg-white p-4 rounded-xl mt-4 h-[250px] hidden">
-                    <div class="text-[10px] font-bold text-slate-400 uppercase mb-2">DPS 演进曲线 (平均值)</div>
-                    <canvas id="dpsChart"></canvas>
-                </div>
-            </section>
+                    <!-- 核心指标卡 -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <!-- 总 DPS -->
+                        <div
+                            class="col-span-2 bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center relative overflow-hidden">
+                            <div class="absolute top-0 right-0 p-3 opacity-10">
+                                <svg class="w-16 h-16 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                    <path
+                                        d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z">
+                                    </path>
+                                </svg>
+                            </div>
+                            <div class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">当前平均
+                                DPS</div>
+                            <div id="resTotal" class="text-4xl font-black text-slate-800 tracking-tight">0
+                            </div>
+                            <div id="resPercent"
+                                class="text-xs font-bold text-green-500 mt-2 bg-green-50 px-2 py-1 rounded-full">
+                                +0.0%</div>
+                        </div>
 
-            <section>
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="font-bold text-slate-500 flex items-center gap-2">
-                        <span class="w-1 h-4 bg-slate-400 rounded-full"></span> 📜 历史记录
-                    </h2>
-                    <button onclick="clearHistory()" class="text-[10px] text-blue-500">清空</button>
-                </div>
-                <div class="bg-white rounded-2xl shadow-sm overflow-hidden text-xs">
-                    <div class="max-h-[400px] overflow-y-auto" id="historyList">
-                        <div class="p-8 text-center text-slate-300">暂无模拟数据</div>
+                        <!-- 细分数据 -->
+                        <div
+                            class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center">
+                            <div class="text-[10px] text-slate-400 font-bold uppercase mb-1">技能伤害</div>
+                            <div id="resCardDps" class="text-lg font-black text-slate-700">0</div>
+                        </div>
+                        <div
+                            class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center">
+                            <div class="text-[10px] text-slate-400 font-bold uppercase mb-1">属性增益</div>
+                            <div id="resBoostDps" class="text-lg font-black text-slate-700">0</div>
+                        </div>
                     </div>
-                </div>
-            </section>
+
+                    <!-- 波动范围 -->
+                    <div id="rangeInfo" class="hidden bg-slate-50 p-4 rounded-xl border border-dashed border-slate-200">
+                        <div class="flex justify-between text-[11px] font-bold text-slate-500 mb-2">
+                            <span>最低 <span id="resMin" class="text-slate-700">0</span></span>
+                            <span>最高 <span id="resMax" class="text-slate-700">0</span></span>
+                        </div>
+                        <div class="relative h-2 bg-slate-200 rounded-full overflow-hidden mb-2">
+                            <div id="rangeBar"
+                                class="absolute h-full bg-red-400 rounded-full transition-all duration-500"
+                                style="left: 0%; width: 0%;"></div>
+                        </div>
+                        <div class="text-center text-[10px] text-slate-400">
+                            预期波动: ±<span id="resErr">0</span> (95% CI)
+                        </div>
+                    </div>
+
+                    <!-- 图表 -->
+                    <div id="dpsChartInfo"
+                        class="hidden bg-white p-4 rounded-2xl shadow-sm border border-slate-100 h-[220px]">
+                        <div class="text-[10px] font-bold text-slate-400 uppercase mb-2 ml-1">DPS 演进曲线</div>
+                        <canvas id="dpsChart"></canvas>
+                    </div>
+
+                    <!-- 历史记录 -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                        <div
+                            class="px-4 py-3 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+                            <h3 class="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
+                                📜 历史记录
+                            </h3>
+                            <button onclick="clearHistory()"
+                                class="text-[10px] text-slate-400 hover:text-red-500 transition-colors">清空</button>
+                        </div>
+                        <div class="max-h-[300px] overflow-y-auto" id="historyList">
+                            <div class="p-8 text-center text-slate-300 text-xs">暂无模拟数据</div>
+                        </div>
+                    </div>
+                </section>
+
+
+            </div>
+
+            <div id="tab-advanced" class="hidden">
+                <section>
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-400 uppercase mb-1">最大费用</label>
+                                <input type="number" id="bfMaxCost" value="15"
+                                    class="w-full border-b font-bold py-1 outline-none text-purple-600 focus:border-purple-400">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-400 uppercase mb-1">演算轮次</label>
+                                <input type="number" id="bfIter" value="5"
+                                    class="w-full border-b font-bold py-1 outline-none text-purple-600 focus:border-purple-400">
+                            </div>
+                        </div>
+
+                        <div class="flex gap-2">
+                            <button onclick="startBruteForce()" id="btnStartBF"
+                                class="flex-1 bg-purple-500 text-white py-3 rounded-xl font-bold shadow-lg shadow-purple-200 hover:bg-purple-600 transition-all flex justify-center items-center gap-2">
+                                <span>🚀 开始高级推演</span>
+                            </button>
+                            <button onclick="stopBruteForce()" id="btnStopBF"
+                                class="hidden w-24 bg-red-100 text-red-500 rounded-xl font-bold hover:bg-red-200 transition-all">
+                                ⏹ 停止
+                            </button>
+                        </div>
+
+                        <!-- 进度条 -->
+                        <div id="bfProgressBox" class="hidden mt-4">
+                            <div class="flex justify-between text-[10px] text-purple-600 font-bold mb-1">
+                                <span id="bfStatusText">正在初始化...</span>
+                                <span id="bfPercent">0%</span>
+                            </div>
+                            <div class="h-2 bg-purple-100 rounded-full overflow-hidden">
+                                <div id="bfProgressBar" class="h-full bg-purple-500 transition-all duration-300"
+                                    style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- 结果列表 -->
+                        <div id="bfResultBox" class="mt-4 hidden">
+                            <div class="text-[10px] font-bold text-slate-400 uppercase mb-2">推演结果 (Top 10)</div>
+                            <div id="bfResultList" class="space-y-2">
+                                <!-- Items -->
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
 
         </div>
     </div>
@@ -197,9 +359,9 @@
 
         const races = ["Human", "Beast", "Tool"];
         const raceConfig = {
-            "Human": { border: "race-human", tag: "tag-human", title: "人"  },
-            "Beast": { border: "race-beast", tag: "tag-beast", title: "兽"  },
-            "Tool": { border: "race-tool", tag: "tag-tool", title: "器"  }
+            "Human": { border: "race-human", tag: "tag-human", title: "人" },
+            "Beast": { border: "race-beast", tag: "tag-beast", title: "兽" },
+            "Tool": { border: "race-tool", tag: "tag-tool", title: "器" }
         };
 
         const CARDS = window.CARD_DATABASE;
@@ -237,7 +399,7 @@
         function toggle(name) {
             const node = document.getElementById(`c-${name}`);
             const starUi = document.getElementById(`star-ui-${name}`);
-            if(selected.has(name)) {
+            if (selected.has(name)) {
                 selected.delete(name);
                 node.classList.remove('selected');
                 starUi.classList.add('hidden');
@@ -250,7 +412,7 @@
         }
 
         function updateLv(name, val) {
-            if(selected.has(name)) {
+            if (selected.has(name)) {
                 selected.get(name).level = parseInt(val);
                 document.getElementById(`lv-${name}`).innerText = val;
             }
@@ -269,7 +431,7 @@
 
 
         function doSim() {
-            if(selected.size === 0) return alert("请先选卡");
+            if (selected.size === 0) return alert("请先选卡");
             const deckClasses = [];
 
             const deckConfig = Array.from(selected.values()).map(val => {
@@ -286,7 +448,7 @@
             const iterations = parseInt(document.getElementById('simIter').value);
 
             let results = [];
-            for(let i = 0; i < iterations; i++) {
+            for (let i = 0; i < iterations; i++) {
                 const currentDeck = deckConfig.map(c => new c.classRef(c.level));
                 const engine = new RaceCombatEngine(currentDeck, baseAtk, baseDps);
                 results.push(engine.simulate(simTime));
@@ -311,7 +473,7 @@
             document.getElementById('resBoostDps').innerText = Math.round(avgBoost).toLocaleString();
 
             const increaseDps = Math.round(avgTotal - baseDps).toLocaleString();
-            document.getElementById('resPercent').innerText = `相比无丹青提升 +${((avgTotal - baseDps)/baseDps*100).toFixed(1)}% (${increaseDps})`;
+            document.getElementById('resPercent').innerText = `相比无丹青提升 +${((avgTotal - baseDps) / baseDps * 100).toFixed(1)}% (${increaseDps})`;
 
             // 更新波动范围条
             document.getElementById('rangeInfo').classList.remove('hidden');
@@ -391,7 +553,7 @@
             const list = document.getElementById('historyList');
             if (list.innerText.includes("暂无")) list.innerHTML = '';
 
-            const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
             // 处理阵容文字 (默认 6 星不显示星级)
             const lineup = Array.from(selected.values()).map(card => {
@@ -408,7 +570,7 @@
                         </div>
                         <span class="text-[9px] text-slate-300 font-mono">${time}</span>
                     </div>
-                    <div class="text-[10px] text-slate-500 truncate">${lineup}</div>
+                    <div class="text-[10px] text-slate-500 break-words leading-tight">${lineup}</div>
                 </div>
             `;
             list.insertAdjacentHTML('afterbegin', item);
@@ -429,14 +591,175 @@
 
         function reset() { selected.clear(); init(); updateFee(); }
 
-        document.getElementById('simTime').oninput = function() { document.getElementById('timeVal').innerText = this.value; };
-        document.getElementById('simIter').oninput = function() { document.getElementById('iterVal').innerText = this.value; };
+        document.getElementById('simTime').oninput = function () { document.getElementById('timeVal').innerText = this.value; };
+        document.getElementById('simIter').oninput = function () { document.getElementById('iterVal').innerText = this.value; };
+
+        let bfWorker = null;
+
+        function selectAll() {
+            const allNames = window.CARD_DATABASE.map(c => c.className);
+            allNames.forEach(n => {
+                if (!selected.has(n)) toggle(n);
+            });
+        }
+
+        function startBruteForce() {
+            const btn = document.getElementById('btnStartBF');
+            const progressBox = document.getElementById('bfProgressBox');
+            const progressBar = document.getElementById('bfProgressBar');
+            const statusText = document.getElementById('bfStatusText');
+            const percentText = document.getElementById('bfPercent');
+            const resultBox = document.getElementById('bfResultBox');
+            const resultList = document.getElementById('bfResultList');
+
+            // 准备配置
+            const maxCost = parseInt(document.getElementById('bfMaxCost').value) || 15;
+            const iterations = parseInt(document.getElementById('bfIter').value) || 5;
+            const baseAtk = parseInt(document.getElementById('baseAtk').value);
+            const baseDps = parseInt(document.getElementById('baseDps').value);
+            const simTime = parseInt(document.getElementById('simTime').value);
+
+
+
+            if (selected.size === 0) {
+                if (!confirm("当前未选中任何卡片，是否使用【全丹青 6★】进行推演？(计算量可能较大)")) return;
+                pool = window.CARD_DATABASE.map(c => ({ className: c.className, name: c.name, fee: c.fee, level: 6 }));
+            } else {
+                pool = Array.from(selected.values()).map(v => {
+                    const meta = window.CARD_DATABASE.find(c => c.className === v.name);
+                    return { className: v.name, name: meta.name, fee: meta.fee, level: v.level };
+                });
+            }
+
+            // UI 状态
+            btn.disabled = true;
+            btn.innerHTML = `<svg class="animate-spin h-5 w-5 mr-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 正在推演...`;
+            document.getElementById('btnStopBF').classList.remove('hidden');
+            progressBox.classList.remove('hidden');
+            resultBox.classList.add('hidden');
+            progressBar.style.width = '0%';
+
+            // 终止旧 Worker
+            if (bfWorker) bfWorker.terminate();
+
+            // 启动 Worker
+            bfWorker = new Worker('sim_worker.js');
+
+            bfWorker.postMessage({
+                type: 'START',
+                data: {
+                    baseAtk, baseDps, timeLimit: simTime, iterations, maxCost,
+                    selectedCardPool: pool
+                }
+            });
+
+            bfWorker.onmessage = function (e) {
+                const { type, message, progress, current, total, data } = e.data;
+
+                if (type === 'STATUS') {
+                    statusText.innerText = message;
+                }
+                else if (type === 'PROGRESS') {
+                    progressBar.style.width = progress + '%';
+                    percentText.innerText = progress + '%';
+                    statusText.innerText = `进度: ${current} / ${total}`;
+                }
+                else if (type === 'RESULT') {
+                    renderBFResults(data);
+                    finishBF();
+                }
+            };
+
+            bfWorker.onerror = function (err) {
+                alert("Worker Error: " + err.message);
+                finishBF();
+            };
+        }
+
+        function stopBruteForce() {
+            if (bfWorker) {
+                bfWorker.terminate();
+                bfWorker = null;
+                document.getElementById('bfStatusText').innerText = "已手动停止";
+                finishBF();
+            }
+        }
+
+        function finishBF() {
+            const btn = document.getElementById('btnStartBF');
+            btn.disabled = false;
+            btn.innerHTML = `🚀 开始高级推演`;
+            document.getElementById('btnStopBF').classList.add('hidden');
+            // Check if status is manually stopped to avoid overwriting
+            if (document.getElementById('bfStatusText').innerText !== "已手动停止") {
+                document.getElementById('bfStatusText').innerText = "完成";
+                document.getElementById('bfPercent').innerText = "100%";
+                document.getElementById('bfProgressBar').style.width = '100%';
+            }
+        }
+
+        function renderBFResults(data) {
+            const list = document.getElementById('bfResultList');
+            const box = document.getElementById('bfResultBox');
+            box.classList.remove('hidden');
+
+            // Sort by DPS desc
+            const top = data.sort((a, b) => b.dps - a.dps).slice(0, 50); // Show top 50 in code but maybe limit render
+
+            list.innerHTML = top.slice(0, 10).map((item, idx) => {
+                const rankColor = idx === 0 ? 'text-red-500' : (idx < 3 ? 'text-orange-500' : 'text-slate-600');
+                const badge = idx === 0 ? '👑' : `#${idx + 1}`;
+
+                return `
+                    <div class="px-3 py-2 border-b border-slate-100 last:border-0 hover:bg-purple-50 transition-colors flex items-center justify-between gap-3">
+                        <div class="flex items-center gap-2 flex-1">
+                            <span class="font-black text-xs ${rankColor} w-7 shrink-0">${badge}</span>
+                            <div class="text-slate-700 font-bold text-xs break-words leading-tight">
+                                ${item.deckDetails.join(' + ')}
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0 self-start mt-0.5">
+                            <span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded min-w-[2.5rem] text-center">${item.cost}F</span>
+                            <span class="font-mono font-black text-purple-600 text-sm w-20 text-right">${Math.round(item.dps).toLocaleString()}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+
+
+        function switchTab(tab) {
+            const basic = document.getElementById('tab-basic');
+            const adv = document.getElementById('tab-advanced');
+            const btnBasic = document.getElementById('btn-tab-basic');
+            const btnAdv = document.getElementById('btn-tab-advanced');
+
+            if (tab === 'basic') {
+                basic.classList.remove('hidden');
+                adv.classList.add('hidden');
+
+                btnBasic.classList.add('bg-white', 'text-slate-700', 'shadow-sm');
+                btnBasic.classList.remove('text-slate-400');
+
+                btnAdv.classList.remove('bg-white', 'text-slate-700', 'shadow-sm');
+                btnAdv.classList.add('text-slate-400');
+            } else {
+                basic.classList.add('hidden');
+                adv.classList.remove('hidden');
+
+                btnAdv.classList.add('bg-white', 'text-slate-700', 'shadow-sm');
+                btnAdv.classList.remove('text-slate-400');
+
+                btnBasic.classList.remove('bg-white', 'text-slate-700', 'shadow-sm');
+                btnBasic.classList.add('text-slate-400');
+            }
+        }
 
         init();
     </script>
 </body>
 
 </html>
-
 
 
