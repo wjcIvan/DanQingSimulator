@@ -279,6 +279,10 @@ class LiuHeJing extends Card {
     }
 }
 
+const QingLiangZhu = class extends Card {
+    constructor(lv) { super("清凉珠", "Tool", 3, lv); }
+};
+
 // --- 被动类 ---
 class PassiveBoostCard extends Card {
     constructor(name, race, fee, level) {
@@ -314,15 +318,7 @@ class RaceCombatEngine {
         this.burnLayers = 0;
         this.burnTickTimer = 0.0;
 
-        const mapping = {
-            "木剑": MuJian, "小环": XiaoHuan, "燕虹": YanHong, "周一仙": ZhouYiXian, "文敏": WenMin,
-            "林峰": LinFeng, "上官策": ShangGuanCe, "左归": ZuoGui, "齐昊": QiHao,
-            "猩红巨蚁": ScarletGiantAnt, "海龟": HaiGui, "猛虎": MengHu, "二尾妖狐": TwoTailedFox,
-            "幽冥犬": YouMingQuan, "岁兽": SuiShou,"雪地熊": XueDiXiong, "六尾魔狐": SixTailedFox,
-            "风筝": FengZheng, "折扇": ZheShan, "神木骰": ShenMuTou, "仙人布幡": XianRenBuFan,
-            "寒冰箭": HanBingJian, "六合镜": LiuHeJing
-        };
-        this.deck = deckConfig.map(c => new (mapping[c.name] || Card)(c.level));
+        this.deck = deckConfig;
         this.initModifiers();
     }
 
@@ -439,7 +435,7 @@ class RaceCombatEngine {
 ALL_CARD_CLASSES.push(
     XiaoHuan, YanHong, WenMin, ZhouYiXian, ZuoGui, QiHao, LinFeng, ShangGuanCe,
     HaiGui, MengHu, XueDiXiong, ScarletGiantAnt, TwoTailedFox, YouMingQuan, SixTailedFox, SuiShou,
-    FengZheng, MuJian, ZheShan, HanBingJian, ShenMuTou, XianRenBuFan, LiuHeJing
+    FengZheng, MuJian, ZheShan, HanBingJian, ShenMuTou, XianRenBuFan, QingLiangZhu, LiuHeJing
 );
 
 /**

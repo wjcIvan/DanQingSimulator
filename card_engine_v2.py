@@ -420,6 +420,11 @@ class ShenMuTou(Card):
                     self.duration_timer = 0.0
 
 
+class QingLiangZhu(Card):
+    def __init__(self, level=6):
+        super().__init__("清凉珠", "Tool", 3, level)
+
+
 class LiuHeJing(Card):
     def __init__(self, level=6):
         super().__init__("六合镜", "Tool", 5, level)
