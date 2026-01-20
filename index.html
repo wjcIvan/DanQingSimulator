@@ -259,13 +259,13 @@
         function doSim() {
             if(selected.size === 0) return alert("请先选卡");
             const deckClasses = [];
-            selected.forEach((val, key) => {
-                // 从数据库中找到对应的类引用
-                const cardMeta = CARDS.find(c => c.className === key);
-                if (cardMeta) {
-                    // 动态创建实例，传入等级
-                    deckClasses.push(new cardMeta.classRef(val.level));
-                }
+
+            const deckConfig = Array.from(selected.values()).map(val => {
+                const cardMeta = CARDS.find(c => c.className === val.name);
+                return {
+                    classRef: cardMeta.classRef,
+                    level: val.level
+                };
             });
 
             const baseAtk = parseInt(document.getElementById('baseAtk').value);
@@ -275,7 +275,8 @@
 
             let results = [];
             for(let i = 0; i < iterations; i++) {
-                const engine = new RaceCombatEngine(deckClasses, baseAtk, baseDps);
+                const currentDeck = deckConfig.map(c => new c.classRef(c.level));
+                const engine = new RaceCombatEngine(currentDeck, baseAtk, baseDps);
                 results.push(engine.simulate(simTime));
             }
 
@@ -424,4 +425,5 @@
 </body>
 
 </html>
+
 
