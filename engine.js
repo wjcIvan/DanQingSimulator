@@ -264,11 +264,11 @@ class LiuHeJing extends Card {
             this.fire(e);
         } else {
             this.timer = pyRound(this.timer + 0.1);
-            if (this.shots_fired < 4 && this.timer >= 1.0) {
+            if (this.shots_fired < 6 && this.timer >= 1.0) {
                 this.fire(e);
                 this.timer = 0.0;
             }
-            if (this.shots_fired >= 4) this.is_active = false;
+            if (this.shots_fired >= 6) this.is_active = false;
         }
     }
     fire(e) {
