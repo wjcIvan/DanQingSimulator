@@ -113,7 +113,6 @@
             color: #10b981;
         }
 
-        /* 网格布局逻辑 */
         .race-section {
             display: grid;
             grid-template-columns: repeat(1, minmax(0, 1fr));
@@ -151,28 +150,8 @@
             border-bottom: 1px solid #e2e8f0;
         }
 
-        /* 滑块美化 */
-        input[type="range"] {
-            -webkit-appearance: none;
-            appearance: none;
-            background: #e2e8f0;
-            height: 4px;
-            border-radius: 2px;
-        }
 
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 14px;
-            height: 14px;
-            background: var(--primary);
-            border-radius: 50%;
-            cursor: pointer;
-            box-shadow: 0 0 8px var(--primary-glow);
-            border: 2px solid white;
-        }
 
-        /* 进度条流光 */
         .progress-shimmer {
             position: relative;
             overflow: hidden;
@@ -201,7 +180,6 @@
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
         }
 
-        /* 费用超限警告 */
         .fee-warning {
             background: #ef4444 !important;
             color: white !important;
@@ -255,20 +233,99 @@
             z-index: 10;
         }
 
-        /* 阵容标签胶囊 */
         .lineup-tag {
             display: inline-flex;
             align-items: center;
             padding: 1px 4px;
-            background: rgba(99, 102, 241, 0.08);
-            border: 1px solid rgba(99, 102, 241, 0.1);
-            color: #4f46e5;
             border-radius: 4px;
             font-size: 9px;
             font-weight: 800;
             margin-right: 3px;
             margin-bottom: 3px;
             line-height: 1.2;
+            transition: all 0.2s;
+        }
+
+        .lineup-tag.tag-human {
+            background: rgba(59, 130, 246, 0.08);
+            border: 1px solid rgba(59, 130, 246, 0.15);
+            color: #2563eb;
+        }
+
+        .lineup-tag.tag-beast {
+            background: rgba(245, 158, 11, 0.08);
+            border: 1px solid rgba(245, 158, 11, 0.15);
+            color: #d97706;
+        }
+
+        .lineup-tag.tag-tool {
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px solid rgba(16, 185, 129, 0.15);
+            color: #059669;
+        }
+
+        /* 计算脉冲动效 */
+        @keyframes pulse-parse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
+                border-color: #6366f1;
+            }
+
+            50% {
+                box-shadow: 0 0 20px 2px rgba(99, 102, 241, 0.6);
+                border-color: #818cf8;
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
+                border-color: #6366f1;
+            }
+        }
+
+        .parsing-mode {
+            animation: pulse-parse 1s infinite;
+            position: relative;
+        }
+
+        .parsing-mode::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.1), transparent);
+            animation: scan-line 1.5s infinite;
+        }
+
+        @keyframes scan-line {
+            100% {
+                left: 200%;
+            }
+        }
+
+        /* 英雄锚点跳动 */
+        @keyframes anchor-bounce {
+
+            0%,
+            100% {
+                transform: scale(1.02);
+                filter: brightness(1.1);
+                box-shadow: 0 0 20px var(--primary-glow);
+            }
+
+            50% {
+                transform: scale(1.08);
+                filter: brightness(1.3);
+                box-shadow: 0 0 30px var(--primary-glow);
+            }
+        }
+
+        .card-anchor-active {
+            z-index: 40;
+            animation: anchor-bounce 0.8s infinite !important;
+            border-color: var(--primary) !important;
+            border-width: 2px !important;
         }
 
         /* 响应式吸顶 */
@@ -278,7 +335,9 @@
                 top: 88px;
                 max-height: calc(100vh - 120px);
                 overflow-y: auto;
-                padding-right: 4px;
+                overflow-x: hidden;
+                padding: 0 4px 20px 0;
+                contain: paint;
             }
 
             .sidebar-sticky::-webkit-scrollbar {
@@ -299,54 +358,186 @@
             }
         }
 
-        /* 数值控制器 */
+        /* 皓月冰晶实验室仪表盘 */
+        .lab-dashboard {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        @media (min-width: 1024px) {
+            .lab-dashboard {
+                grid-template-columns: 2fr 1fr 1fr;
+                align-items: stretch;
+            }
+        }
+
+        .dashboard-item {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(248, 250, 252, 0.8));
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.02), inset 0 0 10px white;
+            border-radius: 16px;
+            padding: 12px 16px;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .dashboard-item:hover {
+            background: white;
+            border-color: var(--primary);
+            box-shadow: 0 8px 24px -10px rgba(99, 102, 241, 0.15);
+        }
+
+        .label-tech {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 10px;
+            font-weight: 900;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 12px;
+        }
+
+        .led-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #6366f1;
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
+            animation: ice-pulse 2s infinite;
+        }
+
+        @keyframes ice-pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.5;
+                transform: scale(0.8);
+            }
+        }
+
         .numeric-control {
             display: flex;
             align-items: center;
-            background: #f8fafc;
-            border-radius: 12px;
+            background: #f1f5f9;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 10px;
             padding: 2px;
-            border: 1px solid #e2e8f0;
-            transition: all 0.3s;
+            height: 32px;
+            transition: all 0.2s;
         }
 
-        .numeric-control:focus-within {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px var(--primary-glow);
+        .dashboard-item:hover .numeric-control {
+            border-color: rgba(99, 102, 241, 0.2);
             background: white;
         }
 
         .numeric-btn {
-            width: 28px;
-            height: 28px;
+            width: 24px;
+            height: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
-            border-radius: 8px;
+            background: white;
             color: #64748b;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 900;
             transition: all 0.2s;
-            font-weight: bold;
-            user-select: none;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
         }
 
         .numeric-btn:hover {
-            background: #f1f5f9;
-            color: var(--primary);
-        }
-
-        .numeric-btn:active {
-            transform: scale(0.9);
+            background: #6366f1;
+            color: white;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
         }
 
         .numeric-input {
-            width: 100%;
+            flex: 1;
+            min-width: 0;
+            background: transparent !important;
+            border: none !important;
             text-align: center;
+            color: #1e293b !important;
+            font-family: inherit;
+            font-weight: 800;
+            font-size: 16px;
+            outline: none;
+        }
+
+        .slider-tech-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .val-display {
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 900;
+            color: #4f46e5;
+            background: #eef2ff;
+            padding: 4px 10px;
+            border-radius: 8px;
+            border: 1px solid #e0e7ff;
+        }
+
+        /* 极地风格滑块 */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: #f1f5f9;
+            background-image: linear-gradient(#6366f1, #6366f1);
+            background-repeat: no-repeat;
+            background-size: 0% 100%;
+            height: 6px;
+            border-radius: 10px;
+            outline: none;
+        }
+
+        #simIter {
+            background-image: linear-gradient(#fbbf24, #fbbf24);
+        }
+
+        input[type="range"]::-webkit-slider-runnable-track {
             background: transparent;
             border: none;
-            outline: none;
-            font-weight: 800;
-            color: #1e293b;
-            font-size: 14px;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: white;
+            border: 2px solid #6366f1;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+            transition: all 0.15s ease;
+        }
+
+        #simIter::-webkit-slider-thumb {
+            border-color: #fbbf24;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
         }
 
         /* 卡牌唤醒动画 */
@@ -396,14 +587,15 @@
 <body class="bg-slate-50 text-slate-900 min-h-screen">
 
     <header
-        class="bg-white/80 backdrop-blur-md px-8 py-3 sticky top-0 z-50 flex justify-between items-center border-b border-slate-200">
+        class="bg-white/80 backdrop-blur-md px-8 py-1.5 sticky top-0 z-50 flex justify-between items-center border-b border-slate-200">
         <div class="flex items-center gap-2">
-            <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-200">
-                <span class="text-white font-black text-xl">D</span>
+            <div class="w-6 h-6 bg-indigo-600 rounded flex items-center justify-center shadow-lg shadow-indigo-100">
+                <span class="text-white font-black text-sm">D</span>
             </div>
             <h1
-                class="text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600 tracking-tight">
-                丹青模拟器 <span class="text-indigo-500 font-medium text-sm ml-1">Pro</span></h1>
+                class="text-base font-black bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600 tracking-tight">
+                丹青模拟器 <span class="text-indigo-500 font-medium text-xs ml-1">Pro</span>
+            </h1>
         </div>
     </header>
 
@@ -411,45 +603,64 @@
 
         <div class="flex-1 lg:w-3/5">
 
-            <div class="bg-white p-6 rounded-3xl shadow-sm mb-6 grid grid-cols-2 md:grid-cols-5 gap-6">
-                <div class="space-y-1.5">
-                    <label class="block text-[11px] font-black text-slate-400 uppercase tracking-tighter ml-1">基础攻击
-                        (无丹青)</label>
-                    <div class="numeric-control">
-                        <button class="numeric-btn" onclick="changeNumericValue('baseAtk', -100, 0, 99999)">-</button>
-                        <input type="number" id="baseAtk" value="8000" class="numeric-input" onchange="updateFee()">
-                        <button class="numeric-btn" onclick="changeNumericValue('baseAtk', 100, 0, 99999)">+</button>
+            <div class="lab-dashboard !mb-3">
+                <div class="dashboard-item">
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="space-y-1">
+                            <span class="text-[9px] font-black text-slate-400 uppercase ml-1">基础攻击</span>
+                            <div class="numeric-control">
+                                <button class="numeric-btn"
+                                    onclick="changeNumericValue('baseAtk', -100, 0, 99999)">-</button>
+                                <input type="number" id="baseAtk" value="8000" class="numeric-input !text-sm"
+                                    onchange="updateFee()">
+                                <button class="numeric-btn"
+                                    onclick="changeNumericValue('baseAtk', 100, 0, 99999)">+</button>
+                            </div>
+                        </div>
+                        <div class="space-y-1">
+                            <span class="text-[9px] font-black text-slate-400 uppercase ml-1">初始秒伤</span>
+                            <div class="numeric-control">
+                                <button class="numeric-btn"
+                                    onclick="changeNumericValue('baseDps', -1000, 0, 999999)">-</button>
+                                <input type="number" id="baseDps" value="35000" class="numeric-input !text-sm"
+                                    onchange="updateFee()">
+                                <button class="numeric-btn"
+                                    onclick="changeNumericValue('baseDps', 1000, 0, 999999)">+</button>
+                            </div>
+                        </div>
+                        <div class="space-y-1">
+                            <span class="text-[9px] font-black text-slate-400 uppercase ml-1">目标数量</span>
+                            <div class="numeric-control">
+                                <button class="numeric-btn"
+                                    onclick="changeNumericValue('targetCount', -1, 1, 10)">-</button>
+                                <input type="number" id="targetCount" value="1" min="1" max="10"
+                                    class="numeric-input !text-sm" onchange="updateFee()">
+                                <button class="numeric-btn"
+                                    onclick="changeNumericValue('targetCount', 1, 1, 10)">+</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div class="space-y-1.5">
-                    <label class="block text-[11px] font-black text-slate-400 uppercase tracking-tighter ml-1">初始秒伤
-                        (无丹青)</label>
-                    <div class="numeric-control">
-                        <button class="numeric-btn" onclick="changeNumericValue('baseDps', -1000, 0, 999999)">-</button>
-                        <input type="number" id="baseDps" value="35000" class="numeric-input" onchange="updateFee()">
-                        <button class="numeric-btn" onclick="changeNumericValue('baseDps', 1000, 0, 999999)">+</button>
+
+                <!-- 时空矩阵 -->
+                <div class="dashboard-item">
+                    <div class="slider-tech-label !mb-1.5">
+                        <span class="text-[9px] font-black text-slate-400 uppercase">战斗时长</span>
+                        <span class="val-display !py-0.5 !px-1.5 !text-xs"><span id="timeVal">300</span>s</span>
                     </div>
+                    <input type="range" id="simTime" min="30" max="600" value="300" class="w-full">
                 </div>
-                <div class="space-y-1.5">
-                    <label class="block text-[11px] font-black text-slate-400 uppercase tracking-tighter ml-1">目标数量</label>
-                    <div class="numeric-control">
-                        <button class="numeric-btn" onclick="changeNumericValue('targetCount', -1, 1, 10)">-</button>
-                        <input type="number" id="targetCount" value="1" min="1" max="10" class="numeric-input"
-                            onchange="updateFee()">
-                        <button class="numeric-btn" onclick="changeNumericValue('targetCount', 1, 1, 10)">+</button>
+
+                <!-- 运算引擎 -->
+                <div class="dashboard-item">
+                    <div class="slider-tech-label !mb-1.5">
+                        <span class="text-[9px] font-black text-slate-400 uppercase">模拟轮次</span>
+                        <span class="val-display !py-0.5 !px-1.5 !text-xs"
+                            style="color:#b45309;background:#fffbeb;border-color:#fde68a">
+                            <span id="iterVal">50</span>x
+                        </span>
                     </div>
-                </div>
-                <div>
-                    <label class="block text-[15px] font-bold text-slate-400 uppercase mb-1">战斗时长: <span
-                            id="timeVal">300</span>s</label>
-                    <input type="range" id="simTime" min="30" max="600" value="300"
-                        style="background: linear-gradient(to right, var(--primary) 47%, #e2e8f0 0%)" class="w-full">
-                </div>
-                <div>
-                    <label class="block text-[15px] font-bold text-slate-400 uppercase mb-1">迭代次数: <span
-                            id="iterVal">50</span></label>
-                    <input type="range" id="simIter" min="1" max="200" value="50"
-                        style="background: linear-gradient(to right, var(--primary) 24.6%, #e2e8f0 0%)" class="w-full">
+                    <input type="range" id="simIter" min="1" max="200" value="50" class="w-full">
                 </div>
             </div>
 
@@ -507,9 +718,10 @@
 
             <div id="tab-basic">
                 <section class="space-y-4">
-                    <!-- 顶部操作区 -->
+                    <!-- 顶部操作区：收敛阴影以消除渲染残留 -->
                     <button onclick="doSim()"
-                        class="w-full bg-slate-800 text-white py-4 rounded-xl font-black text-lg shadow-xl shadow-slate-200 hover:bg-slate-700 hover:shadow-slate-300 hover:scale-[1.02] active:scale-[0.98] transition-all flex justify-center items-center gap-2 group">
+                        class="w-full bg-slate-800 text-white py-4 rounded-xl font-black text-lg shadow-sm hover:bg-slate-700 hover:shadow-indigo-500/30 hover:scale-[1.01] active:scale-[0.98] transition-all flex justify-center items-center gap-2 group relative"
+                        style="backface-visibility: hidden;">
                         <span class="group-hover:rotate-12 transition-transform">🔥</span>
                         <span>开始基础模拟</span>
                     </button>
@@ -707,24 +919,30 @@
                 const raceCards = CARDS.filter(c => c.race === race);
                 const conf = raceConfig[race];
                 html += raceCards.map(c => `
-                            <div id="c-${c.className}" class="card-box rounded-2xl ${conf.border} relative" onclick="toggle('${c.className}')">
+                            <div id="card-anchor-${c.className}" class="card-box rounded-2xl ${conf.border} relative" onclick="toggle('${c.className}')">
                                 ${selected.has(c.className) ? `<div class="selected-badge">✓</div>` : ''}
                                 <div class="w-full">
                                     <div class="flex justify-between items-center mb-1">
                                         <div class="flex items-center gap-2 overflow-hidden">
-                                            <span class="text-[13px] font-black text-slate-800 tracking-tight leading-none truncate">${c.name}</span>
+                                            <span class="text-[14px] font-black text-slate-800 tracking-tight leading-none truncate">${c.name}</span>
                                             <span class="text-[10px] font-black px-2 py-0.5 rounded-md ${conf.tag} shrink-0">${conf.title}</span>
                                         </div>
-                                        <span class="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md font-black shrink-0 ml-2 tracking-tighter">${c.fee} FEE</span>
+                                        <div class="flex flex-col items-end shrink-0 ml-2">
+                                            <span class="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md font-black tracking-tighter">${c.fee} FEE</span>
+                                        </div>
                                     </div>
                                     
                                     <div id="star-ui-${c.className}" class="star-ui ${selected.has(c.className) ? '' : 'hidden'}" onclick="event.stopPropagation()">
-                                        <div class="flex items-center gap-2 mt-4 mb-1">
-                                            <input type="range" min="0" max="6" value="${selected.has(c.className) ? selected.get(c.className).level : 6}" 
-                                                   style="background: linear-gradient(to right, var(--primary) ${((selected.has(c.className) ? selected.get(c.className).level : 6) / 6 * 100)}%, #e2e8f0 0%)"
-                                                   class="flex-1 h-1 star-slider" oninput="updateLv('${c.className}', this.value)">
+                                        <div class="flex items-center gap-3 mt-4 mb-1">
+                                            <div class="flex-1 relative group/slider">
+                                                <input type="range" min="0" max="6" value="${selected.has(c.className) ? selected.get(c.className).level : 6}" 
+                                                    class="w-full h-1.5 star-slider" oninput="updateLv('${c.className}', this.value)">
+                                                <div class="absolute -top-7 left-[calc(var(--p,100%)-10px)] bg-slate-800 text-white text-[9px] px-1.5 py-0.5 rounded opacity-0 group-hover/slider:opacity-100 transition-opacity pointer-events-none font-black shadow-xl">
+                                                    <span id="bubble-${c.className}">${selected.has(c.className) ? selected.get(c.className).level : 6}</span>★
+                                                </div>
+                                            </div>
                                             <div class="flex flex-col items-center min-w-[24px]">
-                                                <span class="text-[10px] font-black text-indigo-600 leading-none"><span id="lv-${c.className}">${selected.has(c.className) ? selected.get(c.className).level : 6}</span></span>
+                                                <span class="text-[11px] font-black text-indigo-600 leading-none"><span id="lv-${c.className}">${selected.has(c.className) ? selected.get(c.className).level : 6}</span></span>
                                                 <span class="text-[10px] font-black text-indigo-400">★</span>
                                             </div>
                                         </div>
@@ -735,10 +953,17 @@
             });
 
             grid.innerHTML = `<div class="race-section">${html}</div>`;
+            CARDS.forEach(c => {
+                if (selected.has(c.className)) updateLv(c.className, selected.get(c.className).level);
+                else {
+                    const el = document.querySelector(`#star-ui-${c.className} input`);
+                    if (el) el.style.backgroundSize = '100% 100%';
+                }
+            });
         }
 
         function toggle(name) {
-            const node = document.getElementById(`c-${name}`);
+            const node = document.getElementById(`card-anchor-${name}`);
             const starUi = document.getElementById(`star-ui-${name}`);
             if (selected.has(name)) {
                 selected.delete(name);
@@ -761,12 +986,13 @@
             if (selected.has(name)) {
                 selected.get(name).level = parseInt(val);
                 document.getElementById(`lv-${name}`).innerText = val;
+                document.getElementById(`bubble-${name}`).innerText = val;
 
-                // 动态更新滑块背景进度
                 const slider = document.querySelector(`#star-ui-${name} input`);
                 if (slider) {
                     const pct = (val / 6 * 100);
-                    slider.style.background = `linear-gradient(to right, var(--primary) ${pct}%, #e2e8f0 0%)`;
+                    slider.style.backgroundSize = pct + '% 100%';
+                    slider.parentElement.style.setProperty('--p', `${pct}%`);
                 }
             }
         }
@@ -793,9 +1019,12 @@
             if (selected.size === 0) return alert("请先选卡");
 
             const btn = document.querySelector('button[onclick="doSim()"]');
+            const resPanel = document.getElementById('resTotal').parentElement;
             const originalText = btn.innerHTML;
-            btn.innerHTML = `<span class="flex items-center gap-2 justify-center">解析数据中<span class="animate-bounce">.</span><span class="animate-bounce" style="animation-delay: 0.2s">.</span><span class="animate-bounce" style="animation-delay: 0.4s">.</span></span>`;
+
+            btn.innerHTML = `<span class="flex items-center gap-2 justify-center">CORE 解析中<span class="animate-bounce">.</span><span class="animate-bounce" style="animation-delay: 0.2s">.</span><span class="animate-bounce" style="animation-delay: 0.4s">.</span></span>`;
             btn.disabled = true;
+            resPanel.classList.add('parsing-mode');
 
             setTimeout(() => {
                 const deckConfig = Array.from(selected.values()).map(val => {
@@ -830,27 +1059,21 @@
                 animateNumber('resCardDps', Math.round(avgCard));
                 animateNumber('resBoostDps', Math.round(avgBoost));
 
-                // 相比无丹青提升动画在 addHistory 逻辑中原有逻辑保持
                 const increaseDps = Math.round(avgTotal - baseDps).toLocaleString();
                 document.getElementById('resPercent').innerText = `相比无丹青提升 +${((avgTotal - baseDps) / baseDps * 100).toFixed(1)}% (${increaseDps})`;
 
-
-                // 更新波动范围条
                 document.getElementById('rangeInfo').classList.remove('hidden');
                 document.getElementById('dpsChartInfo').classList.remove('hidden');
                 document.getElementById('resMin').innerText = Math.round(minVal).toLocaleString();
                 document.getElementById('resMax').innerText = Math.round(maxVal).toLocaleString();
                 document.getElementById('resErr').innerText = Math.round(ci95).toLocaleString();
 
-                // 渲染进度条位置
                 const rangePercent = ((2 * ci95) / (maxVal - minVal + 1)) * 100;
                 const leftPercent = ((avgTotal - ci95 - minVal) / (maxVal - minVal + 1)) * 100;
                 document.getElementById('rangeBar').style.left = Math.max(0, leftPercent) + "%";
                 document.getElementById('rangeBar').style.width = Math.min(100, rangePercent) + "%";
 
                 addHistory(Math.round(avgTotal), ci95);
-
-                // 计算平均 DPS 曲线 ---
                 const historyLength = results[0].dpsHistory.length;
                 let averageCurve = new Array(historyLength).fill(0);
 
@@ -865,7 +1088,8 @@
 
                 btn.innerHTML = originalText;
                 btn.disabled = false;
-            }, 0);
+                resPanel.classList.remove('parsing-mode');
+            }, 500);
         }
 
         function renderChart(curveData, totalTime) {
@@ -940,44 +1164,63 @@
             });
         }
 
+        function highlightCard(className, active) {
+            const el = document.getElementById(`card-anchor-${className}`);
+            if (el) {
+                if (active) el.classList.add('card-anchor-active');
+                else el.classList.remove('card-anchor-active');
+            }
+        }
+
         function addHistory(dps, error) {
             const list = document.getElementById('historyList');
             if (list.innerText.includes("暂无")) list.innerHTML = '';
 
             const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-            // 处理阵容文字 (按 FEE 从高到低排序，默认 6 星不显示星级)
             const lineupCards = Array.from(selected.values()).map(s => {
                 const meta = window.CARD_DATABASE.find(c => c.className === s.name);
-                return { ...s, fee: meta ? meta.fee : 0 };
+                return { ...s, race: meta ? meta.race : 'Human', fee: meta ? meta.fee : 0 };
             }).sort((a, b) => b.fee - a.fee);
 
             const totalFee = lineupCards.reduce((sum, c) => sum + c.fee, 0);
             const lineupHtml = lineupCards.map(card => {
                 const chineseName = window.CARD_NAME_MAP[card.name] || card.name;
                 const starPart = card.level === 6 ? '' : `<span class="opacity-60 ml-0.5">${card.level}★</span>`;
-                return `<span class="lineup-tag">${chineseName}${starPart}</span>`;
+                const raceClass = `tag-${card.race.toLowerCase()}`;
+                return `<span class="lineup-tag ${raceClass}" onmouseenter="highlightCard('${card.name}', true)" onmouseleave="highlightCard('${card.name}', false)">${chineseName}${starPart}</span>`;
             }).join("");
 
             const item = `
-                <div onclick="copyAndRestore('${lineupCards.map(c => (window.CARD_NAME_MAP[c.name] || c.name) + (c.level === 6 ? '' : `(${c.level}★)`)).join(" + ")}', event)" class="p-2.5 bg-white/60 border border-white rounded-2xl mb-2 hover:bg-white hover:shadow-xl hover:scale-[1.01] transition-all cursor-pointer group relative overflow-hidden">
-                    <div class="flex items-center gap-3 relative z-10">
-                        <!-- 数据面板 -->
-                        <div class="text-left shrink-0 min-w-[90px] border-r border-slate-200/50 pr-3 flex flex-col justify-center">
-                            <div class="text-[15px] font-black text-indigo-600 leading-none tracking-tighter mb-1.5">
-                                ${dps.toLocaleString()}<span class="text-[9px] text-slate-400 font-bold ml-1 opacity-70">±${Math.round(error).toLocaleString()}</span>
+                <div onclick="copyAndRestore('${lineupCards.map(c => (window.CARD_NAME_MAP[c.name] || c.name) + (c.level === 6 ? '' : `(${c.level}★)`)).join(" + ")}', event)" 
+                     class="group relative p-3 mb-3 transition-all duration-300 cursor-pointer overflow-hidden rounded-2xl border border-white/40 bg-white/40 backdrop-blur-md hover:bg-white/80 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:scale-[1.01] active:scale-[0.99]">
+                    
+                    <div class="absolute -right-10 -top-10 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl transition-opacity group-hover:opacity-100 opacity-0"></div>
+                    
+                    <div class="flex items-center gap-4 relative z-10">
+                        <div class="text-left shrink-0 min-w-[95px] border-r border-slate-200/40 pr-3 flex flex-col justify-center">
+                            <div class="flex items-baseline gap-1 mb-1">
+                                <span class="text-[16px] font-black text-slate-800 leading-none tracking-tight">
+                                    ${dps.toLocaleString()}
+                                </span>
+                                <span class="text-[9px] font-bold text-slate-400 opacity-80 italic">DPS</span>
                             </div>
-                            <div class="flex items-center gap-1.5 opacity-60">
-                                <span class="text-[9px] text-slate-400 font-mono leading-none">${time}</span>
-                                <span class="w-1 h-1 bg-slate-300 rounded-full"></span>
-                                <span class="text-[9px] font-black text-slate-500 leading-none">${totalFee} FEE</span>
+                            <div class="text-[10px] text-indigo-500/80 font-black leading-none mb-2">
+                                ±${Math.round(error).toLocaleString()}
+                            </div>
+                            <div class="flex items-center gap-1.5 pt-1 border-t border-slate-200/20">
+                                <span class="text-[9px] text-slate-400 font-mono font-medium">${time}</span>
+                                <span class="w-1 h-1 bg-slate-300 rounded-full opacity-40"></span>
+                                <span class="px-1.5 py-0.5 rounded-md bg-slate-100 text-[8px] font-black text-slate-500 leading-none uppercase tracking-tighter border border-slate-200/50">${totalFee} FEE</span>
                             </div>
                         </div>
                         
-                        <!-- 阵容面板 -->
                         <div class="flex-1 min-w-0">
-                             <div class="flex flex-wrap gap-1">${lineupHtml}</div>
-                             <div class="tip-label text-[9px] text-indigo-500 font-black opacity-0 group-hover:opacity-100 transition-all uppercase leading-none mt-1.5 tracking-wider">点击复制还原</div>
+                             <div class="flex flex-wrap gap-1.5 mb-1.5">${lineupHtml}</div>
+                             <div class="flex items-center gap-1.5 translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                <span class="text-[9px] text-emerald-600 font-black uppercase tracking-widest">点击还原此配置</span>
+                             </div>
                         </div>
                     </div>
                 </div>
@@ -997,8 +1240,7 @@
                 const input = document.querySelector(`#star-ui-${k} input`);
                 if (input) {
                     input.value = s;
-                    const pct = (s / 6 * 100);
-                    input.style.background = `linear-gradient(to right, var(--primary) ${pct}%, #e2e8f0 0%)`;
+                    input.style.backgroundSize = (s / 6 * 100) + '% 100%';
                 }
             });
         }
@@ -1007,7 +1249,6 @@
             selected.clear();
             init();
             updateFee();
-            // 同时重置高级推演界面的状态
             const placeholder = document.getElementById('bfPlaceholder');
             if (placeholder) {
                 placeholder.style.display = 'flex';
@@ -1070,7 +1311,6 @@
         }
 
         async function startBruteForce() {
-            // 终止可能存在的旧任务
             isStopped = true;
             if (bfWorkerPool.length > 0) {
                 bfWorkerPool.forEach(w => w.terminate());
@@ -1278,7 +1518,10 @@
                             star = `<span class="opacity-60 ml-0.5">${match[2]}★</span>`;
                         }
                     }
-                    return `<span class="lineup-tag !m-0 ${isFirst ? '!bg-amber-100 !text-amber-700 !border-amber-200' : ''}">${name}${star}</span>`;
+                    const cardMeta = window.CARD_DATABASE.find(c => c.name === name);
+                    const raceClass = cardMeta ? `tag-${cardMeta.race.toLowerCase()}` : '';
+                    const firstClass = isFirst ? '!border-amber-400/50' : '';
+                    return `<span class="lineup-tag !m-0 ${raceClass} ${firstClass}">${name}${star}</span>`;
                 }).join('')}
                                 </div>
                                     <div class="tip-label text-[9px] text-indigo-500 font-black opacity-0 group-hover:opacity-100 transition-all uppercase leading-none">点击复制并还原</div>
@@ -1357,12 +1600,17 @@
                         updateLv(meta.className, lv);
                         // 同步滑块和显示文字
                         const input = document.querySelector(`#star-ui-${meta.className} input`);
-                        if (input) input.value = lv;
+                        if (input) {
+                            input.value = lv;
+                            const pct = (lv / 6 * 100);
+                            input.style.backgroundSize = pct + '% 100%';
+                            input.parentElement.style.setProperty('--p', `${pct}%`);
+                        }
                         const lvLabel = document.getElementById(`lv-${meta.className}`);
                         if (lvLabel) lvLabel.innerText = lv;
 
                         // 触发波纹唤醒动画
-                        const node = document.getElementById(`c-${meta.className}`);
+                        const node = document.getElementById(`card-anchor-${meta.className}`);
                         if (node) {
                             node.classList.remove('wake-up');
                             void node.offsetWidth; // 触发回流
@@ -1373,6 +1621,33 @@
             });
         }
 
+        document.getElementById('simTime').oninput = function () {
+            document.getElementById('timeVal').innerText = this.value;
+            const pct = (this.value - 30) / (600 - 30) * 100;
+            this.style.backgroundSize = pct + '% 100%';
+        };
+
+        document.getElementById('simIter').oninput = function () {
+            document.getElementById('iterVal').innerText = this.value;
+            const pct = (this.value - 1) / (200 - 1) * 100;
+            this.style.backgroundSize = pct + '% 100%';
+        };
+
+        // 初始化滑块背景色彩
+        const initSliderBg = () => {
+            const t = document.getElementById('simTime');
+            const i = document.getElementById('simIter');
+            if (t) {
+                const tpct = (t.value - 30) / (600 - 30) * 100;
+                t.style.backgroundSize = tpct + '% 100%';
+            }
+            if (i) {
+                const ipct = (i.value - 1) / (200 - 1) * 100;
+                i.style.backgroundSize = ipct + '% 100%';
+            }
+        };
+
+        initSliderBg();
         init();
     </script>
 </body>
