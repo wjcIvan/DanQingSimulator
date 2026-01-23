@@ -31,7 +31,7 @@ class Card {
 
 // --- 1. 人族 (Human) ---
 class YanHong extends Card {
-    constructor(lv) { super("燕虹", "Human", 1, lv); this.dmg_r = 0.28 + 0.02 * lv; this.internal_timer = 6.0;}
+    constructor(lv) { super("燕虹", "Human", 1, lv); this.dmg_r = 0.28 + 0.02 * lv; this.internal_timer = 6.0; }
     check(t) { return t === EVENTS.TIME && this.internal_timer >= 6.0; }
     trigger(e) {
         this.internal_timer = 0.0;
@@ -46,7 +46,7 @@ class WenMin extends Card {
     check(t) { return t === EVENTS.TIME && this.internal_timer >= this.trigger_interval; }
     trigger(e) {
         this.internal_timer = 0;
-        for(let i=0; i<3; i++) {
+        for (let i = 0; i < 3; i++) {
             let d = e.baseAtk * e.iceRate;
             e.cardTotalDmg += d * e.effectMod;
             e.addEvent(EVENTS.ICE, d);
@@ -94,7 +94,7 @@ class LinFeng extends Card {
             e.cardTotalDmg += event_dmg * e.effectMod;
             e.addEvent(EVENTS.ICE_D, event_dmg);
         } else {
-            if (e.burnLayers < 12) e.burnLayers++;
+            e.addBurnLayer(false);
             e.addEvent(EVENTS.BURN_D, 0);
         }
     }
@@ -104,8 +104,7 @@ class ShangGuanCe extends Card {
     constructor(lv) { super("上官策", "Human", 2, lv); this.burn_r = 0.62 - 0.02 * lv; }
     check(t) { return (t === EVENTS.ICE || t === EVENTS.ICE_D) && Math.random() >= this.burn_r; }
     trigger(e) {
-        if (!e.isBurnActive || e.burnLayers === 0) { e.burnLayers = 0; e.isBurnActive = true; }
-        if (e.burnLayers < 12) e.burnLayers++;
+        e.addBurnLayer(false);
         e.addEvent(EVENTS.BURN, 0);
     }
 }
@@ -135,8 +134,7 @@ class ScarletGiantAnt extends Card {
     constructor(lv) { super("猩红巨蚁", "Beast", 1, lv); this.internal_timer = 8.0; this.dmg_r = 0.014 + 0.001 * lv; }
     check(t) { return t === EVENTS.TIME && this.internal_timer >= 8.0; }
     trigger(e) {
-        if (!e.isBurnActive || e.burnLayers === 0) { e.burnLayers = 0; e.isBurnActive = true; }
-        if (e.burnLayers < 12) e.burnLayers++;
+        e.addBurnLayer(true);
         e.addEvent(EVENTS.BURN, 0);
         this.internal_timer = 0;
     }
@@ -158,24 +156,44 @@ class YouMingQuan extends Card {
         return t === EVENTS.TIME && this.internal_timer >= this.trigger_interval;
     }
     trigger(e) {
-        if (!e.isBurnActive || e.burnLayers === 0) { e.burnLayers = 0; e.isBurnActive = true; }
-        if (e.burnLayers < 12) e.burnLayers++;
+        e.addBurnLayer(true);
         e.addEvent(EVENTS.BURN, 0);
         this.internal_timer = 0;
     }
 }
 
 class SixTailedFox extends Card {
-    constructor(lv) { super("六尾魔狐", "Beast", 5, lv); this.explode_timer = 1.5; this.dmg_r = 0.5 + 0.03 * lv; }
+    constructor(lv) {
+        super("六尾魔狐", "Beast", 5, lv);
+        this.dmg_r = 0.5 + 0.03 * lv;
+    }
     check(t) { return t === EVENTS.TIME; }
     trigger(e) {
-        if (e.burnLayers < 8) return;
-        this.explode_timer = pyRound(this.explode_timer - 0.1);
-        if (this.explode_timer <= 0) {
-            this.explode_timer = 1.5;
-            e.cardTotalDmg += (e.burnLayers * this.dmg_r * e.baseAtk);
-            e.burnLayers = 0; e.isBurnActive = false; e.burnTickTimer = 0;
-        }
+        // 遍历每个目标，独立处理倒计时
+        e.targets.forEach(target => {
+            // 检查该目标是否达到8层
+            if (target.burnLayers >= 8) {
+                // 如果该目标还没有启动倒计时，启动它
+                if (target.explodeTimer < 0) {
+                    target.explodeTimer = 1.5;
+                }
+
+                // 倒计时
+                target.explodeTimer = pyRound(target.explodeTimer - 0.1);
+
+                // 倒计时结束，引爆该目标
+                if (target.explodeTimer <= 0) {
+                    // 引爆该目标的燃烧层数，对该目标和周围敌人造成伤害
+                    const explodeDmg = target.burnLayers * this.dmg_r * e.baseAtk * e.targetCount;
+                    e.cardTotalDmg += explodeDmg;
+                    // 清空该目标的燃烧状态（包括重置计时器）
+                    target.clearBurn();
+                }
+            } else {
+                // 目标层数不足8层，重置该目标的倒计时
+                target.explodeTimer = -1;
+            }
+        });
     }
 }
 
@@ -183,9 +201,8 @@ class SuiShou extends Card {
     constructor(lv) { super("岁兽", "Beast", 3, lv); this.burn_r = 0.3 - 0.05 * lv; }
     check(t) { return t === EVENTS.PULSE && Math.random() >= this.burn_r; }
     trigger(e) {
-        for(let i=0; i<3; i++) {
-            if (e.burnLayers < 12) e.burnLayers++;
-            e.isBurnActive = true;
+        for (let i = 0; i < 3; i++) {
+            e.addBurnLayer(true);
             e.addEvent(EVENTS.BURN, 0);
         }
     }
@@ -205,7 +222,7 @@ class ZheShan extends Card {
     trigger(e) {
         this.internal_timer = 0;
         let dmg = e.baseAtk * this.dmg_r;
-        e.cardTotalDmg += dmg * e.effectMod;
+        e.cardTotalDmg += dmg * e.effectMod * e.targetCount;
         e.addEvent(EVENTS.PULSE, dmg);
     }
 }
@@ -234,9 +251,9 @@ class ShenMuTou extends Card {
     trigger(e, event_dmg) {
         if (this.first_tick) {
             this.first_tick = false;
-            for(let i=0; i<3; i++) {
+            for (let i = 0; i < 3; i++) {
                 let d = e.baseAtk * e.pulseRate;
-                e.cardTotalDmg += d * e.effectMod;
+                e.cardTotalDmg += d * e.effectMod * e.targetCount;
                 e.addEvent(EVENTS.PULSE, d);
             }
             return;
@@ -273,7 +290,7 @@ class LiuHeJing extends Card {
     }
     fire(e) {
         let d = e.baseAtk * e.pulseRate * this.dmg_r;
-        e.cardTotalDmg += d;
+        e.cardTotalDmg += d * e.targetCount;
         e.addEvent(EVENTS.PULSE_D, d);
         this.shots_fired++;
     }
@@ -299,6 +316,28 @@ const ZhouYiXian = class extends PassiveBoostCard { constructor(lv) { super("周
 const MengHu = class extends PassiveBoostCard { constructor(lv) { super("猛虎", "Beast", 2, lv); } };
 const XianRenBuFan = class extends PassiveBoostCard { constructor(lv) { super("仙人布幡", "Tool", 2, lv); } };
 
+// --- Target 类：每个目标的独立状态 ---
+class Target {
+    constructor(index) {
+        this.index = index; // 0 = 主目标, 1+ = 副目标
+        this.isBurnActive = false;
+        this.burnLayers = 0;
+        this.burnTickTimer = 0.0;
+        this.explodeTimer = -1; // 六尾爆炸计时器，-1表示未激活
+    }
+
+    addBurnLayer() {
+        this.isBurnActive = true;
+        if (this.burnLayers < 12) this.burnLayers++;
+    }
+
+    clearBurn() {
+        this.isBurnActive = false;
+        this.burnLayers = 0;
+        this.burnTickTimer = 0.0;
+        this.explodeTimer = -1; // 清空时也重置爆炸计时器
+    }
+}
 
 class ZuoGui extends Card {
     constructor(lv) {
@@ -308,15 +347,19 @@ class ZuoGui extends Card {
 }
 
 class RaceCombatEngine {
-    constructor(deckConfig, baseAtk = 8000, baseDps = 35000) {
+    constructor(deckConfig, baseAtk = 8000, baseDps = 35000, targetCount = 1) {
         this.baseAtk = baseAtk;
         this.baseDps = baseDps;
+        this.targetCount = targetCount;
         this.time = 0.0;
         this.cardTotalDmg = 0.0;
         this.eventQueue = [];
-        this.isBurnActive = false;
-        this.burnLayers = 0;
-        this.burnTickTimer = 0.0;
+
+        // 创建目标数组，每个目标独立状态
+        this.targets = [];
+        for (let i = 0; i < targetCount; i++) {
+            this.targets.push(new Target(i));
+        }
 
         this.deck = deckConfig;
         this.initModifiers();
@@ -349,6 +392,23 @@ class RaceCombatEngine {
         const yan = getC("燕虹"); this.iceRate = yan ? yan.dmg_r : 0.26;
         const ant = getC("猩红巨蚁"); this.burnRate = ant ? ant.dmg_r : 0.013;
         const shan = getC("折扇"); this.pulseRate = shan ? shan.dmg_r : 0.38;
+
+        // 【优化】筛选活动卡
+        this.activeCards = this.deck.filter(c => {
+            return c.check !== Card.prototype.check || (c instanceof XueDiXiong);
+        });
+
+        // 【优化】缓存雪地熊引用
+        this.xdxRef = this.deck.find(c => c instanceof XueDiXiong);
+    }
+
+    // 辅助方法：增加燃烧层数
+    addBurnLayer(isAOE) {
+        if (isAOE) {
+            for (let i = 0; i < this.targets.length; i++) this.targets[i].addBurnLayer();
+        } else {
+            this.targets[0].addBurnLayer();
+        }
     }
 
     addEvent(type, dmg) { this.eventQueue.push({ type, dmg }); }
@@ -356,51 +416,55 @@ class RaceCombatEngine {
     simulate(duration) {
         let dynamicBaseBoost = 0.0;
         const steps = Math.round(duration / 0.1);
-
-        let dpsHistory = [];
+        const dpsHistory = [];
 
         for (let i = 0; i <= steps; i++) {
             this.time = pyRound(i * 0.1);
-
-            // 1. 物理时间流动
-            this.deck.forEach(c => c.internal_timer = pyRound(c.internal_timer + 0.1));
-
             let dmgBefore = this.cardTotalDmg;
 
-            // 2. 时间触发
-            this.deck.forEach(c => { if (c.check(EVENTS.TIME)) c.trigger(this, 0); });
-
-            // 3. 链式反应
-            while (this.eventQueue.length > 0) {
-                const currentEvents = [...this.eventQueue];
-                this.eventQueue = [];
-                currentEvents.forEach(e => {
-                    this.deck.forEach(c => { if (e.type !== EVENTS.TIME && c.check(e.type)) c.trigger(this, e.dmg); });
-                });
+            // 1. 系统时间驱动 + 计时器更新
+            for (let j = 0; j < this.activeCards.length; j++) {
+                const c = this.activeCards[j];
+                c.internal_timer = pyRound(c.internal_timer + 0.1);
+                if (c.check(EVENTS.TIME)) c.trigger(this, 0);
             }
 
-            // 4. 系统燃烧逻辑
-            if (this.isBurnActive) {
-                this.burnTickTimer = pyRound(this.burnTickTimer + 0.1);
-                if (this.burnTickTimer >= 3.0) {
-                    this.cardTotalDmg += (this.baseAtk * (this.burnLayers * this.burnRate)) * this.effectMod;
-                    this.burnTickTimer = 0;
+            // 2. 消费事件队列
+            while (this.eventQueue.length > 0) {
+                const e = this.eventQueue.shift();
+                if (e.type === EVENTS.TIME) continue;
+                for (let j = 0; j < this.activeCards.length; j++) {
+                    const c = this.activeCards[j];
+                    if (c.check(e.type)) c.trigger(this, e.dmg);
                 }
             }
 
-            // 5. 雪地熊动态加成 (对齐 Python 逻辑：基础 DPS 受其加成，卡牌增量也受其加成)
-            const xdx = this.deck.find(c => c instanceof XueDiXiong);
-            const xdxRate = xdx ? xdx.getCurrentRate() : 0;
+            // 3. 系统燃烧逻辑
+            for (let j = 0; j < this.targets.length; j++) {
+                const target = this.targets[j];
+                if (target.isBurnActive) {
+                    target.burnTickTimer = pyRound(target.burnTickTimer + 0.1);
+                    if (target.burnTickTimer >= 3.0) {
+                        this.cardTotalDmg += (target.burnLayers * this.baseAtk * this.burnRate * this.effectMod);
+                        target.burnTickTimer = 0;
+                    }
+                }
+            }
 
-            dynamicBaseBoost += (this.baseDps * this.passiveMod / 10 * xdxRate);
-            let dmgAdd = this.cardTotalDmg - dmgBefore;
-            this.cardTotalDmg += (dmgAdd * xdxRate);
+            // 4. 雪地熊动态加成 (逻辑对齐：由于雪地熊是活动卡，其 Buff 状态已在 activeCards 循环中更新)
+            if (this.xdxRef) {
+                const xdxRate = this.xdxRef.getCurrentRate();
+                dynamicBaseBoost += (this.baseDps * this.passiveMod / 10 * xdxRate);
+                let dmgAdd = this.cardTotalDmg - dmgBefore;
+                this.cardTotalDmg += (dmgAdd * xdxRate);
+            }
 
             if (i % 10 === 0 && i > 0) {
                 const currentRes = this.finalize(this.time, dynamicBaseBoost);
                 dpsHistory.push(currentRes.total);
             }
         }
+
         const finalRes = this.finalize(duration, dynamicBaseBoost);
         finalRes.dpsHistory = dpsHistory;
         return finalRes;

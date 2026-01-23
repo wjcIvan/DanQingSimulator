@@ -6,7 +6,6 @@
     <title>丹青模拟器 Pro</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
     <!-- Microsoft Clarity -->
     <script type="text/javascript">
         (function (c, l, a, r, i, t, y) {
@@ -16,134 +15,395 @@
         })(window, document, "clarity", "script", "v4tptto2kf");
     </script>
     <style>
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.4);
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.4);
+        }
+
+        body {
+            background: radial-gradient(circle at top right, #f8fafc, #eff6ff);
+            background-attachment: fixed;
+        }
+
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+        }
+
+        /* 极客风卡牌 */
         .card-box {
-            height: 100px;
+            position: relative;
+            min-height: 120px;
             display: flex;
             flex-direction: column;
-            justify-content: flex-start;
-            overflow: hidden;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            border: 1px solid transparent;
+            justify-content: space-between;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            cursor: pointer;
+            border: 1.5px solid transparent;
+            background: white;
+            padding: 1.25rem !important;
         }
 
         .card-box:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            transform: translateY(-4px) scale(1.02);
+            box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 防止调节滑块时卡牌跳动 */
+        .card-box:focus-within,
+        .card-box:active {
+            transform: none !important;
+            box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.1) !important;
+        }
+
+        .card-box:active {
+            transform: scale(0.96);
         }
 
         .card-box.selected {
-            border-color: #8b5cf6;
-            background-color: #f5f3ff;
-            box-shadow: 0 10px 25px -5px rgba(139, 92, 246, 0.15), 0 0 0 1px #8b5cf6;
+            border-color: var(--primary);
+            background: linear-gradient(to bottom right, #ffffff, #f5f3ff);
+            box-shadow: 0 0 20px var(--primary-glow);
+            animation: pulse-border 2s infinite;
         }
 
-        .accent-red {
-            accent-color: #8b5cf6;
+        @keyframes pulse-border {
+            0% {
+                box-shadow: 0 0 0 0 var(--primary-glow);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(99, 102, 241, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+            }
         }
 
         .race-human {
-            border-top: 4px solid #128cf0;
-        }
-
-        .tag-human {
-            background-color: #ecf6ff;
-            color: #1d4ed8;
+            border-left: 4px solid #3b82f6;
         }
 
         .race-beast {
-            border-top: 4px solid #f59e0b;
+            border-left: 4px solid #f59e0b;
+        }
+
+        .race-tool {
+            border-left: 4px solid #10b981;
+        }
+
+        .tag-human {
+            background-color: #eff6ff;
+            color: #3b82f6;
         }
 
         .tag-beast {
             background-color: #fffbeb;
-            color: #b45309;
-        }
-
-        .race-tool {
-            border-top: 4px solid #10b981;
+            color: #f59e0b;
         }
 
         .tag-tool {
             background-color: #ecfdf5;
-            color: #047857;
+            color: #10b981;
         }
 
-        /* 布局控制 */
+        /* 网格布局逻辑 */
         .race-section {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: repeat(1, minmax(0, 1fr));
             gap: 1rem;
-            margin-bottom: 2rem;
+            margin-bottom: 2.5rem;
+        }
+
+        @media (min-width: 640px) {
+            .race-section {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .race-section {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+
+        @media (min-width: 1280px) {
+            .race-section {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
         }
 
         .race-title {
             grid-column: 1 / -1;
-            font-size: 1rem;
-            font-weight: 800;
-            color: #64748b;
-            padding-bottom: 0.5rem;
-            border-bottom: 1px solid #f1f5f9;
-            margin-bottom: 1rem;
-            text-transform: uppercase;
-        }
-
-        /* 右侧结果卡片 */
-        .metric-card {
-            background: white;
-            padding: 1.25rem;
-            border-radius: 12px;
-            border: 1px solid #e2e8f0;
-            margin-bottom: 1rem;
-        }
-
-        .metric-label {
-            font-size: 0.75rem;
-            color: #64748b;
-            font-weight: bold;
-            margin-bottom: 0.25rem;
-        }
-
-        .metric-value {
-            font-size: 1.875rem;
+            font-size: 0.85rem;
             font-weight: 900;
-            color: #334155;
-            line-height: 1;
+            color: #475569;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            padding-bottom: 0.75rem;
+            margin-bottom: 0.5rem;
+            border-bottom: 1px solid #e2e8f0;
         }
 
-        /* 预期范围条样式 */
-        .range-container {
-            background: #f8fafc;
-            padding: 12px;
-            border-radius: 12px;
-            border: 1px solid #e2e8f0;
-            margin-top: 1rem;
-        }
-
-        .range-bar-bg {
-            height: 6px;
+        /* 滑块美化 */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
             background: #e2e8f0;
-            border-radius: 99px;
-            position: relative;
-            margin-top: 8px;
+            height: 4px;
+            border-radius: 2px;
         }
 
-        .range-bar-fill {
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            background: var(--primary);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 8px var(--primary-glow);
+            border: 2px solid white;
+        }
+
+        /* 进度条流光 */
+        .progress-shimmer {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-shimmer::after {
+            content: "";
             position: absolute;
-            background: #64748b;
-            opacity: 0.8;
+            top: 0;
+            left: -100%;
+            width: 100%;
             height: 100%;
-            border-radius: 99px;
-            transition: all 0.5s ease;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+            animation: shimmer 1.5s infinite;
+        }
+
+        @keyframes shimmer {
+            100% {
+                left: 100%;
+            }
+        }
+
+        .tab-btn.active {
+            background: white;
+            color: var(--primary);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        /* 费用超限警告 */
+        .fee-warning {
+            background: #ef4444 !important;
+            color: white !important;
+            animation: fee-shake 0.5s ease-in-out infinite, fee-glow 1.5s ease-in-out infinite;
+        }
+
+        @keyframes fee-shake {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            25% {
+                transform: translateX(-2px);
+            }
+
+            75% {
+                transform: translateX(2px);
+            }
+        }
+
+        @keyframes fee-glow {
+
+            0%,
+            100% {
+                box-shadow: 0 0 5px #ef4444;
+            }
+
+            50% {
+                box-shadow: 0 0 20px #ef4444;
+            }
+        }
+
+        /* 选中勋章 */
+        .selected-badge {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            width: 20px;
+            height: 20px;
+            background: var(--primary);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            box-shadow: 0 4px 8px var(--primary-glow);
+            border: 2px solid white;
+            z-index: 10;
+        }
+
+        /* 阵容标签胶囊 */
+        .lineup-tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 1px 4px;
+            background: rgba(99, 102, 241, 0.08);
+            border: 1px solid rgba(99, 102, 241, 0.1);
+            color: #4f46e5;
+            border-radius: 4px;
+            font-size: 9px;
+            font-weight: 800;
+            margin-right: 3px;
+            margin-bottom: 3px;
+            line-height: 1.2;
+        }
+
+        /* 响应式吸顶 */
+        @media (min-width: 1024px) {
+            .sidebar-sticky {
+                position: sticky;
+                top: 88px;
+                max-height: calc(100vh - 120px);
+                overflow-y: auto;
+                padding-right: 4px;
+            }
+
+            .sidebar-sticky::-webkit-scrollbar {
+                width: 4px;
+            }
+
+            .sidebar-sticky::-webkit-scrollbar-track {
+                background: transparent;
+            }
+
+            .sidebar-sticky::-webkit-scrollbar-thumb {
+                background: #e2e8f0;
+                border-radius: 10px;
+            }
+
+            .sidebar-sticky::-webkit-scrollbar-thumb:hover {
+                background: #cbd5e1;
+            }
+        }
+
+        /* 数值控制器 */
+        .numeric-control {
+            display: flex;
+            align-items: center;
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 2px;
+            border: 1px solid #e2e8f0;
+            transition: all 0.3s;
+        }
+
+        .numeric-control:focus-within {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-glow);
+            background: white;
+        }
+
+        .numeric-btn {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            color: #64748b;
+            transition: all 0.2s;
+            font-weight: bold;
+            user-select: none;
+        }
+
+        .numeric-btn:hover {
+            background: #f1f5f9;
+            color: var(--primary);
+        }
+
+        .numeric-btn:active {
+            transform: scale(0.9);
+        }
+
+        .numeric-input {
+            width: 100%;
+            text-align: center;
+            background: transparent;
+            border: none;
+            outline: none;
+            font-weight: 800;
+            color: #1e293b;
+            font-size: 14px;
+        }
+
+        /* 卡牌唤醒动画 */
+        @keyframes card-wake {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+            }
+
+            50% {
+                transform: scale(1.05);
+                box-shadow: 0 0 20px 5px var(--primary-glow);
+            }
+
+            100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+            }
+        }
+
+        .wake-up {
+            animation: card-wake 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        /* 占位符样式 */
+        .empty-placeholder {
+            border: 2px dashed #e2e8f0;
+            border-radius: 24px;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #cbd5e1;
+            transition: all 0.3s;
+        }
+
+        .empty-placeholder svg {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 12px;
+            opacity: 0.5;
         }
     </style>
 </head>
 
 <body class="bg-slate-50 text-slate-900 min-h-screen">
 
-    <header class="bg-white px-8 py-4 sticky top-0 z-10 flex justify-between items-center">
-        <h1 class="text-xl font-black text-red-600">🎴 丹青模拟器 Pro</h1>
-        <div class="flex gap-4">
-
+    <header
+        class="bg-white/80 backdrop-blur-md px-8 py-3 sticky top-0 z-50 flex justify-between items-center border-b border-slate-200">
+        <div class="flex items-center gap-2">
+            <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-200">
+                <span class="text-white font-black text-xl">D</span>
+            </div>
+            <h1
+                class="text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600 tracking-tight">
+                丹青模拟器 <span class="text-indigo-500 font-medium text-sm ml-1">Pro</span></h1>
         </div>
     </header>
 
@@ -151,65 +411,98 @@
 
         <div class="flex-1 lg:w-3/5">
 
-            <div class="bg-white p-6 rounded-3xl shadow-sm mb-6 grid grid-cols-2 md:grid-cols-4 gap-6">
-                <div>
-                    <label class="block text-[15px] font-bold text-slate-400 uppercase mb-1">基础攻击(无丹青)</label>
-                    <input type="number" id="baseAtk" value="8000"
-                        class="w-full border-b font-bold py-1 outline-none focus:border-red-400">
+            <div class="bg-white p-6 rounded-3xl shadow-sm mb-6 grid grid-cols-2 md:grid-cols-5 gap-6">
+                <div class="space-y-1.5">
+                    <label class="block text-[11px] font-black text-slate-400 uppercase tracking-tighter ml-1">基础攻击
+                        (无丹青)</label>
+                    <div class="numeric-control">
+                        <button class="numeric-btn" onclick="changeNumericValue('baseAtk', -100, 0, 99999)">-</button>
+                        <input type="number" id="baseAtk" value="8000" class="numeric-input" onchange="updateFee()">
+                        <button class="numeric-btn" onclick="changeNumericValue('baseAtk', 100, 0, 99999)">+</button>
+                    </div>
                 </div>
-                <div>
-                    <label class="block text-[15px] font-bold text-slate-400 uppercase mb-1">初始秒伤(无丹青)</label>
-                    <input type="number" id="baseDps" value="35000"
-                        class="w-full border-b font-bold py-1 outline-none focus:border-red-400">
+                <div class="space-y-1.5">
+                    <label class="block text-[11px] font-black text-slate-400 uppercase tracking-tighter ml-1">初始秒伤
+                        (无丹青)</label>
+                    <div class="numeric-control">
+                        <button class="numeric-btn" onclick="changeNumericValue('baseDps', -1000, 0, 999999)">-</button>
+                        <input type="number" id="baseDps" value="35000" class="numeric-input" onchange="updateFee()">
+                        <button class="numeric-btn" onclick="changeNumericValue('baseDps', 1000, 0, 999999)">+</button>
+                    </div>
+                </div>
+                <div class="space-y-1.5">
+                    <label class="block text-[11px] font-black text-slate-400 uppercase tracking-tighter ml-1">目标数量</label>
+                    <div class="numeric-control">
+                        <button class="numeric-btn" onclick="changeNumericValue('targetCount', -1, 1, 10)">-</button>
+                        <input type="number" id="targetCount" value="1" min="1" max="10" class="numeric-input"
+                            onchange="updateFee()">
+                        <button class="numeric-btn" onclick="changeNumericValue('targetCount', 1, 1, 10)">+</button>
+                    </div>
                 </div>
                 <div>
                     <label class="block text-[15px] font-bold text-slate-400 uppercase mb-1">战斗时长: <span
                             id="timeVal">300</span>s</label>
-                    <input type="range" id="simTime" min="30" max="600" value="300" class="w-full accent-red">
+                    <input type="range" id="simTime" min="30" max="600" value="300"
+                        style="background: linear-gradient(to right, var(--primary) 47%, #e2e8f0 0%)" class="w-full">
                 </div>
                 <div>
                     <label class="block text-[15px] font-bold text-slate-400 uppercase mb-1">迭代次数: <span
                             id="iterVal">50</span></label>
-                    <input type="range" id="simIter" min="1" max="200" value="50" class="w-full accent-red">
+                    <input type="range" id="simIter" min="1" max="200" value="50"
+                        style="background: linear-gradient(to right, var(--primary) 24.6%, #e2e8f0 0%)" class="w-full">
                 </div>
             </div>
 
-            <div class="flex justify-between items-center mb-4 px-2">
-                <h2 class="font-bold text-slate-700">阵容编成 <span id="feeLabel"
-                        class="ml-2 text-sm font-bold text-green-500">0 / 25 费</span></h2>
-                <div class="flex gap-2">
-                    <button onclick="selectAll()"
-                        class="text-[12px] bg-blue-50 text-blue-500 font-bold border border-blue-100 px-2 py-1 rounded shadow-sm hover:bg-blue-100">全选</button>
-                    <button onclick="reset()"
-                        class="text-[12px] bg-red-50 text-red-500 font-bold border border-red-100 px-2 py-1 rounded shadow-sm hover:bg-red-100">清空</button>
-                    <button onclick="batchSetStars(0)"
-                        class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">全员 0★</button>
-                    <button onclick="batchSetStars(1)"
-                        class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">1★</button>
-                    <button onclick="batchSetStars(2)"
-                        class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">2★</button>
-                    <button onclick="batchSetStars(3)"
-                        class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">3★</button>
-                    <button onclick="batchSetStars(4)"
-                        class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">4★</button>
-                    <button onclick="batchSetStars(5)"
-                        class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">5★</button>
-                    <button onclick="batchSetStars(6)"
-                        class="text-[12px] bg-white border px-2 py-1 rounded shadow-sm hover:bg-slate-50">6★</button>
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 px-2">
+                <h2 class="font-black text-slate-800 flex items-center gap-2">
+                    <span class="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></span>
+                    阵容编成
+                    <span id="feeLabel"
+                        class="ml-2 text-[10px] px-2 py-0.5 rounded-full font-black bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase">
+                        0 / 25 FEE
+                    </span>
+                </h2>
+
+                <div class="flex flex-wrap gap-3">
+                    <div class="flex p-1 bg-slate-200/50 rounded-xl">
+                        <button onclick="selectAll()"
+                            class="px-3 py-1.5 text-[11px] font-black text-slate-600 hover:text-indigo-600 hover:bg-white rounded-lg transition-all">全选</button>
+                        <button onclick="reset()"
+                            class="px-3 py-1.5 text-[11px] font-black text-slate-600 hover:text-red-500 hover:bg-white rounded-lg transition-all">重置</button>
+                    </div>
+
+                    <div class="flex p-1 bg-slate-200/50 rounded-xl items-center">
+                        <span class="px-2 text-[9px] font-black text-slate-400 uppercase tracking-tighter">★</span>
+                        <div class="flex gap-0.5">
+                            <button onclick="batchSetStars(0)"
+                                class="w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">0</button>
+                            <button onclick="batchSetStars(1)"
+                                class="w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">1</button>
+                            <button onclick="batchSetStars(2)"
+                                class="w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">2</button>
+                            <button onclick="batchSetStars(3)"
+                                class="w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">3</button>
+                            <button onclick="batchSetStars(4)"
+                                class="w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">4</button>
+                            <button onclick="batchSetStars(5)"
+                                class="w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">5</button>
+                            <button onclick="batchSetStars(6)"
+                                class="w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">6</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <div id="cardGrid"></div>
         </div>
 
-        <div class="w-full lg:w-[450px] xl:w-[500px] space-y-6">
-
+        <div class="w-full lg:w-[450px] xl:w-[520px] sidebar-sticky">
             <!-- 选项卡导航 -->
-            <div class="flex p-1 bg-slate-100 rounded-xl mb-6">
+            <div class="flex p-1.5 bg-slate-200/50 backdrop-blur-sm rounded-2xl mb-6">
                 <button onclick="switchTab('basic')" id="btn-tab-basic"
-                    class="flex-1 py-2 rounded-lg text-sm font-bold text-slate-700 bg-white shadow-sm transition-all">基础模拟</button>
+                    class="tab-btn active flex-1 py-2.5 rounded-xl text-sm font-black transition-all">基础模拟</button>
                 <button onclick="switchTab('advanced')" id="btn-tab-advanced"
-                    class="flex-1 py-2 rounded-lg text-sm font-bold text-slate-400 hover:text-slate-600 transition-all">高级推演</button>
+                    class="tab-btn flex-1 py-2.5 rounded-xl text-sm font-black text-slate-500 hover:text-slate-700 transition-all">高级推演</button>
             </div>
 
             <div id="tab-basic">
@@ -261,9 +554,10 @@
                             <span>最低 <span id="resMin" class="text-slate-700">0</span></span>
                             <span>最高 <span id="resMax" class="text-slate-700">0</span></span>
                         </div>
-                        <div class="relative h-2 bg-slate-200 rounded-full overflow-hidden mb-2">
+                        <div
+                            class="relative h-2 bg-slate-100 rounded-full overflow-hidden mb-2 border border-slate-200/50">
                             <div id="rangeBar"
-                                class="absolute h-full bg-red-400 rounded-full transition-all duration-500"
+                                class="absolute h-full bg-gradient-to-r from-indigo-400 to-indigo-600 rounded-full transition-all duration-500 shadow-sm"
                                 style="left: 0%; width: 0%;"></div>
                         </div>
                         <div class="text-center text-[10px] text-slate-400">
@@ -273,7 +567,7 @@
 
                     <!-- 图表 -->
                     <div id="dpsChartInfo"
-                        class="hidden bg-white p-4 rounded-2xl shadow-sm border border-slate-100 h-[220px]">
+                        class="hidden bg-white p-4 rounded-2xl shadow-sm border border-slate-100 h-[250px]">
                         <div class="text-[10px] font-bold text-slate-400 uppercase mb-2 ml-1">DPS 演进曲线</div>
                         <canvas id="dpsChart"></canvas>
                     </div>
@@ -326,14 +620,26 @@
 
                         <!-- 进度条 -->
                         <div id="bfProgressBox" class="hidden mt-4">
-                            <div class="flex justify-between text-[10px] text-purple-600 font-bold mb-1">
-                                <span id="bfStatusText">正在初始化...</span>
+                            <div class="flex justify-between text-[10px] text-indigo-600 font-black mb-1.5">
+                                <span id="bfStatusText">正在执行推演...</span>
                                 <span id="bfPercent">0%</span>
                             </div>
-                            <div class="h-2 bg-purple-100 rounded-full overflow-hidden">
-                                <div id="bfProgressBar" class="h-full bg-purple-500 transition-all duration-300"
+                            <div class="h-2.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
+                                <div id="bfProgressBar"
+                                    class="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-300 progress-shimmer"
                                     style="width: 0%"></div>
                             </div>
+                        </div>
+
+                        <div id="bfPlaceholder" class="empty-placeholder">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z">
+                                </path>
+                            </svg>
+                            <p class="text-xs font-black">等待推演指令</p>
+                            <p class="text-[10px] opacity-60 mt-1 uppercase font-bold tracking-widest">Awaiting Command
+                            </p>
                         </div>
 
                         <!-- 结果列表 -->
@@ -349,21 +655,38 @@
 
         </div>
     </div>
-    <footer class="mt-12 py-8 border-t border-slate-200 text-center" hidden>
-        <div class="text-[12px] text-slate-400 font-medium flex justify-center gap-4">
-            <span id="busuanzi_container_site_pv">
-                本站总访问量 <span id="busuanzi_value_site_pv" class="text-slate-900 font-bold">--</span> 次
-            </span>
-            <span class="text-slate-200">|</span>
-            <span id="busuanzi_container_site_uv">
-                共有 <span id="busuanzi_value_site_uv" class="text-slate-900 font-bold">--</span> 位猪白到访
-            </span>
-        </div>
-    </footer>
-    
+
+
     <script src="engine.js"></script>
     <script>
         let selected = new Map();
+
+        function changeNumericValue(id, delta, min, max) {
+            const el = document.getElementById(id);
+            let val = parseInt(el.value) + delta;
+            if (val < min) val = min;
+            if (max !== undefined && val > max) val = max;
+            el.value = val;
+            updateFee();
+        }
+
+        function animateNumber(id, endValue, duration = 800) {
+            const obj = document.getElementById(id);
+            const startValue = parseInt(obj.innerText.replace(/,/g, '')) || 0;
+            if (startValue === endValue) return;
+
+            const startTime = performance.now();
+            function step(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const current = Math.floor(progress * (endValue - startValue) + startValue);
+                obj.innerText = current.toLocaleString();
+                if (progress < 1) {
+                    requestAnimationFrame(step);
+                }
+            }
+            requestAnimationFrame(step);
+        }
 
         const races = ["Human", "Beast", "Tool"];
         const raceConfig = {
@@ -379,29 +702,39 @@
         function init() {
             const grid = document.getElementById('cardGrid');
 
-            grid.innerHTML = races.map(race => {
+            let html = '';
+            races.forEach(race => {
                 const raceCards = CARDS.filter(c => c.race === race);
                 const conf = raceConfig[race];
-                return `
-                    <div class="race-section">
-                        ${raceCards.map(c => `
-                            <div id="c-${c.className}" class="card-box p-4 rounded-2xl bg-white shadow-sm ${conf.border}" onclick="toggle('${c.className}')">
-                                <div class="flex justify-between items-start mb-1">
-                                    <span class="font-bold text-slate-700">${c.name}</span>
-                                    <span class="text-[12px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-mono">${c.fee}F</span>
-                                </div>
-                                <div class="flex mb-3"><div class="text-[12px] px-2 py-0.5 rounded-full font-black ${conf.tag}">${conf.title}</div></div>
-                                <div id="star-ui-${c.className}" class="star-ui hidden" onclick="event.stopPropagation()">
-                                    <div class="flex items-center gap-2">
-                                        <input type="range" min="0" max="6" value="6" class="flex-1 accent-red h-1" oninput="updateLv('${c.className}', this.value)">
-                                        <span class="text-[10px] font-black text-red-500 w-4"><span id="lv-${c.className}">6</span>★</span>
+                html += raceCards.map(c => `
+                            <div id="c-${c.className}" class="card-box rounded-2xl ${conf.border} relative" onclick="toggle('${c.className}')">
+                                ${selected.has(c.className) ? `<div class="selected-badge">✓</div>` : ''}
+                                <div class="w-full">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <div class="flex items-center gap-2 overflow-hidden">
+                                            <span class="text-[13px] font-black text-slate-800 tracking-tight leading-none truncate">${c.name}</span>
+                                            <span class="text-[10px] font-black px-2 py-0.5 rounded-md ${conf.tag} shrink-0">${conf.title}</span>
+                                        </div>
+                                        <span class="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md font-black shrink-0 ml-2 tracking-tighter">${c.fee} FEE</span>
+                                    </div>
+                                    
+                                    <div id="star-ui-${c.className}" class="star-ui ${selected.has(c.className) ? '' : 'hidden'}" onclick="event.stopPropagation()">
+                                        <div class="flex items-center gap-2 mt-4 mb-1">
+                                            <input type="range" min="0" max="6" value="${selected.has(c.className) ? selected.get(c.className).level : 6}" 
+                                                   style="background: linear-gradient(to right, var(--primary) ${((selected.has(c.className) ? selected.get(c.className).level : 6) / 6 * 100)}%, #e2e8f0 0%)"
+                                                   class="flex-1 h-1 star-slider" oninput="updateLv('${c.className}', this.value)">
+                                            <div class="flex flex-col items-center min-w-[24px]">
+                                                <span class="text-[10px] font-black text-indigo-600 leading-none"><span id="lv-${c.className}">${selected.has(c.className) ? selected.get(c.className).level : 6}</span></span>
+                                                <span class="text-[10px] font-black text-indigo-400">★</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        `).join('')}
-                    </div>
-                `;
-            }).join('');
+                        `).join('');
+            });
+
+            grid.innerHTML = `<div class="race-section">${html}</div>`;
         }
 
         function toggle(name) {
@@ -411,10 +744,15 @@
                 selected.delete(name);
                 node.classList.remove('selected');
                 starUi.classList.add('hidden');
+                // 移除勋章
+                const badge = node.querySelector('.selected-badge');
+                if (badge) badge.remove();
             } else {
                 selected.set(name, { name, level: 6 });
                 node.classList.add('selected');
                 starUi.classList.remove('hidden');
+                // 添加勋章
+                node.insertAdjacentHTML('afterbegin', `<div class="selected-badge">✓</div>`);
             }
             updateFee();
         }
@@ -423,6 +761,13 @@
             if (selected.has(name)) {
                 selected.get(name).level = parseInt(val);
                 document.getElementById(`lv-${name}`).innerText = val;
+
+                // 动态更新滑块背景进度
+                const slider = document.querySelector(`#star-ui-${name} input`);
+                if (slider) {
+                    const pct = (val / 6 * 100);
+                    slider.style.background = `linear-gradient(to right, var(--primary) ${pct}%, #e2e8f0 0%)`;
+                }
             }
         }
 
@@ -434,89 +779,104 @@
             });
             const label = document.getElementById('feeLabel');
             label.innerText = `${total} / 25 费`;
-            label.className = total > 25 ? "ml-2 text-sm font-bold text-red-500" : "ml-2 text-sm font-bold text-green-500";
+
+            const baseStyle = "ml-2 text-[11px] px-2 py-0.5 rounded-full font-black transition-all duration-300 ";
+            if (total > 25) {
+                label.className = baseStyle + "fee-warning";
+            } else {
+                label.className = baseStyle + "bg-emerald-50 text-emerald-600 border border-emerald-100";
+            }
         }
 
 
         function doSim() {
             if (selected.size === 0) return alert("请先选卡");
-            const deckClasses = [];
 
-            const deckConfig = Array.from(selected.values()).map(val => {
-                const cardMeta = CARDS.find(c => c.className === val.name);
-                return {
-                    classRef: cardMeta.classRef,
-                    level: val.level
-                };
-            });
+            const btn = document.querySelector('button[onclick="doSim()"]');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<span class="flex items-center gap-2 justify-center">解析数据中<span class="animate-bounce">.</span><span class="animate-bounce" style="animation-delay: 0.2s">.</span><span class="animate-bounce" style="animation-delay: 0.4s">.</span></span>`;
+            btn.disabled = true;
 
-            const baseAtk = parseInt(document.getElementById('baseAtk').value);
-            const baseDps = parseInt(document.getElementById('baseDps').value);
-            const simTime = parseInt(document.getElementById('simTime').value);
-            const iterations = parseInt(document.getElementById('simIter').value);
+            setTimeout(() => {
+                const deckConfig = Array.from(selected.values()).map(val => {
+                    const cardMeta = CARDS.find(c => c.className === val.name);
+                    return { classRef: cardMeta.classRef, level: val.level };
+                });
 
-            let results = [];
-            for (let i = 0; i < iterations; i++) {
-                const currentDeck = deckConfig.map(c => new c.classRef(c.level));
-                const engine = new RaceCombatEngine(currentDeck, baseAtk, baseDps);
-                results.push(engine.simulate(simTime));
-            }
+                const baseAtk = parseInt(document.getElementById('baseAtk').value);
+                const baseDps = parseInt(document.getElementById('baseDps').value);
+                const simTime = parseInt(document.getElementById('simTime').value);
+                const iterations = parseInt(document.getElementById('simIter').value);
+                const targetCount = parseInt(document.getElementById('targetCount').value) || 1;
 
-            // 统计计算
-            const totals = results.map(r => r.total);
-            const avgTotal = totals.reduce((a, b) => a + b, 0) / iterations;
-            const avgCard = results.reduce((a, b) => a + b.card_dps, 0) / iterations;
-            const avgBoost = results.reduce((a, b) => a + b.boost_dps, 0) / iterations;
-
-            const minVal = Math.min(...totals);
-            const maxVal = Math.max(...totals);
-
-            // 计算标准差和 95% 置信区间 (CI = 1.96 * std / sqrt(n))
-            const stdDev = Math.sqrt(totals.map(x => Math.pow(x - avgTotal, 2)).reduce((a, b) => a + b) / iterations);
-            const ci95 = 1.96 * (stdDev / Math.sqrt(iterations));
-
-            // 更新 UI
-            document.getElementById('resTotal').innerText = Math.round(avgTotal).toLocaleString();
-            document.getElementById('resCardDps').innerText = Math.round(avgCard).toLocaleString();
-            document.getElementById('resBoostDps').innerText = Math.round(avgBoost).toLocaleString();
-
-            const increaseDps = Math.round(avgTotal - baseDps).toLocaleString();
-            document.getElementById('resPercent').innerText = `相比无丹青提升 +${((avgTotal - baseDps) / baseDps * 100).toFixed(1)}% (${increaseDps})`;
-
-            // 更新波动范围条
-            document.getElementById('rangeInfo').classList.remove('hidden');
-            document.getElementById('dpsChartInfo').classList.remove('hidden');
-            document.getElementById('resMin').innerText = Math.round(minVal).toLocaleString();
-            document.getElementById('resMax').innerText = Math.round(maxVal).toLocaleString();
-            document.getElementById('resErr').innerText = Math.round(ci95).toLocaleString();
-
-            // 渲染进度条位置
-            const rangePercent = ((2 * ci95) / (maxVal - minVal + 1)) * 100;
-            const leftPercent = ((avgTotal - ci95 - minVal) / (maxVal - minVal + 1)) * 100;
-            document.getElementById('rangeBar').style.left = Math.max(0, leftPercent) + "%";
-            document.getElementById('rangeBar').style.width = Math.min(100, rangePercent) + "%";
-
-            addHistory(Math.round(avgTotal), ci95);
-
-            // 计算平均 DPS 曲线 ---
-            const historyLength = results[0].dpsHistory.length;
-            let averageCurve = new Array(historyLength).fill(0);
-
-            for (let i = 0; i < historyLength; i++) {
-                let sum = 0;
-                for (let j = 0; j < iterations; j++) {
-                    sum += results[j].dpsHistory[i];
+                let results = [];
+                for (let i = 0; i < iterations; i++) {
+                    const currentDeck = deckConfig.map(c => new c.classRef(c.level));
+                    const engine = new RaceCombatEngine(currentDeck, baseAtk, baseDps, targetCount);
+                    results.push(engine.simulate(simTime));
                 }
-                averageCurve[i] = Math.round(sum / iterations);
-            }
-            renderChart(averageCurve, simTime);
+
+                const totals = results.map(r => r.total);
+                const avgTotal = totals.reduce((a, b) => a + b, 0) / iterations;
+                const avgCard = results.reduce((a, b) => a + b.card_dps, 0) / iterations;
+                const avgBoost = results.reduce((a, b) => a + b.boost_dps, 0) / iterations;
+                const minVal = Math.min(...totals);
+                const maxVal = Math.max(...totals);
+
+                const stdDev = Math.sqrt(totals.map(x => Math.pow(x - avgTotal, 2)).reduce((a, b) => a + b) / iterations);
+                const ci95 = 1.96 * (stdDev / Math.sqrt(iterations));
+
+                animateNumber('resTotal', Math.round(avgTotal));
+                animateNumber('resCardDps', Math.round(avgCard));
+                animateNumber('resBoostDps', Math.round(avgBoost));
+
+                // 相比无丹青提升动画在 addHistory 逻辑中原有逻辑保持
+                const increaseDps = Math.round(avgTotal - baseDps).toLocaleString();
+                document.getElementById('resPercent').innerText = `相比无丹青提升 +${((avgTotal - baseDps) / baseDps * 100).toFixed(1)}% (${increaseDps})`;
+
+
+                // 更新波动范围条
+                document.getElementById('rangeInfo').classList.remove('hidden');
+                document.getElementById('dpsChartInfo').classList.remove('hidden');
+                document.getElementById('resMin').innerText = Math.round(minVal).toLocaleString();
+                document.getElementById('resMax').innerText = Math.round(maxVal).toLocaleString();
+                document.getElementById('resErr').innerText = Math.round(ci95).toLocaleString();
+
+                // 渲染进度条位置
+                const rangePercent = ((2 * ci95) / (maxVal - minVal + 1)) * 100;
+                const leftPercent = ((avgTotal - ci95 - minVal) / (maxVal - minVal + 1)) * 100;
+                document.getElementById('rangeBar').style.left = Math.max(0, leftPercent) + "%";
+                document.getElementById('rangeBar').style.width = Math.min(100, rangePercent) + "%";
+
+                addHistory(Math.round(avgTotal), ci95);
+
+                // 计算平均 DPS 曲线 ---
+                const historyLength = results[0].dpsHistory.length;
+                let averageCurve = new Array(historyLength).fill(0);
+
+                for (let i = 0; i < historyLength; i++) {
+                    let sum = 0;
+                    for (let j = 0; j < iterations; j++) {
+                        sum += results[j].dpsHistory[i];
+                    }
+                    averageCurve[i] = Math.round(sum / iterations);
+                }
+                renderChart(averageCurve, simTime);
+
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }, 0);
         }
 
         function renderChart(curveData, totalTime) {
             const ctx = document.getElementById('dpsChart').getContext('2d');
             if (dpsChartInstance) dpsChartInstance.destroy();
 
-            // 生成 X 轴标签 (1s, 2s, ...)
+            // 创建渐变背景
+            const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+            gradient.addColorStop(0, 'rgba(99, 102, 241, 0.2)');
+            gradient.addColorStop(1, 'rgba(99, 102, 241, 0.0)');
+
             const labels = curveData.map((_, i) => (i + 1) + 's');
 
             dpsChartInstance = new Chart(ctx, {
@@ -526,9 +886,9 @@
                     datasets: [{
                         label: '平均 DPS',
                         data: curveData,
-                        borderColor: '#ef4444',
-                        backgroundColor: 'rgba(239, 68, 68, 0.05)',
-                        borderWidth: 2,
+                        borderColor: '#6366f1',
+                        backgroundColor: gradient,
+                        borderWidth: 3,
                         pointRadius: 0,
                         fill: true,
                         tension: 0.4
@@ -539,19 +899,42 @@
                     maintainAspectRatio: false,
                     layout: {
                         padding: {
-                            left: 10,
-                            right: 20,
-                            top: 10,
                             bottom: 10
                         }
                     },
                     plugins: {
                         legend: { display: false },
-                        tooltip: { mode: 'index', intersect: false }
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            padding: 10,
+                            titleFont: { size: 10, weight: 'bold' },
+                            bodyFont: { size: 12, weight: '900' }
+                        }
                     },
                     scales: {
-                        x: { display: true, grid: { display: false }, ticks: { maxTicksLimit: 10 } },
-                        y: { beginAtZero: false, grid: { color: '#f1f5f9' } }
+                        x: {
+                            display: true,
+                            grid: { display: false },
+                            ticks: {
+                                padding: 2,
+                                maxRotation: 0,
+                                autoSkip: true,
+                                maxTicksLimit: 6,
+                                font: { size: 9, weight: 'bold' },
+                                color: '#94a3b8'
+                            }
+                        },
+                        y: {
+                            beginAtZero: false,
+                            grid: { color: 'rgba(0,0,0,0.03)', drawTicks: false },
+                            ticks: {
+                                font: { size: 10, weight: 'bold' },
+                                color: '#94a3b8',
+                                callback: v => (v >= 10000 ? (v / 1000).toFixed(0) + 'K' : v)
+                            }
+                        }
                     }
                 }
             });
@@ -563,22 +946,40 @@
 
             const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-            // 处理阵容文字 (默认 6 星不显示星级)
-            const lineup = Array.from(selected.values()).map(card => {
+            // 处理阵容文字 (按 FEE 从高到低排序，默认 6 星不显示星级)
+            const lineupCards = Array.from(selected.values()).map(s => {
+                const meta = window.CARD_DATABASE.find(c => c.className === s.name);
+                return { ...s, fee: meta ? meta.fee : 0 };
+            }).sort((a, b) => b.fee - a.fee);
+
+            const totalFee = lineupCards.reduce((sum, c) => sum + c.fee, 0);
+            const lineupHtml = lineupCards.map(card => {
                 const chineseName = window.CARD_NAME_MAP[card.name] || card.name;
-                return card.level === 6 ? chineseName : `${chineseName}(${card.level}★)`;
-            }).join(" + ");
+                const starPart = card.level === 6 ? '' : `<span class="opacity-60 ml-0.5">${card.level}★</span>`;
+                return `<span class="lineup-tag">${chineseName}${starPart}</span>`;
+            }).join("");
 
             const item = `
-                <div class="p-3 border-b hover:bg-slate-50 transition-colors bg-white rounded-xl mb-1 border border-slate-100">
-                    <div class="flex justify-between items-center mb-1">
-                        <div class="flex items-center gap-2">
-                            <span class="text-sm font-black text-red-500">${dps.toLocaleString()}</span>
-                            <span class="text-[9px] text-slate-400 font-bold">±${Math.round(error).toLocaleString()}</span>
+                <div onclick="copyAndRestore('${lineupCards.map(c => (window.CARD_NAME_MAP[c.name] || c.name) + (c.level === 6 ? '' : `(${c.level}★)`)).join(" + ")}', event)" class="p-2.5 bg-white/60 border border-white rounded-2xl mb-2 hover:bg-white hover:shadow-xl hover:scale-[1.01] transition-all cursor-pointer group relative overflow-hidden">
+                    <div class="flex items-center gap-3 relative z-10">
+                        <!-- 数据面板 -->
+                        <div class="text-left shrink-0 min-w-[90px] border-r border-slate-200/50 pr-3 flex flex-col justify-center">
+                            <div class="text-[15px] font-black text-indigo-600 leading-none tracking-tighter mb-1.5">
+                                ${dps.toLocaleString()}<span class="text-[9px] text-slate-400 font-bold ml-1 opacity-70">±${Math.round(error).toLocaleString()}</span>
+                            </div>
+                            <div class="flex items-center gap-1.5 opacity-60">
+                                <span class="text-[9px] text-slate-400 font-mono leading-none">${time}</span>
+                                <span class="w-1 h-1 bg-slate-300 rounded-full"></span>
+                                <span class="text-[9px] font-black text-slate-500 leading-none">${totalFee} FEE</span>
+                            </div>
                         </div>
-                        <span class="text-[9px] text-slate-300 font-mono">${time}</span>
+                        
+                        <!-- 阵容面板 -->
+                        <div class="flex-1 min-w-0">
+                             <div class="flex flex-wrap gap-1">${lineupHtml}</div>
+                             <div class="tip-label text-[9px] text-indigo-500 font-black opacity-0 group-hover:opacity-100 transition-all uppercase leading-none mt-1.5 tracking-wider">点击复制还原</div>
+                        </div>
                     </div>
-                    <div class="text-[10px] text-slate-500 break-words leading-tight">${lineup}</div>
                 </div>
             `;
             list.insertAdjacentHTML('afterbegin', item);
@@ -593,16 +994,30 @@
             selected.forEach((v, k) => {
                 v.level = s;
                 document.getElementById(`lv-${k}`).innerText = s;
-                document.querySelector(`#star-ui-${k} input`).value = s;
+                const input = document.querySelector(`#star-ui-${k} input`);
+                if (input) {
+                    input.value = s;
+                    const pct = (s / 6 * 100);
+                    input.style.background = `linear-gradient(to right, var(--primary) ${pct}%, #e2e8f0 0%)`;
+                }
             });
         }
 
-        function reset() { selected.clear(); init(); updateFee(); }
-
-        document.getElementById('simTime').oninput = function () { document.getElementById('timeVal').innerText = this.value; };
-        document.getElementById('simIter').oninput = function () { document.getElementById('iterVal').innerText = this.value; };
-
-        let bfWorker = null;
+        function reset() {
+            selected.clear();
+            init();
+            updateFee();
+            // 同时重置高级推演界面的状态
+            const placeholder = document.getElementById('bfPlaceholder');
+            if (placeholder) {
+                placeholder.style.display = 'flex';
+                placeholder.classList.remove('hidden');
+            }
+            const resultBox = document.getElementById('bfResultBox');
+            if (resultBox) resultBox.classList.add('hidden');
+            const progressBox = document.getElementById('bfProgressBox');
+            if (progressBox) progressBox.classList.add('hidden');
+        }
 
         function selectAll() {
             const allNames = window.CARD_DATABASE.map(c => c.className);
@@ -611,7 +1026,58 @@
             });
         }
 
-        function startBruteForce() {
+        document.getElementById('simTime').oninput = function () {
+            document.getElementById('timeVal').innerText = this.value;
+            const pct = (this.value - 30) / (600 - 30) * 100;
+            this.style.background = `linear-gradient(to right, var(--primary) ${pct}%, #e2e8f0 0%)`;
+        };
+        document.getElementById('simIter').oninput = function () {
+            document.getElementById('iterVal').innerText = this.value;
+            const pct = (this.value - 1) / (200 - 1) * 100;
+            this.style.background = `linear-gradient(to right, var(--primary) ${pct}%, #e2e8f0 0%)`;
+        };
+
+        let bfWorkerPool = [];
+        let isStopped = false;
+
+        /**
+         * 组合生成算法 (Backtracking)
+         * 移至主线程以方便任务预处理
+         */
+        function generateCombos(availableCards, maxCost) {
+            const results = [];
+            const sorted = [...availableCards].sort((a, b) => b.fee - a.fee);
+
+            function backtrack(start, current, currentCost) {
+                if (currentCost > maxCost) return;
+                if (current.length > 0) {
+                    results.push({
+                        cost: currentCost,
+                        deckRef: [...current]
+                    });
+                }
+                for (let i = start; i < sorted.length; i++) {
+                    const card = sorted[i];
+                    if (currentCost + card.fee <= maxCost) {
+                        current.push(card);
+                        backtrack(i + 1, current, currentCost + card.fee);
+                        current.pop();
+                    }
+                }
+            }
+            backtrack(0, [], 0);
+            return results;
+        }
+
+        async function startBruteForce() {
+            // 终止可能存在的旧任务
+            isStopped = true;
+            if (bfWorkerPool.length > 0) {
+                bfWorkerPool.forEach(w => w.terminate());
+                bfWorkerPool = [];
+            }
+
+            isStopped = false;
             const btn = document.getElementById('btnStartBF');
             const progressBox = document.getElementById('bfProgressBox');
             const progressBar = document.getElementById('bfProgressBar');
@@ -620,15 +1086,14 @@
             const resultBox = document.getElementById('bfResultBox');
             const resultList = document.getElementById('bfResultList');
 
-            // 准备配置
             const maxCost = parseInt(document.getElementById('bfMaxCost').value) || 15;
             const iterations = parseInt(document.getElementById('bfIter').value) || 5;
             const baseAtk = parseInt(document.getElementById('baseAtk').value);
             const baseDps = parseInt(document.getElementById('baseDps').value);
             const simTime = parseInt(document.getElementById('simTime').value);
+            const targetCount = parseInt(document.getElementById('targetCount').value) || 1;
 
-
-
+            let pool = [];
             if (selected.size === 0) {
                 if (!confirm("当前未选中任何卡片，是否使用【全丹青 6★】进行推演？(计算量可能较大)")) return;
                 pool = window.CARD_DATABASE.map(c => ({ className: c.className, name: c.name, fee: c.fee, level: 6 }));
@@ -639,58 +1104,126 @@
                 });
             }
 
-            // UI 状态
+            // UI 准备
             btn.disabled = true;
             btn.innerHTML = `<svg class="animate-spin h-5 w-5 mr-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 正在推演...`;
             document.getElementById('btnStopBF').classList.remove('hidden');
-            progressBox.classList.remove('hidden');
+            const placeholder = document.getElementById('bfPlaceholder');
+            if (placeholder) placeholder.style.display = 'none';
             resultBox.classList.add('hidden');
+            progressBox.classList.remove('hidden');
+
+            statusText.innerText = "正在生成组合...";
+            const rawCombos = generateCombos(pool, maxCost);
+            let maxFound = 0;
+            rawCombos.forEach(c => { if (c.cost > maxFound) maxFound = c.cost; });
+            const allCombos = rawCombos.filter(c => c.cost === maxFound);
+
+            // 给每个组合分配一个唯一 ID，方便精准还原
+            allCombos.forEach((c, idx) => c.id = idx);
+
+            if (allCombos.length === 0) {
+                alert("未找到有效组合"); finishBF(); return;
+            }
+
+            // 2. 环境准备：多线程池
+            const threadCount = Math.max(1, (navigator.hardwareConcurrency || 4) - 1);
+            bfWorkerPool = [];
+            for (let i = 0; i < threadCount; i++) {
+                bfWorkerPool.push(new Worker('sim_worker.js'));
+            }
+
+            // 辅助：并行分发
+            const runParallel = (combos, iters, onProgress) => {
+                return new Promise((resolve) => {
+                    let finishedWorkers = 0;
+                    let processedCombos = 0;
+                    let allResults = [];
+                    const chunkSize = Math.ceil(combos.length / threadCount);
+
+                    bfWorkerPool.forEach((worker, i) => {
+                        const start = i * chunkSize;
+                        const end = Math.min(combos.length, (i + 1) * chunkSize);
+                        const chunk = combos.slice(start, end);
+
+                        if (chunk.length === 0) {
+                            finishedWorkers++;
+                            if (finishedWorkers === threadCount) resolve(allResults);
+                            return;
+                        }
+
+                        worker.onerror = (err) => {
+                            console.error("Worker Error:", err);
+                            finishedWorkers++;
+                            if (finishedWorkers === threadCount) resolve(allResults);
+                        };
+
+                        worker.onmessage = (e) => {
+                            if (isStopped) return;
+                            if (e.data.type === 'PROGRESS_TICK') {
+                                processedCombos++;
+                                onProgress(processedCombos, combos.length);
+                            } else if (e.data.type === 'BATCH_DONE') {
+                                allResults = allResults.concat(e.data.results);
+                                finishedWorkers++;
+                                if (finishedWorkers === threadCount) resolve(allResults);
+                            }
+                        };
+
+                        worker.postMessage({
+                            type: 'BATCH',
+                            data: { combos: chunk, baseAtk, baseDps, timeLimit: simTime, iterations: iters, targetCount }
+                        });
+                    });
+                });
+            };
+
+            // 计算总工作量用于动态进度条
+            const w1 = allCombos.length; // Phase 1: 每组 1 次
+            const topN = Math.min(100, w1);
+            const w2 = topN * iterations; // Phase 2: 每组 iterations 次
+            const wTotal = w1 + w2;
+
+            // Phase 1：海选 (每组合 1 次迭代)
+            statusText.innerText = `[1/2] 正在海选 (${w1} 组)...`;
             progressBar.style.width = '0%';
-
-            // 终止旧 Worker
-            if (bfWorker) bfWorker.terminate();
-
-            // 启动 Worker
-            bfWorker = new Worker('sim_worker.js');
-
-            bfWorker.postMessage({
-                type: 'START',
-                data: {
-                    baseAtk, baseDps, timeLimit: simTime, iterations, maxCost,
-                    selectedCardPool: pool
-                }
+            const phase1Results = await runParallel(allCombos, 1, (f, t) => {
+                const p = Math.floor((f / wTotal) * 100);
+                progressBar.style.width = p + '%';
+                percentText.innerText = p + '%';
+                statusText.innerText = `[1/2] 海选进度: ${f} / ${t}`;
             });
 
-            bfWorker.onmessage = function (e) {
-                const { type, message, progress, current, total, data } = e.data;
+            if (isStopped) return;
 
-                if (type === 'STATUS') {
-                    statusText.innerText = message;
-                }
-                else if (type === 'PROGRESS') {
-                    progressBar.style.width = progress + '%';
-                    percentText.innerText = progress + '%';
-                    statusText.innerText = `进度: ${current} / ${total}`;
-                }
-                else if (type === 'RESULT') {
-                    renderBFResults(data);
-                    finishBF();
-                }
-            };
+            // Phase 2：精选 (前 100 名跑完整 iterations)
+            const topTier = phase1Results.sort((a, b) => b.dps - a.dps).slice(0, topN);
+            statusText.innerText = `[2/2] 正在精选 Top ${topN}...`;
 
-            bfWorker.onerror = function (err) {
-                alert("Worker Error: " + err.message);
-                finishBF();
-            };
+            // 还原 deckRef (通过 ID 精准查找)
+            const detailedTopTier = topTier.map(t => allCombos[t.id]).filter(Boolean);
+
+            const finalResults = await runParallel(detailedTopTier, iterations, (f, t) => {
+                // 精选阶段每完成一个组合，相当于完成了 iterations 次模拟
+                const currentProcessed = w1 + (f * iterations);
+                const p = Math.min(99, Math.floor((currentProcessed / wTotal) * 100));
+                progressBar.style.width = p + '%';
+                percentText.innerText = p + '%';
+                statusText.innerText = `[2/2] 精选进度: ${f} / ${t}`;
+            });
+
+            if (isStopped) return;
+
+            renderBFResults(finalResults);
+            finishBF();
         }
 
         function stopBruteForce() {
-            if (bfWorker) {
-                bfWorker.terminate();
-                bfWorker = null;
-                document.getElementById('bfStatusText').innerText = "已手动停止";
-                finishBF();
-            }
+            isStopped = true;
+            bfWorkerPool.forEach(w => w.terminate());
+            bfWorkerPool = [];
+            document.getElementById('bfStatusText').innerText = "已手动停止";
+            finishBF();
         }
 
         function finishBF() {
@@ -698,7 +1231,6 @@
             btn.disabled = false;
             btn.innerHTML = `🚀 开始高级推演`;
             document.getElementById('btnStopBF').classList.add('hidden');
-            // Check if status is manually stopped to avoid overwriting
             if (document.getElementById('bfStatusText').innerText !== "已手动停止") {
                 document.getElementById('bfStatusText').innerText = "完成";
                 document.getElementById('bfPercent').innerText = "100%";
@@ -709,26 +1241,54 @@
         function renderBFResults(data) {
             const list = document.getElementById('bfResultList');
             const box = document.getElementById('bfResultBox');
+            const placeholder = document.getElementById('bfPlaceholder');
+            if (placeholder) {
+                placeholder.style.display = 'none';
+                placeholder.classList.add('hidden');
+            }
             box.classList.remove('hidden');
 
-            // Sort by DPS desc
-            const top = data.sort((a, b) => b.dps - a.dps).slice(0, 50); // Show top 50 in code but maybe limit render
+            const top = data.sort((a, b) => b.dps - a.dps).slice(0, 10);
+            const maxDps = top[0].dps;
 
-            list.innerHTML = top.slice(0, 10).map((item, idx) => {
-                const rankColor = idx === 0 ? 'text-red-500' : (idx < 3 ? 'text-orange-500' : 'text-slate-600');
-                const badge = idx === 0 ? '👑' : `#${idx + 1}`;
+            list.innerHTML = top.map((item, idx) => {
+                const isFirst = idx === 0;
+                const rankColor = isFirst ? 'bg-amber-400 text-white shadow-sm' : (idx < 3 ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-500');
+                const cardBg = isFirst ? 'bg-gradient-to-r from-amber-50 to-white border-amber-200 shadow-md scale-[1.01] z-10' : 'bg-white/50 border-white hover:bg-white hover:shadow-lg';
+                const badge = isFirst ? '🏆' : `${idx + 1}`;
+                const barWidth = (item.dps / maxDps * 100) + '%';
 
                 return `
-                    <div class="px-3 py-2 border-b border-slate-100 last:border-0 hover:bg-purple-50 transition-colors flex items-center justify-between gap-3">
-                        <div class="flex items-center gap-2 flex-1">
-                            <span class="font-black text-xs ${rankColor} w-7 shrink-0">${badge}</span>
-                            <div class="text-slate-700 font-bold text-xs break-words leading-tight">
-                                ${item.deckDetails.join(' + ')}
+                    <div onclick="copyAndRestore('${item.deckDetails.join(' + ')}', event)" 
+                         class="group relative border p-3 rounded-2xl transition-all cursor-pointer overflow-hidden mb-2 ${cardBg}">
+                        <div class="absolute bottom-0 left-0 h-0.5 bg-indigo-500/20" style="width: ${barWidth}"></div>
+                        
+                        <div class="flex items-center justify-between gap-3 relative z-10">
+                            <div class="flex items-center gap-3 flex-1 overflow-hidden">
+                            <span class="shrink-0 w-7 h-7 rounded-lg ${rankColor} flex items-center justify-center font-black text-[11px]">${badge}</span>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex flex-wrap gap-1 mb-1">
+                                    ${item.deckDetails.map(d => {
+                    let name = d;
+                    let star = '';
+                    if (d.includes('(')) {
+                        const match = d.match(/(.+)\((\d+)\)/);
+                        if (match) {
+                            name = match[1];
+                            star = `<span class="opacity-60 ml-0.5">${match[2]}★</span>`;
+                        }
+                    }
+                    return `<span class="lineup-tag !m-0 ${isFirst ? '!bg-amber-100 !text-amber-700 !border-amber-200' : ''}">${name}${star}</span>`;
+                }).join('')}
+                                </div>
+                                    <div class="tip-label text-[9px] text-indigo-500 font-black opacity-0 group-hover:opacity-100 transition-all uppercase leading-none">点击复制并还原</div>
+                                </div>
                             </div>
-                        </div>
-                        <div class="flex items-center gap-2 shrink-0 self-start mt-0.5">
-                            <span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded min-w-[2.5rem] text-center">${item.cost}F</span>
-                            <span class="font-mono font-black text-purple-600 text-sm w-20 text-right">${Math.round(item.dps).toLocaleString()}</span>
+                            
+                            <div class="text-right shrink-0 border-l border-slate-200/60 pl-3 min-w-[70px]">
+                                <div class="text-[10px] font-black ${isFirst ? 'text-amber-600' : 'text-slate-400'} uppercase leading-none mb-1">${item.cost} FEE</div>
+                                <div class="text-[15px] font-black ${isFirst ? 'text-amber-700' : 'text-slate-900'} font-mono tracking-tighter leading-tight">${Math.round(item.dps).toLocaleString()}</div>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -746,22 +1306,71 @@
             if (tab === 'basic') {
                 basic.classList.remove('hidden');
                 adv.classList.add('hidden');
-
-                btnBasic.classList.add('bg-white', 'text-slate-700', 'shadow-sm');
-                btnBasic.classList.remove('text-slate-400');
-
-                btnAdv.classList.remove('bg-white', 'text-slate-700', 'shadow-sm');
-                btnAdv.classList.add('text-slate-400');
+                btnBasic.classList.add('active');
+                btnAdv.classList.remove('active');
             } else {
                 basic.classList.add('hidden');
                 adv.classList.remove('hidden');
-
-                btnAdv.classList.add('bg-white', 'text-slate-700', 'shadow-sm');
-                btnAdv.classList.remove('text-slate-400');
-
-                btnBasic.classList.remove('bg-white', 'text-slate-700', 'shadow-sm');
-                btnBasic.classList.add('text-slate-400');
+                btnAdv.classList.add('active');
+                btnBasic.classList.remove('active');
             }
+        }
+
+        async function copyAndRestore(lineupStr, event) {
+            if (event) event.stopPropagation();
+            try {
+                await navigator.clipboard.writeText(lineupStr);
+                const tip = event.currentTarget.querySelector('.tip-label');
+                if (tip) {
+                    const oldText = tip.innerText;
+                    tip.innerText = "已复制阵容 !";
+                    tip.classList.remove('text-indigo-500');
+                    tip.classList.add('text-emerald-500', 'opacity-100');
+                    setTimeout(() => {
+                        tip.innerText = oldText;
+                        tip.classList.remove('text-emerald-500', 'opacity-100');
+                        tip.classList.add('text-indigo-500');
+                    }, 1500);
+                }
+            } catch (e) {
+                console.error("Copy failed", e);
+            }
+            restoreLineup(lineupStr);
+        }
+
+        function restoreLineup(lineupStr) {
+            // 解析历史记录字符串 "燕虹 + 齐昊(5★)"
+            reset();
+            const parts = lineupStr.split(' + ');
+            parts.forEach((p, idx) => {
+                let name = p;
+                let lv = 6;
+                if (p.includes('(')) {
+                    name = p.split('(')[0];
+                    lv = parseInt(p.match(/\d+/)[0]);
+                }
+                // 查找对应的 className
+                const meta = window.CARD_DATABASE.find(c => c.name === name);
+                if (meta) {
+                    setTimeout(() => {
+                        toggle(meta.className);
+                        updateLv(meta.className, lv);
+                        // 同步滑块和显示文字
+                        const input = document.querySelector(`#star-ui-${meta.className} input`);
+                        if (input) input.value = lv;
+                        const lvLabel = document.getElementById(`lv-${meta.className}`);
+                        if (lvLabel) lvLabel.innerText = lv;
+
+                        // 触发波纹唤醒动画
+                        const node = document.getElementById(`c-${meta.className}`);
+                        if (node) {
+                            node.classList.remove('wake-up');
+                            void node.offsetWidth; // 触发回流
+                            node.classList.add('wake-up');
+                        }
+                    }, idx * 60);
+                }
+            });
         }
 
         init();
@@ -769,5 +1378,3 @@
 </body>
 
 </html>
-
-
