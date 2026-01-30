@@ -607,34 +607,34 @@
                 <div class="dashboard-item">
                     <div class="grid grid-cols-3 gap-3">
                         <div class="space-y-1">
-                            <span class="text-[9px] font-black text-slate-400 uppercase ml-1">基础攻击</span>
+                            <span class="text-[13px] font-black text-slate-400 uppercase ml-1">基础攻击</span>
                             <div class="numeric-control">
                                 <button class="numeric-btn"
                                     onclick="changeNumericValue('baseAtk', -100, 0, 99999)">-</button>
-                                <input type="number" id="baseAtk" value="9000" class="numeric-input !text-sm"
+                                <input type="number" id="baseAtk" value="9000" class="numeric-input !text-base"
                                     onchange="updateFee()">
                                 <button class="numeric-btn"
                                     onclick="changeNumericValue('baseAtk', 100, 0, 99999)">+</button>
                             </div>
                         </div>
                         <div class="space-y-1">
-                            <span class="text-[9px] font-black text-slate-400 uppercase ml-1">初始秒伤</span>
+                            <span class="text-[13px] font-black text-slate-400 uppercase ml-1">初始秒伤</span>
                             <div class="numeric-control">
                                 <button class="numeric-btn"
                                     onclick="changeNumericValue('baseDps', -1000, 0, 999999)">-</button>
-                                <input type="number" id="baseDps" value="40000" class="numeric-input !text-sm"
+                                <input type="number" id="baseDps" value="40000" class="numeric-input !text-base"
                                     onchange="updateFee()">
                                 <button class="numeric-btn"
                                     onclick="changeNumericValue('baseDps', 1000, 0, 999999)">+</button>
                             </div>
                         </div>
                         <div class="space-y-1">
-                            <span class="text-[9px] font-black text-slate-400 uppercase ml-1">目标数量</span>
+                            <span class="text-[13px] font-black text-slate-400 uppercase ml-1">目标数量</span>
                             <div class="numeric-control">
                                 <button class="numeric-btn"
                                     onclick="changeNumericValue('targetCount', -1, 1, 10)">-</button>
                                 <input type="number" id="targetCount" value="1" min="1" max="10"
-                                    class="numeric-input !text-sm" onchange="updateFee()">
+                                    class="numeric-input !text-base" onchange="updateFee()">
                                 <button class="numeric-btn"
                                     onclick="changeNumericValue('targetCount', 1, 1, 10)">+</button>
                             </div>
@@ -645,8 +645,8 @@
                 <!-- 时空矩阵 -->
                 <div class="dashboard-item">
                     <div class="slider-tech-label !mb-1.5">
-                        <span class="text-[9px] font-black text-slate-400 uppercase">战斗时长</span>
-                        <span class="val-display !py-0.5 !px-1.5 !text-xs"><span id="timeVal">240</span>s</span>
+                        <span class="text-[13px] font-black text-slate-400 uppercase">战斗时长</span>
+                        <span class="val-display !py-0.5 !px-1.5 !text-sm"><span id="timeVal">240</span>s</span>
                     </div>
                     <input type="range" id="simTime" min="30" max="600" value="240" class="w-full">
                 </div>
@@ -654,7 +654,7 @@
                 <!-- 运算引擎 -->
                 <div class="dashboard-item">
                     <div class="slider-tech-label !mb-1.5">
-                        <span class="text-[9px] font-black text-slate-400 uppercase">模拟轮次</span>
+                        <span class="text-[13px] font-black text-slate-400 uppercase">模拟轮次</span>
                         <span class="val-display !py-0.5 !px-1.5 !text-xs"
                             style="color:#b45309;background:#fffbeb;border-color:#fde68a">
                             <span id="iterVal">50</span>x
@@ -669,21 +669,21 @@
                     <span class="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></span>
                     阵容编成
                     <span id="feeLabel"
-                        class="ml-2 text-[10px] px-2 py-0.5 rounded-full font-black bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase">
-                        0 / 25 FEE
+                        class="ml-2 text-[15px] px-2 py-0.5 rounded-full font-black bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase">
+                        0 / 25 费
                     </span>
                 </h2>
 
                 <div class="flex flex-wrap gap-3">
                     <div class="flex p-1 bg-slate-200/50 rounded-xl">
                         <button onclick="selectAll()"
-                            class="px-3 py-1.5 text-[11px] font-black text-slate-600 hover:text-indigo-600 hover:bg-white rounded-lg transition-all">全选</button>
+                            class="px-3 py-1.5 text-[13px] font-black text-slate-600 hover:text-indigo-600 hover:bg-white rounded-lg transition-all">全选</button>
                         <button onclick="reset()"
-                            class="px-3 py-1.5 text-[11px] font-black text-slate-600 hover:text-red-500 hover:bg-white rounded-lg transition-all">重置</button>
+                            class="px-3 py-1.5 text-[13px] font-black text-slate-600 hover:text-red-500 hover:bg-white rounded-lg transition-all">重置</button>
                     </div>
 
                     <div class="flex p-1 bg-slate-200/50 rounded-xl items-center">
-                        <span class="px-2 text-[9px] font-black text-slate-400 uppercase tracking-tighter">★</span>
+                        <span class="px-2 text-[11px] font-black text-slate-400 uppercase tracking-tighter">★</span>
                         <div class="flex gap-0.5">
                             <button onclick="batchSetStars(0)"
                                 class="w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">0</button>
@@ -750,12 +750,12 @@
                         <!-- 细分数据 -->
                         <div
                             class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center">
-                            <div class="text-[10px] text-slate-400 font-bold uppercase mb-1">技能伤害</div>
+                            <div class="text-[11px] text-slate-400 font-bold uppercase mb-1">丹青技能伤害</div>
                             <div id="resCardDps" class="text-lg font-black text-slate-700">0</div>
                         </div>
                         <div
                             class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center">
-                            <div class="text-[10px] text-slate-400 font-bold uppercase mb-1">属性增益</div>
+                            <div class="text-[11px] text-slate-400 font-bold uppercase mb-1">丹青属性增益</div>
                             <div id="resBoostDps" class="text-lg font-black text-slate-700">0</div>
                         </div>
                     </div>
@@ -772,7 +772,7 @@
                                 class="absolute h-full bg-gradient-to-r from-indigo-400 to-indigo-600 rounded-full transition-all duration-500 shadow-sm"
                                 style="left: 0%; width: 0%;"></div>
                         </div>
-                        <div class="text-center text-[10px] text-slate-400">
+                        <div class="text-center text-[11px] text-slate-400">
                             预期波动: ±<span id="resErr">0</span> (95% CI)
                         </div>
                     </div>
@@ -780,7 +780,7 @@
                     <!-- 图表 -->
                     <div id="dpsChartInfo"
                         class="hidden bg-white p-4 rounded-2xl shadow-sm border border-slate-100 h-[250px]">
-                        <div class="text-[10px] font-bold text-slate-400 uppercase mb-2 ml-1">DPS 演进曲线</div>
+                        <div class="text-[11px] font-bold text-slate-400 uppercase mb-2 ml-1">DPS 演进曲线</div>
                         <canvas id="dpsChart"></canvas>
                     </div>
 
@@ -924,11 +924,11 @@
                                 <div class="w-full">
                                     <div class="flex justify-between items-center mb-1">
                                         <div class="flex items-center gap-2 overflow-hidden">
-                                            <span class="text-[14px] font-black text-slate-800 tracking-tight leading-none truncate">${c.name}</span>
-                                            <span class="text-[10px] font-black px-2 py-0.5 rounded-md ${conf.tag} shrink-0">${conf.title}</span>
+                                            <span class="text-[16px] font-black text-slate-800 tracking-tight leading-none truncate">${c.name}</span>
+                                            <span class="text-[11px] font-black px-2 py-0.5 rounded-md ${conf.tag} shrink-0">${conf.title}</span>
                                         </div>
                                         <div class="flex flex-col items-end shrink-0 ml-2">
-                                            <span class="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md font-black tracking-tighter">${c.fee} FEE</span>
+                                            <span class="text-[10px] bg-gradient-to-br from-slate-50 to-slate-100 text-slate-600 px-2 py-1 rounded-lg font-black tracking-tight border border-slate-200 shadow-sm">${c.fee}</span>
                                         </div>
                                     </div>
                                     
@@ -1006,7 +1006,7 @@
             const label = document.getElementById('feeLabel');
             label.innerText = `${total} / 25 费`;
 
-            const baseStyle = "ml-2 text-[11px] px-2 py-0.5 rounded-full font-black transition-all duration-300 ";
+            const baseStyle = "ml-2 text-[15px] px-2 py-0.5 rounded-full font-black transition-all duration-300 ";
             if (total > 25) {
                 label.className = baseStyle + "fee-warning";
             } else {
@@ -1211,7 +1211,7 @@
                             <div class="flex items-center gap-1.5 pt-1 border-t border-slate-200/20">
                                 <span class="text-[9px] text-slate-400 font-mono font-medium">${time}</span>
                                 <span class="w-1 h-1 bg-slate-300 rounded-full opacity-40"></span>
-                                <span class="px-1.5 py-0.5 rounded-md bg-slate-100 text-[8px] font-black text-slate-500 leading-none uppercase tracking-tighter border border-slate-200/50">${totalFee} FEE</span>
+                                <span class="px-1.5 py-0.5 rounded-md bg-slate-100 text-[8px] font-black text-slate-500 leading-none uppercase tracking-tighter border border-slate-200/50">${totalFee}</span>
                             </div>
                         </div>
                         
@@ -1533,7 +1533,7 @@
                             </div>
                             
                             <div class="text-right shrink-0 border-l border-slate-200/60 pl-3 min-w-[70px]">
-                                <div class="text-[10px] font-black ${isFirst ? 'text-amber-600' : 'text-slate-400'} uppercase leading-none mb-1">${item.cost} FEE</div>
+                                <div class="text-[10px] font-black ${isFirst ? 'text-amber-600' : 'text-slate-400'} uppercase leading-none mb-1">${item.cost} 费</div>
                                 <div class="text-[15px] font-black ${isFirst ? 'text-amber-700' : 'text-slate-900'} font-mono tracking-tighter leading-tight">${Math.round(item.dps).toLocaleString()}</div>
                             </div>
                         </div>
