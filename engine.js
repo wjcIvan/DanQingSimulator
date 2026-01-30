@@ -12,6 +12,17 @@ const EVENTS = {
 const BASE_CORE = [225, 449, 674, 898, 1123];
 const INCREMENTS = [11, 22, 33, 44, 55];
 
+const TARGET_DECAY_COEFFICIENTS = [
+    1.00, 0.90, 0.85, 0.81, 0.77, 0.73, 0.69, 0.66,
+    0.63, 0.60, 0.55, 0.51, 0.48, 0.45, 0.42
+];
+
+const getTargetCoefficient = (targetCount) => {
+    if (targetCount <= 0) return 0;
+    if (targetCount >= 15) return 0.42;
+    return TARGET_DECAY_COEFFICIENTS[targetCount - 1];
+};
+
 const pyRound = (val) => Math.round(val * 10) / 10;
 
 const ALL_CARD_CLASSES = [];
@@ -184,7 +195,7 @@ class SixTailedFox extends Card {
                 // 倒计时结束，引爆该目标
                 if (target.explodeTimer <= 0) {
                     // 引爆该目标的燃烧层数，对该目标和周围敌人造成伤害
-                    const explodeDmg = target.burnLayers * this.dmg_r * e.baseAtk * e.targetCount;
+                    const explodeDmg = target.burnLayers * this.dmg_r * e.baseAtk * e.targetCount * e.targetCoefficient;
                     e.cardTotalDmg += explodeDmg;
                     // 清空该目标的燃烧状态（包括重置计时器）
                     target.clearBurn();
@@ -222,7 +233,7 @@ class ZheShan extends Card {
     trigger(e) {
         this.internal_timer = 0;
         let dmg = e.baseAtk * this.dmg_r;
-        e.cardTotalDmg += dmg * e.effectMod * e.targetCount;
+        e.cardTotalDmg += dmg * e.effectMod * e.targetCount * e.targetCoefficient;
         e.addEvent(EVENTS.PULSE, dmg);
     }
 }
@@ -253,7 +264,7 @@ class ShenMuTou extends Card {
             this.first_tick = false;
             for (let i = 0; i < 3; i++) {
                 let d = e.baseAtk * e.pulseRate;
-                e.cardTotalDmg += d * e.effectMod * e.targetCount;
+                e.cardTotalDmg += d * e.effectMod * e.targetCount * e.targetCoefficient;
                 e.addEvent(EVENTS.PULSE, d);
             }
             return;
@@ -290,7 +301,7 @@ class LiuHeJing extends Card {
     }
     fire(e) {
         let d = e.baseAtk * e.pulseRate * this.dmg_r;
-        e.cardTotalDmg += d * e.targetCount;
+        e.cardTotalDmg += d * e.targetCount * e.targetCoefficient;
         e.addEvent(EVENTS.PULSE_D, d);
         this.shots_fired++;
     }
@@ -351,6 +362,7 @@ class RaceCombatEngine {
         this.baseAtk = baseAtk;
         this.baseDps = baseDps;
         this.targetCount = targetCount;
+        this.targetCoefficient = getTargetCoefficient(targetCount); // 获取目标衰减系数
         this.time = 0.0;
         this.cardTotalDmg = 0.0;
         this.eventQueue = [];
