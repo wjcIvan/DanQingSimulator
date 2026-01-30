@@ -100,13 +100,13 @@ class LinFeng extends Card {
         if (t === EVENTS.BURN) { this.lastType = EVENTS.BURN; return Math.random() >= this.burn_r; }
         return false;
     }
-    trigger(e, event_dmg) {
+    trigger(e, event_dmg, targetIndex = 0) {
         if (this.lastType === EVENTS.ICE) {
             e.cardTotalDmg += event_dmg * e.effectMod;
             e.addEvent(EVENTS.ICE_D, event_dmg);
         } else {
-            e.addBurnLayer(false);
-            e.addEvent(EVENTS.BURN_D, 0);
+            e.addBurnLayer(targetIndex);
+            e.addEvent(EVENTS.BURN_D, 0, targetIndex);
         }
     }
 }
@@ -115,8 +115,8 @@ class ShangGuanCe extends Card {
     constructor(lv) { super("上官策", "Human", 2, lv); this.burn_r = 0.62 - 0.02 * lv; }
     check(t) { return (t === EVENTS.ICE || t === EVENTS.ICE_D) && Math.random() >= this.burn_r; }
     trigger(e) {
-        e.addBurnLayer(false);
-        e.addEvent(EVENTS.BURN, 0);
+        e.addBurnLayer(0);
+        e.addEvent(EVENTS.BURN, 0, 0);
     }
 }
 
@@ -145,8 +145,10 @@ class ScarletGiantAnt extends Card {
     constructor(lv) { super("猩红巨蚁", "Beast", 1, lv); this.internal_timer = 8.0; this.dmg_r = 0.014 + 0.001 * lv; }
     check(t) { return t === EVENTS.TIME && this.internal_timer >= 8.0; }
     trigger(e) {
-        e.addBurnLayer(true);
-        e.addEvent(EVENTS.BURN, 0);
+        for (let i = 0; i < e.targets.length; i++) {
+            e.targets[i].addBurnLayer();
+            e.addEvent(EVENTS.BURN, 0, i);
+        }
         this.internal_timer = 0;
     }
 }
@@ -167,8 +169,10 @@ class YouMingQuan extends Card {
         return t === EVENTS.TIME && this.internal_timer >= this.trigger_interval;
     }
     trigger(e) {
-        e.addBurnLayer(true);
-        e.addEvent(EVENTS.BURN, 0);
+        for (let i = 0; i < e.targets.length; i++) {
+            e.targets[i].addBurnLayer();
+            e.addEvent(EVENTS.BURN, 0, i);
+        }
         this.internal_timer = 0;
     }
 }
@@ -209,12 +213,19 @@ class SixTailedFox extends Card {
 }
 
 class SuiShou extends Card {
-    constructor(lv) { super("岁兽", "Beast", 3, lv); this.burn_r = 0.3 - 0.05 * lv; }
-    check(t) { return t === EVENTS.PULSE && Math.random() >= this.burn_r; }
+    constructor(lv) { 
+        super("岁兽", "Beast", 3, lv); 
+        this.burn_r = 0.3 - 0.05 * lv;
+    }
+    check(t) { 
+        return t === EVENTS.PULSE && Math.random() >= this.burn_r;
+    }
     trigger(e) {
         for (let i = 0; i < 3; i++) {
-            e.addBurnLayer(true);
-            e.addEvent(EVENTS.BURN, 0);
+            for (let j = 0; j < e.targets.length; j++) {
+                e.targets[j].addBurnLayer();
+                e.addEvent(EVENTS.BURN, 0, j);
+            }
         }
     }
 }
@@ -415,15 +426,13 @@ class RaceCombatEngine {
     }
 
     // 辅助方法：增加燃烧层数
-    addBurnLayer(isAOE) {
-        if (isAOE) {
-            for (let i = 0; i < this.targets.length; i++) this.targets[i].addBurnLayer();
-        } else {
-            this.targets[0].addBurnLayer();
-        }
+    addBurnLayer(targetIndex = 0) {
+        this.targets[targetIndex].addBurnLayer();
     }
 
-    addEvent(type, dmg) { this.eventQueue.push({ type, dmg }); }
+    addEvent(type, dmg, targetIndex = 0) { 
+        this.eventQueue.push({ type, dmg, targetIndex }); 
+    }
 
     simulate(duration) {
         let dynamicBaseBoost = 0.0;
@@ -447,7 +456,7 @@ class RaceCombatEngine {
                 if (e.type === EVENTS.TIME) continue;
                 for (let j = 0; j < this.activeCards.length; j++) {
                     const c = this.activeCards[j];
-                    if (c.check(e.type)) c.trigger(this, e.dmg);
+                    if (c.check(e.type)) c.trigger(this, e.dmg, e.targetIndex);
                 }
             }
 
