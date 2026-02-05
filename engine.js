@@ -70,6 +70,9 @@ class QiHao extends Card {
         super("齐昊", "Human", 5, lv);
         this.internal_timer = 60.0;
         this.dmg_r = 1.04 + 0.06 * lv;
+        this.is_active = false;
+        this.timer = 0.0;
+        this.shots_fired = 0;
     }
 
     check(t) {
@@ -77,14 +80,34 @@ class QiHao extends Card {
             this.internal_timer += 1.0;
             return false;
         }
+        if (t === EVENTS.TIME && this.is_active) return true;
         return t === EVENTS.TIME && this.internal_timer >= 60.0;
     }
 
     trigger(e) {
-        let dmg = (e.baseAtk * this.dmg_r) * 10;
-        e.cardTotalDmg += dmg * e.effectMod;
-        e.addEvent(EVENTS.SNOW_MAN, dmg);
-        this.internal_timer -= 60.0;
+        if (!this.is_active) {
+            this.is_active = true;
+            this.timer = 0.0;
+            this.shots_fired = 0;
+            this.internal_timer -= 60.0;
+            this.fire(e);
+        } else {
+            this.timer = pyRound(this.timer + 0.1);
+            if (this.shots_fired < 10 && this.timer >= 0.3) {
+                this.fire(e);
+                this.timer = 0.0;
+            }
+            if (this.shots_fired >= 10) {
+                this.is_active = false;
+            }
+        }
+    }
+
+    fire(e) {
+        let single_dmg = (e.baseAtk * this.dmg_r);
+        e.cardTotalDmg += single_dmg * e.effectMod;
+        e.addEvent(EVENTS.SNOW_MAN, single_dmg);
+        this.shots_fired++;
     }
 }
 

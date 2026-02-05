@@ -91,23 +91,40 @@ class WenMin(Card):
 class QiHao(Card):
     def __init__(self, level=6):
         super().__init__("齐昊", "Human", 5, level)
-        self.internal_timer = 60.0  # Starts ready or at 60s
+        self.internal_timer = 60.0
         self.dmg_r = 1.04 + 0.06 * self.level
+        self.is_active = False
+        self.timer = 0.0
+        self.shots_fired = 0
 
     def check(self, type):
-        # Qi Hao triggers on TIME, but ICE events reduce his timer (CDR)
         if type == ICE or type == ICE_D:
             self.internal_timer += 1.0
             return False
+        if type == TIME and self.is_active:
+            return True
         return self.internal_timer >= 60.0
 
     def trigger(self, engine, _):
-        # Heavy burst: 10 hits
-        dmg = (engine.base_atk * self.dmg_r) * 10
-        engine.card_total_dmg += dmg * engine.effect_mod
-        engine.queue_event((SNOW_MAN, dmg))
+        if not self.is_active:
+            self.is_active = True
+            self.timer = 0.0
+            self.shots_fired = 0
+            self.internal_timer -= 60.0
+            self.fire_shot(engine)
+        else:
+            self.timer = round(self.timer + 0.1, 1)
+            if self.shots_fired < 10 and self.timer >= 0.3:
+                self.fire_shot(engine)
+                self.timer = 0.0
+            if self.shots_fired >= 10:
+                self.is_active = False
 
-        self.internal_timer -= 60.0
+    def fire_shot(self, engine):
+        single_dmg = engine.base_atk * self.dmg_r
+        engine.card_total_dmg += single_dmg * engine.effect_mod
+        engine.queue_event((SNOW_MAN, single_dmg))
+        self.shots_fired += 1
 
 
 class LinFeng(Card):
