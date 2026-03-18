@@ -143,6 +143,14 @@ class ShangGuanCe extends Card {
     }
 }
 
+class ZhengDaLi extends Card {
+    constructor(lv) { super("郑大礼", "Human", 3, lv); this.dmg_r = 0.19 + 0.01 * lv; }
+    check(t) { return t === EVENTS.ICE || t === EVENTS.ICE_D || t === EVENTS.SNOW_MAN; }
+    trigger(e, event_dmg, targetIndex = 0) {
+        e.cardTotalDmg += event_dmg * this.dmg_r * e.targetCount * e.targetCoefficient;
+    }
+}
+
 // --- 2. 兽族 (Beast) ---
 class XueDiXiong extends Card {
     constructor(lv) { super("雪地熊", "Beast", 4, lv); this.buff_stacks = []; this.dmg_r = 0.00038 + 0.00002 * lv; }
@@ -164,6 +172,10 @@ class XueDiXiong extends Card {
     getCurrentRate() { return this.buff_stacks.length * this.dmg_r; }
 }
 
+class BaHuangHuoLong extends Card {
+    constructor(lv) { super("八荒火龙", "Beast", 4, lv); }
+}
+
 class ScarletGiantAnt extends Card {
     constructor(lv) { super("猩红巨蚁", "Beast", 1, lv); this.internal_timer = 8.0; this.dmg_r = 0.014 + 0.001 * lv; }
     check(t) { return t === EVENTS.TIME && this.internal_timer >= 8.0; }
@@ -174,6 +186,10 @@ class ScarletGiantAnt extends Card {
         }
         this.internal_timer = 0;
     }
+}
+
+class FireBat extends Card {
+    constructor(lv) { super("火蝠", "Beast", 1, lv); this.burnEfficiency = 100 + (40 + 10 * lv); }
 }
 
 class TwoTailedFox extends Card {
@@ -266,7 +282,7 @@ class ZheShan extends Card {
     check(t) { return t === EVENTS.TIME && this.internal_timer >= 15.0; }
     trigger(e) {
         this.internal_timer = 0;
-        let dmg = e.baseAtk * this.dmg_r;
+        let dmg = e.baseAtk * this.dmg_r * e.pulseDamageMod;
         e.cardTotalDmg += dmg * e.effectMod * e.targetCount * e.targetCoefficient;
         e.addEvent(EVENTS.PULSE, dmg);
     }
@@ -279,7 +295,7 @@ class HanBingJian extends Card {
         this.arrow_count++;
         if (this.arrow_count >= this.threshold) {
             this.arrow_count = 0;
-            let d = e.baseAtk * e.pulseRate;
+            let d = e.baseAtk * e.pulseRate * e.pulseDamageMod;
             e.cardTotalDmg += d * e.effectMod;
             e.addEvent(EVENTS.PULSE, d);
         }
@@ -297,7 +313,7 @@ class ShenMuTou extends Card {
         if (this.first_tick) {
             this.first_tick = false;
             for (let i = 0; i < 3; i++) {
-                let d = e.baseAtk * e.pulseRate;
+                let d = e.baseAtk * e.pulseRate * e.pulseDamageMod;
                 e.cardTotalDmg += d * e.effectMod * e.targetCount * e.targetCoefficient;
                 e.addEvent(EVENTS.PULSE, d);
             }
@@ -334,7 +350,7 @@ class LiuHeJing extends Card {
         }
     }
     fire(e) {
-        let d = e.baseAtk * e.pulseRate * this.dmg_r;
+        let d = e.baseAtk * e.pulseRate * this.dmg_r * e.pulseDamageMod;
         e.cardTotalDmg += d * e.targetCount * e.targetCoefficient;
         e.addEvent(EVENTS.PULSE_D, d);
         this.shots_fired++;
@@ -344,6 +360,20 @@ class LiuHeJing extends Card {
 const QingLiangZhu = class extends Card {
     constructor(lv) { super("清凉珠", "Tool", 3, lv); }
 };
+
+
+const GongJian = class extends Card {
+    constructor(lv) { super("弓箭", "Tool", 3, lv); }
+    getPulseDamageMod(targetCount) {
+        const baseBonus = 0.35 + 0.025 * this.level;
+        const perExtra = 0.07 + 0.005 * this.level;
+        const extraTargets = Math.max(0, targetCount - 1);
+        const effectiveBonus = Math.max(0, baseBonus - perExtra * extraTargets);
+        return 1.0 + effectiveBonus;
+    }
+};
+
+const DiZi = class extends Card { constructor(lv) { super("笛子", "Tool", 2, lv); } };
 
 // --- 被动类 ---
 class PassiveBoostCard extends Card {
@@ -438,6 +468,17 @@ class RaceCombatEngine {
         const yan = getC("燕虹"); this.iceRate = yan ? yan.dmg_r : 0.26;
         const ant = getC("猩红巨蚁"); this.burnRate = ant ? ant.dmg_r : 0.013;
         const shan = getC("折扇"); this.pulseRate = shan ? shan.dmg_r : 0.38;
+        
+        // 计算脉冲伤害倍率（弓箭提供）
+        const gong = getC("弓箭");
+        this.pulseDamageMod = gong ? gong.getPulseDamageMod(this.targetCount) : 1.0;
+
+        // 计算燃烧效率（火蝠提供）
+        const bat = getC("火蝠");
+        this.burnEfficiency = bat ? bat.burnEfficiency : 100;
+        
+        // 计算燃烧触发间隔
+        this.burnInterval = pyRound(3.0 / (this.burnEfficiency / 100.0));
 
         // 【优化】筛选活动卡
         this.activeCards = this.deck.filter(c => {
@@ -488,7 +529,7 @@ class RaceCombatEngine {
                 const target = this.targets[j];
                 if (target.isBurnActive) {
                     target.burnTickTimer = pyRound(target.burnTickTimer + 0.1);
-                    if (target.burnTickTimer >= 3.0) {
+                    if (target.burnTickTimer >= this.burnInterval) {
                         this.cardTotalDmg += (target.burnLayers * this.baseAtk * this.burnRate * this.effectMod);
                         target.burnTickTimer = 0;
                     }
@@ -541,9 +582,9 @@ class RaceCombatEngine {
 }
 
 ALL_CARD_CLASSES.push(
-    XiaoHuan, YanHong, WenMin, ZhouYiXian, ZuoGui, QiHao, LinFeng, ShangGuanCe,
-    HaiGui, MengHu, XueDiXiong, ScarletGiantAnt, TwoTailedFox, YouMingQuan, SixTailedFox, SuiShou,
-    FengZheng, MuJian, ZheShan, HanBingJian, ShenMuTou, XianRenBuFan, QingLiangZhu, LiuHeJing
+    XiaoHuan, YanHong, WenMin, ZhouYiXian, ZuoGui, QiHao, LinFeng, ShangGuanCe, ZhengDaLi,
+    HaiGui, MengHu, XueDiXiong, BaHuangHuoLong, ScarletGiantAnt, FireBat, TwoTailedFox, YouMingQuan, SixTailedFox, SuiShou,
+    FengZheng, MuJian, ZheShan, HanBingJian, ShenMuTou, XianRenBuFan, QingLiangZhu, GongJian, DiZi, LiuHeJing
 );
 
 /**
