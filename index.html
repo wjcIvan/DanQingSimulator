@@ -1255,15 +1255,6 @@
 
         function reset() {
             clearSelection();
-            const placeholder = document.getElementById('bfPlaceholder');
-            if (placeholder) {
-                placeholder.style.display = 'flex';
-                placeholder.classList.remove('hidden');
-            }
-            const resultBox = document.getElementById('bfResultBox');
-            if (resultBox) resultBox.classList.add('hidden');
-            const progressBox = document.getElementById('bfProgressBox');
-            if (progressBox) progressBox.classList.add('hidden');
         }
 
         function selectAll() {
