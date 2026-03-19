@@ -134,7 +134,7 @@
 
         @media (min-width: 1280px) {
             .race-section {
-                grid-template-columns: repeat(4, minmax(0, 1fr));
+                grid-template-columns: repeat(5, minmax(0, 1fr));
             }
         }
 
@@ -611,7 +611,7 @@
                             <div class="numeric-control">
                                 <button class="numeric-btn"
                                     onclick="changeNumericValue('baseAtk', -100, 0, 99999)">-</button>
-                                <input type="number" id="baseAtk" value="9000" class="numeric-input !text-base"
+                                <input type="number" id="baseAtk" value="10000" class="numeric-input !text-base"
                                     onchange="updateFee()">
                                 <button class="numeric-btn"
                                     onclick="changeNumericValue('baseAtk', 100, 0, 99999)">+</button>
@@ -622,7 +622,7 @@
                             <div class="numeric-control">
                                 <button class="numeric-btn"
                                     onclick="changeNumericValue('baseDps', -1000, 0, 999999)">-</button>
-                                <input type="number" id="baseDps" value="40000" class="numeric-input !text-base"
+                                <input type="number" id="baseDps" value="60000" class="numeric-input !text-base"
                                     onchange="updateFee()">
                                 <button class="numeric-btn"
                                     onclick="changeNumericValue('baseDps', 1000, 0, 999999)">+</button>
@@ -918,7 +918,7 @@
             races.forEach(race => {
                 const raceCards = CARDS.filter(c => c.race === race);
                 const conf = raceConfig[race];
-                html += raceCards.map(c => `
+                const cardsHtml = raceCards.map(c => `
                             <div id="card-anchor-${c.className}" class="card-box rounded-2xl ${conf.border} relative" onclick="toggle('${c.className}')">
                                 ${selected.has(c.className) ? `<div class="selected-badge">✓</div>` : ''}
                                 <div class="w-full">
@@ -950,9 +950,11 @@
                                 </div>
                             </div>
                         `).join('');
+
+                html += `<div class="race-section">${cardsHtml}</div>`;
             });
 
-            grid.innerHTML = `<div class="race-section">${html}</div>`;
+            grid.innerHTML = html;
             CARDS.forEach(c => {
                 if (selected.has(c.className)) updateLv(c.className, selected.get(c.className).level);
                 else {
