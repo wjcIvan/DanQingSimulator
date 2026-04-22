@@ -153,7 +153,7 @@ class ZhengDaLi extends Card {
 
 // --- 2. 兽族 (Beast) ---
 class XueDiXiong extends Card {
-    constructor(lv) { super("雪地熊", "Beast", 4, lv); this.buff_stacks = []; this.dmg_r = 0.00038 + 0.00002 * lv; }
+    constructor(lv) { super("雪地熊", "Beast", 4, lv); this.buff_stacks = []; this.dmg_r = 0.0038 + 0.0002 * lv; }
     check(t) {
         if (t === EVENTS.ICE || t === EVENTS.ICE_D) return true;
         if (t === EVENTS.TIME && this.buff_stacks.length > 0) return true;
@@ -379,7 +379,7 @@ const DiZi = class extends Card { constructor(lv) { super("笛子", "Tool", 2, l
 class PassiveBoostCard extends Card {
     constructor(name, race, fee, level) {
         super(name, race, fee, level);
-        this.mul = 0.0056 + 0.0004 * level;
+        this.mul = fee == 1 ? 0.0046 : 0.0056 + 0.0004 * level;
     }
 }
 
