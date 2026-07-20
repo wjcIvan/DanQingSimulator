@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Season 3 · 243s 实战 vs 代码运行对比</title>
+  <script src="lib/chart.js"></script>
+  <script src="data.js"></script>
+  <script src="engine.js"></script>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --panel: rgba(255,255,255,0.96);
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: rgba(148,163,184,0.22);
+      --fire: #d9415d;
+      --ice: #2f7df6;
+      --wood: #2f9e44;
+      --thunder: #8b5cf6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(217,65,93,.08), transparent 28%),
+        radial-gradient(circle at top right, rgba(47,125,246,.08), transparent 26%),
+        var(--bg);
+    }
+    .wrap { max-width: 1440px; margin: 0 auto; padding: 24px; }
+    .hero, .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
+    }
+    .hero { padding: 22px 24px; margin-bottom: 18px; }
+    .hero h1 { margin: 0; font-size: 28px; font-weight: 900; letter-spacing: -0.03em; }
+    .hero p { margin: 8px 0 0; color: var(--muted); font-size: 14px; line-height: 1.7; }
+    .hero-actions { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:16px; }
+    .btn { border:none; border-radius:999px; padding:10px 16px; font-weight:800; cursor:pointer; font-size:14px; transition:all .2s ease; }
+    .btn-primary { background: linear-gradient(135deg, #4f46e5, #7c3aed); color:white; }
+    .btn-primary:hover { transform: translateY(-1px); }
+    .status { color: var(--muted); font-size: 13px; }
+    .grid { display:grid; grid-template-columns: 1.1fr .9fr; gap:18px; }
+    .panel { padding: 18px; }
+    .panel h2 { margin: 0 0 14px; font-size: 15px; font-weight: 900; color: #334155; letter-spacing: .04em; text-transform: uppercase; }
+    .chart-box { height: 380px; position: relative; }
+    .stat-grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; margin-bottom: 14px; }
+    .stat { border:1px solid var(--line); border-radius:18px; background: rgba(255,255,255,.92); padding: 14px 16px; }
+    .stat label { display:block; font-size:12px; font-weight:800; color: var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.05em; }
+    .stat strong { display:block; font-size:22px; font-weight:900; letter-spacing:-0.02em; }
+    table { width:100%; border-collapse: collapse; overflow:hidden; border-radius:18px; border:1px solid var(--line); }
+    th, td { padding: 12px 14px; border-bottom: 1px solid rgba(148,163,184,0.16); text-align:left; font-size:13px; vertical-align:top; }
+    th { font-size:12px; color: var(--muted); text-transform: uppercase; letter-spacing:.05em; background: rgba(248,250,252,0.92); }
+    tr:last-child td { border-bottom:none; }
+    .chip { display:inline-flex; align-items:center; gap:8px; font-weight:800; }
+    .dot { width:10px; height:10px; border-radius:50%; display:inline-block; flex:0 0 auto; }
+    .note { margin-top: 14px; border-radius:16px; padding: 14px 16px; background: rgba(248,250,252,0.85); border:1px dashed rgba(148,163,184,0.35); color:#475569; font-size:13px; line-height:1.7; }
+    .details-panel { margin-top: 18px; }
+    .details-grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:16px; }
+    .detail-card { border:1px solid var(--line); border-radius:20px; padding:14px; background: rgba(255,255,255,.92); }
+    .detail-card h3 { margin:0 0 10px; font-size:14px; font-weight:900; }
+    .detail-table { width:100%; border:1px solid rgba(148,163,184,0.18); border-radius:14px; overflow:hidden; }
+    .detail-table th, .detail-table td { font-size:12px; padding: 10px 10px; }
+    .detail-table th { background: rgba(248,250,252,0.9); }
+    .align-right { text-align:right; }
+    @media (max-width: 1024px) {
+      .grid, .details-grid { grid-template-columns: 1fr; }
+      .chart-box { height: 340px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h1>243s 四系实战 vs 代码运行对比</h1>
+      <p>点击按钮后，会直接调用当前 <strong>engine.js</strong> 运行 243s 单目标模拟，并与 <strong>season3_243s_validation.md</strong> 中记录的实战数据对比。下方会同时展示各系技能<strong>数量</strong>与<strong>伤害</strong>的前后对比。</p>
+      <div class="hero-actions">
+        <button id="runBtn" class="btn btn-primary">运行代码对比</button>
+        <span id="status" class="status">尚未运行。点击按钮开始计算。</span>
+      </div>
+    </section>
+
+    <div class="grid">
+      <section class="panel">
+        <h2>四系 243s 单目标：实战数据 vs 代码运行数据</h2>
+        <div class="chart-box"><canvas id="compareChart"></canvas></div>
+      </section>
+
+      <section class="panel">
+        <h2>摘要</h2>
+        <div class="stat-grid">
+          <div class="stat"><label>实战最高</label><strong id="actualTop">冰 · 19650.62</strong></div>
+          <div class="stat"><label>代码最高</label><strong id="simTop">等待运行</strong></div>
+          <div class="stat"><label>实战排序</label><strong>冰 &gt; 木 &gt; 火 &gt; 雷</strong></div>
+          <div class="stat"><label>代码排序</label><strong id="simOrder">等待运行</strong></div>
+        </div>
+        <table>
+          <thead><tr><th>系别</th><th>实战数据</th><th>代码运行</th><th>差值</th></tr></thead>
+          <tbody id="compareTableBody"></tbody>
+        </table>
+        <div class="note">图中深色柱为<strong>实战测试数据</strong>，浅色柱为<strong>当前代码运行数据</strong>。下方每系会按技能列出<strong>实战数量/代码数量</strong>和<strong>实战伤害/代码伤害</strong>，方便直观看偏差点。</div>
+      </section>
+    </div>
+
+    <section class="panel details-panel">
+      <h2>各系技能数量与伤害前后对比</h2>
+      <div id="detailsGrid" class="details-grid"></div>
+    </section>
+  </div>
+
+  <script>
+    const ACTUAL = {
+      fire: {
+        label: '火', color: '#d9415d', dps: 17596.30, total: 4275900,
+        skills: [
+          { key: 'combust', label: '爆燃', count: 28, damage: 1955000 },
+          { key: 'ignite', label: '引燃', count: 202, damage: 1066000 },
+          { key: 'fire_amplify', label: '天火激化', count: 19, damage: 744600 },
+          { key: 'burn_tick', label: '燃烧', count: 145, damage: 510300 },
+        ]
+      },
+      wood: {
+        label: '木', color: '#2f9e44', dps: 19220.99, total: 4670700,
+        skills: [
+          { key: 'pulse_total', label: '脉冲', count: 80, damage: 2016000 },
+          { key: 'pulse_echo', label: '震荡', count: 120, damage: 1333000 },
+          { key: 'wood_amplify', label: '苍木激化', count: 27, damage: 673600 },
+          { key: 'wood_bloom', label: '绽放', count: 9, damage: 648100 },
+        ]
+      },
+      ice: {
+        label: '冰', color: '#2f7df6', dps: 19650.62, total: 4775100,
+        skills: [
+          { key: 'ice_storm_frenzy', label: '玄冰风暴', count: 160, damage: 1767000 },
+          { key: 'ice_arrow_total', label: '冰箭', count: 111, damage: 1286000 },
+          { key: 'shatter', label: '碎裂', count: 89, damage: 1078000 },
+          { key: 'ice_amplify', label: '玄冰激化', count: 10, damage: 644100 },
+        ]
+      },
+      thunder: {
+        label: '雷', color: '#8b5cf6', dps: 15928.40, total: 3870600,
+        skills: [
+          { key: 'chain_total', label: '连锁闪电', count: 72, damage: 1800000 },
+          { key: 'static_overload', label: '静电过载', count: 88, damage: 1697000 },
+          { key: 'thunder_amplify', label: '神雷激化', count: 4, damage: 373600 },
+        ]
+      }
+    };
+
+    const ELEMENT_ORDER = ['fire', 'ice', 'wood', 'thunder'];
+    let chart = null;
+
+    function buildCompareRows(simulated) {
+      return ELEMENT_ORDER.map(key => {
+        const actual = ACTUAL[key];
+        const sim = simulated[key];
+        const diff = sim.dps - actual.dps;
+        return `<tr><td><span class="chip"><span class="dot" style="background:${actual.color}"></span>${actual.label}</span></td><td>${actual.dps.toFixed(2)}</td><td>${sim.dps.toFixed(2)}</td><td>${diff >= 0 ? '+' : ''}${diff.toFixed(2)}</td></tr>`;
+      }).join('');
+    }
+
+    function buildDetailCards(simulated) {
+      return ELEMENT_ORDER.map(key => {
+        const actual = ACTUAL[key];
+        const item = simulated[key];
+        return `
+          <div class="detail-card">
+            <h3><span class="chip"><span class="dot" style="background:${item.color}"></span>${item.label}</span></h3>
+            <table class="detail-table">
+              <thead>
+                <tr>
+                  <th>技能</th>
+                  <th class="align-right">实战次数</th>
+                  <th class="align-right">代码次数</th>
+                  <th class="align-right">实战伤害</th>
+                  <th class="align-right">代码伤害</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${actual.skills.map(skill => {
+                  const simSkill = item.skillMap[skill.key] || { count: 0, damage: 0 };
+                  return `<tr><td>${skill.label}</td><td class="align-right">${skill.count}</td><td class="align-right">${simSkill.count}</td><td class="align-right">${skill.damage.toLocaleString()}</td><td class="align-right">${Math.round(simSkill.damage).toLocaleString()}</td></tr>`;
+                }).join('')}
+                <tr><td><strong>总伤</strong></td><td class="align-right">-</td><td class="align-right">-</td><td class="align-right"><strong>${actual.total.toLocaleString()}</strong></td><td class="align-right"><strong>${item.total.toLocaleString()}</strong></td></tr>
+                <tr><td><strong>DPS</strong></td><td class="align-right" colspan="2"><strong>${actual.dps.toFixed(2)}</strong></td><td class="align-right" colspan="2"><strong>${item.dps.toFixed(2)}</strong></td></tr>
+              </tbody>
+            </table>
+          </div>`;
+      }).join('');
+    }
+
+    function summarizeOrder(simulated) {
+      const arr = ELEMENT_ORDER.map(key => simulated[key]).sort((a, b) => b.dps - a.dps);
+      return arr.map(item => item.label).join(' > ');
+    }
+
+    function summarizeTop(simulated) {
+      const arr = ELEMENT_ORDER.map(key => simulated[key]).sort((a, b) => b.dps - a.dps);
+      return `${arr[0].label} · ${arr[0].dps.toFixed(2)}`;
+    }
+
+    function renderChart(simulated) {
+      const labels = ELEMENT_ORDER.map(key => ACTUAL[key].label);
+      const actual = ELEMENT_ORDER.map(key => ACTUAL[key].dps);
+      const sim = ELEMENT_ORDER.map(key => simulated[key].dps);
+      const colors = ELEMENT_ORDER.map(key => ACTUAL[key].color);
+      const ctx = document.getElementById('compareChart').getContext('2d');
+      if (chart) chart.destroy();
+      chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: '实战测试数据', data: actual, backgroundColor: colors.map(c => c + 'CC'), borderColor: colors, borderWidth: 1, borderRadius: 4, borderSkipped: false, barPercentage: 0.7, categoryPercentage: 0.7 },
+            { label: '代码运行数据', data: sim, backgroundColor: colors.map(c => c + '55'), borderColor: colors, borderWidth: 2, borderRadius: 4, borderSkipped: false, barPercentage: 0.7, categoryPercentage: 0.7 }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { display: true, position: 'top', labels: { color: '#334155', usePointStyle: true, pointStyle: 'rectRounded', boxWidth: 10, padding: 16, font: { size: 12, weight: 700 } } },
+            tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.94)', padding: 12, displayColors: true, callbacks: { label(context) { return `${context.dataset.label}：${context.parsed.y.toFixed(2)} DPS`; } } }
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#475569', font: { size: 12, weight: 800 } } },
+            y: { beginAtZero: true, grid: { color: 'rgba(148,163,184,0.16)' }, ticks: { color: '#64748b', font: { size: 11, weight: 700 }, callback(value) { return value.toLocaleString(); } } }
+          }
+        }
+      });
+    }
+
+    function instrumentElement(element) {
+      const cards = window.Data.CARD_DEFS.filter(c => c.element === element);
+      const deck = cards.map(c => ({ id: c.id, level: 6 }));
+      const engine = new window.Engine.CombatEngine(deck, { duration: 243, targetCount: 1, seed: 1 });
+      const result = engine.simulate();
+      return summarizeElement(element, result);
+    }
+
+    function summarizeElement(element, result) {
+      const label = ACTUAL[element].label;
+      const color = ACTUAL[element].color;
+      const detailMap = {};
+      result.breakdown.byMechanic.forEach(item => { detailMap[item.mechanic] = item; });
+
+      if (element === 'fire') {
+        return {
+          label, color, dps: result.totalDps, total: result.totalDamage,
+          skillMap: {
+            combust: { count: detailMap.combust?.count || 0, damage: detailMap.combust?.damage || 0 },
+            ignite: { count: detailMap.ignite?.count || 0, damage: detailMap.ignite?.damage || 0 },
+            fire_amplify: { count: detailMap.fire_amplify?.count || 0, damage: detailMap.fire_amplify?.damage || 0 },
+            burn_tick: { count: detailMap.burn_tick?.count || 0, damage: detailMap.burn_tick?.damage || 0 },
+          }
+        };
+      }
+      if (element === 'ice') {
+        return {
+          label, color, dps: result.totalDps, total: result.totalDamage,
+          skillMap: {
+            ice_storm_frenzy: { count: detailMap.ice_storm_frenzy?.count || 0, damage: detailMap.ice_storm_frenzy?.damage || 0 },
+            ice_arrow_total: { count: (detailMap.ice_arrow?.count || 0) + (detailMap.ice_arrow_volley?.count || 0), damage: (detailMap.ice_arrow?.damage || 0) + (detailMap.ice_arrow_volley?.damage || 0) },
+            shatter: { count: detailMap.shatter?.count || 0, damage: detailMap.shatter?.damage || 0 },
+            ice_amplify: { count: detailMap.ice_amplify?.count || 0, damage: detailMap.ice_amplify?.damage || 0 },
+          }
+        };
+      }
+      if (element === 'wood') {
+        return {
+          label, color, dps: result.totalDps, total: result.totalDamage,
+          skillMap: {
+            pulse_total: { count: (detailMap.pulse?.count || 0) + (detailMap.pulse_followup?.count || 0) + (detailMap.opening_pulse?.count || 0), damage: (detailMap.pulse?.damage || 0) + (detailMap.pulse_followup?.damage || 0) + (detailMap.opening_pulse?.damage || 0) },
+            pulse_echo: { count: detailMap.pulse_echo?.count || 0, damage: detailMap.pulse_echo?.damage || 0 },
+            wood_amplify: { count: detailMap.wood_amplify?.count || 0, damage: detailMap.wood_amplify?.damage || 0 },
+            wood_bloom: { count: detailMap.wood_bloom?.count || 0, damage: detailMap.wood_bloom?.damage || 0 },
+          }
+        };
+      }
+      return {
+        label, color, dps: result.totalDps, total: result.totalDamage,
+        skillMap: {
+          chain_total: { count: (detailMap.chain_lightning?.count || 0) + (detailMap.chain_lightning_extra?.count || 0), damage: (detailMap.chain_lightning?.damage || 0) + (detailMap.chain_lightning_extra?.damage || 0) },
+          static_overload: { count: detailMap.static_overload?.count || 0, damage: detailMap.static_overload?.damage || 0 },
+          thunder_amplify: { count: detailMap.thunder_amplify?.count || 0, damage: detailMap.thunder_amplify?.damage || 0 },
+        }
+      };
+    }
+
+    function runComparison() {
+      const status = document.getElementById('status');
+      status.textContent = '正在运行 engine.js 并整理技能数量与伤害...';
+      requestAnimationFrame(() => {
+        const simulated = {};
+        ELEMENT_ORDER.forEach(key => { simulated[key] = instrumentElement(key); });
+        document.getElementById('compareTableBody').innerHTML = buildCompareRows(simulated);
+        document.getElementById('detailsGrid').innerHTML = buildDetailCards(simulated);
+        document.getElementById('simTop').textContent = summarizeTop(simulated);
+        document.getElementById('simOrder').textContent = summarizeOrder(simulated);
+        renderChart(simulated);
+        status.textContent = '已完成：图表、差值表，以及各系技能数量 / 伤害前后对比均已基于当前代码生成。';
+      });
+    }
+
+    document.getElementById('runBtn').addEventListener('click', runComparison);
+  </script>
+</body>
+</html>

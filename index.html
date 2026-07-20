@@ -1,44 +1,107 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-
 <head>
     <meta charset="UTF-8">
-    <title>丹青模拟器 Pro</title>
-    <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <script src="lib/tailwindcss.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>丹青模拟器S4</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="lib/chart.js"></script>
-    <script type="text/javascript">
-        (function (c, l, a, r, i, t, y) {
-            c[a] = c[a] || function () { (c[a].q = c[a].q || []).push(arguments) };
-            t = l.createElement(r); t.async = 1; t.src = "https://www.clarity.ms/tag/" + i;
-            y = l.getElementsByTagName(r)[0]; y.parentNode.insertBefore(t, y);
-        })(window, document, "clarity", "script", "v4tptto2kf");
-    </script>
     <style>
         :root {
-            --glass-bg: rgba(255, 255, 255, 0.7);
-            --glass-border: rgba(255, 255, 255, 0.4);
-            --primary: #6366f1;
-            --primary-glow: rgba(99, 102, 241, 0.4);
+            color-scheme: light;
+            --bg: #f8fafc;
+            --panel: rgba(255,255,255,.92);
+            --ink: #0f172a;
+            --muted: #64748b;
+            --line: rgba(148,163,184,.20);
+            --fire: #ef4444;
+            --ice: #06b6d4;
+            --wood: #16a34a;
+            --thunder: #8b5cf6;
         }
-
+        * { box-sizing: border-box; }
         body {
-            background: radial-gradient(circle at top right, #f8fafc, #eff6ff);
-            background-attachment: fixed;
+            margin: 0;
+            font-family: Inter, "Microsoft YaHei", sans-serif;
+            color: var(--ink);
+            background:
+                radial-gradient(circle at top left, rgba(99,102,241,.12), transparent 30%),
+                radial-gradient(circle at top right, rgba(14,165,233,.10), transparent 28%),
+                var(--bg);
         }
-
-        .glass-panel {
-            background: var(--glass-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid var(--glass-border);
-            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+        .shell {
+            max-width: 1500px;
+            margin: 0 auto;
+            padding: 28px;
         }
-
-        /* 极客风卡牌 */
+        .hero, .panel, .element-section, .stat-card {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
+            backdrop-filter: blur(10px);
+        }
+        .hero {
+            border-radius: 28px;
+            padding: 28px;
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            align-items: flex-start;
+        }
+        .hero h1 {
+            margin: 0 0 10px;
+            font-size: 34px;
+            font-weight: 900;
+            letter-spacing: -.03em;
+        }
+        .hero p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.7;
+        }
+        .hero-notes {
+            min-width: 280px;
+            border-radius: 22px;
+            padding: 18px 20px;
+            background: linear-gradient(135deg, rgba(99,102,241,.08), rgba(14,165,233,.06));
+        }
+        .layout {
+            margin-top: 24px;
+            display: grid;
+            grid-template-columns: minmax(560px, 1.15fr) minmax(420px, .85fr);
+            gap: 22px;
+        }
+        .panel {
+            border-radius: 26px;
+            padding: 22px;
+        }
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 18px;
+        }
+        .toolbar-actions, .toolbar-summary { display: flex; gap: 10px; flex-wrap: wrap; }
+        .pill, .toolbar button {
+            border: 1px solid var(--line);
+            background: white;
+            color: var(--ink);
+            border-radius: 999px;
+            padding: 10px 14px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .toolbar button.primary {
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: white;
+            border: none;
+        }
+        .card-grid { display: grid; gap: 0; }
         .card-box {
             position: relative;
-            min-height: 120px;
+            min-height: 128px;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -46,98 +109,47 @@
             cursor: pointer;
             border: 1.5px solid transparent;
             background: white;
-            padding: 1.25rem !important;
+            padding: 1rem 1rem 1.05rem !important;
         }
-
         .card-box:hover {
             transform: translateY(-4px) scale(1.02);
             box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.1);
+            z-index: 40;
         }
-
-        /* 防止调节滑块时卡牌跳动 */
         .card-box:focus-within,
         .card-box:active {
             transform: none !important;
             box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.1) !important;
+            z-index: 40;
         }
-
         .card-box:active {
             transform: scale(0.96);
         }
-
         .card-box.selected {
-            border-color: var(--primary);
+            border-color: #6366f1;
             background: linear-gradient(to bottom right, #ffffff, #f5f3ff);
-            box-shadow: 0 0 20px var(--primary-glow);
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
             animation: pulse-border 2s infinite;
         }
-
         @keyframes pulse-border {
-            0% {
-                box-shadow: 0 0 0 0 var(--primary-glow);
-            }
-
-            70% {
-                box-shadow: 0 0 0 10px rgba(99, 102, 241, 0);
-            }
-
-            100% {
-                box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
-            }
+            0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
         }
-
-        .race-human {
-            border-left: 4px solid #3b82f6;
-        }
-
-        .race-beast {
-            border-left: 4px solid #f59e0b;
-        }
-
-        .race-tool {
-            border-left: 4px solid #10b981;
-        }
-
-        .tag-human {
-            background-color: #eff6ff;
-            color: #3b82f6;
-        }
-
-        .tag-beast {
-            background-color: #fffbeb;
-            color: #f59e0b;
-        }
-
-        .tag-tool {
-            background-color: #ecfdf5;
-            color: #10b981;
-        }
-
+        .race-fire { border-left: 4px solid #ef4444; }
+        .race-ice { border-left: 4px solid #06b6d4; }
+        .race-wood { border-left: 4px solid #16a34a; }
+        .race-thunder { border-left: 4px solid #8b5cf6; }
+        .tag-fire { background-color: #fef2f2; color: #dc2626; }
+        .tag-ice { background-color: #ecfeff; color: #0891b2; }
+        .tag-wood { background-color: #ecfdf5; color: #16a34a; }
+        .tag-thunder { background-color: #f5f3ff; color: #7c3aed; }
         .race-section {
             display: grid;
             grid-template-columns: repeat(1, minmax(0, 1fr));
             gap: 1rem;
             margin-bottom: 2.5rem;
         }
-
-        @media (min-width: 640px) {
-            .race-section {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
-        }
-
-        @media (min-width: 1024px) {
-            .race-section {
-                grid-template-columns: repeat(3, minmax(0, 1fr));
-            }
-        }
-
-        @media (min-width: 1280px) {
-            .race-section {
-                grid-template-columns: repeat(5, minmax(0, 1fr));
-            }
-        }
-
         .race-title {
             grid-column: 1 / -1;
             font-size: 0.85rem;
@@ -149,230 +161,60 @@
             margin-bottom: 0.5rem;
             border-bottom: 1px solid #e2e8f0;
         }
-
-
-
-        .progress-shimmer {
-            position: relative;
-            overflow: hidden;
-        }
-
-        .progress-shimmer::after {
-            content: "";
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
-            animation: shimmer 1.5s infinite;
-        }
-
-        @keyframes shimmer {
-            100% {
-                left: 100%;
-            }
-        }
-
-        .tab-btn.active {
-            background: white;
-            color: var(--primary);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-        }
-
-        .fee-warning {
-            background: #ef4444 !important;
-            color: white !important;
-            animation: fee-shake 0.5s ease-in-out infinite, fee-glow 1.5s ease-in-out infinite;
-        }
-
-        @keyframes fee-shake {
-
-            0%,
-            100% {
-                transform: translateX(0);
-            }
-
-            25% {
-                transform: translateX(-2px);
-            }
-
-            75% {
-                transform: translateX(2px);
-            }
-        }
-
-        @keyframes fee-glow {
-
-            0%,
-            100% {
-                box-shadow: 0 0 5px #ef4444;
-            }
-
-            50% {
-                box-shadow: 0 0 20px #ef4444;
-            }
-        }
-
-        /* 选中勋章 */
         .selected-badge {
             position: absolute;
             top: -6px;
             right: -6px;
             width: 20px;
             height: 20px;
-            background: var(--primary);
+            background: #6366f1;
             color: white;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 10px;
-            box-shadow: 0 4px 8px var(--primary-glow);
+            box-shadow: 0 4px 8px rgba(99, 102, 241, 0.4);
             border: 2px solid white;
             z-index: 10;
         }
-
-        .lineup-tag {
-            display: inline-flex;
-            align-items: center;
-            padding: 1px 4px;
-            border-radius: 4px;
-            font-size: 9px;
-            font-weight: 800;
-            margin-right: 3px;
-            margin-bottom: 3px;
-            line-height: 1.2;
-            transition: all 0.2s;
+        .star-ui {
+            transition: all .2s ease;
         }
-
-        .lineup-tag.tag-human {
-            background: rgba(59, 130, 246, 0.08);
-            border: 1px solid rgba(59, 130, 246, 0.15);
-            color: #2563eb;
+        .star-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 10px;
+            background: #f1f5f9;
+            background-image: linear-gradient(#6366f1, #6366f1);
+            background-repeat: no-repeat;
+            background-size: 100% 100%;
+            outline: none;
         }
-
-        .lineup-tag.tag-beast {
-            background: rgba(245, 158, 11, 0.08);
-            border: 1px solid rgba(245, 158, 11, 0.15);
-            color: #d97706;
+        .star-slider::-webkit-slider-runnable-track {
+            background: transparent;
+            border: none;
         }
-
-        .lineup-tag.tag-tool {
-            background: rgba(16, 185, 129, 0.08);
-            border: 1px solid rgba(16, 185, 129, 0.15);
-            color: #059669;
+        .star-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: white;
+            border: 2px solid #6366f1;
+            border-radius: 50%;
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+            cursor: pointer;
+            margin-top: -6px;
         }
-
-        /* 计算脉冲动效 */
-        @keyframes pulse-parse {
-            0% {
-                box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
-                border-color: #6366f1;
-            }
-
-            50% {
-                box-shadow: 0 0 20px 2px rgba(99, 102, 241, 0.6);
-                border-color: #818cf8;
-            }
-
-            100% {
-                box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
-                border-color: #6366f1;
-            }
-        }
-
-        .parsing-mode {
-            animation: pulse-parse 1s infinite;
-            position: relative;
-        }
-
-        .parsing-mode::after {
-            content: "";
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 50%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.1), transparent);
-            animation: scan-line 1.5s infinite;
-        }
-
-        @keyframes scan-line {
-            100% {
-                left: 200%;
-            }
-        }
-
-        /* 英雄锚点跳动 */
-        @keyframes anchor-bounce {
-
-            0%,
-            100% {
-                transform: scale(1.02);
-                filter: brightness(1.1);
-                box-shadow: 0 0 20px var(--primary-glow);
-            }
-
-            50% {
-                transform: scale(1.08);
-                filter: brightness(1.3);
-                box-shadow: 0 0 30px var(--primary-glow);
-            }
-        }
-
-        .card-anchor-active {
-            z-index: 40;
-            animation: anchor-bounce 0.8s infinite !important;
-            border-color: var(--primary) !important;
-            border-width: 2px !important;
-        }
-
-        /* 响应式吸顶 */
-        @media (min-width: 1024px) {
-            .sidebar-sticky {
-                position: sticky;
-                top: 88px;
-                max-height: calc(100vh - 120px);
-                overflow-y: auto;
-                overflow-x: hidden;
-                padding: 0 4px 20px 0;
-                contain: paint;
-            }
-
-            .sidebar-sticky::-webkit-scrollbar {
-                width: 4px;
-            }
-
-            .sidebar-sticky::-webkit-scrollbar-track {
-                background: transparent;
-            }
-
-            .sidebar-sticky::-webkit-scrollbar-thumb {
-                background: #e2e8f0;
-                border-radius: 10px;
-            }
-
-            .sidebar-sticky::-webkit-scrollbar-thumb:hover {
-                background: #cbd5e1;
-            }
-        }
-
-        /* 皓月冰晶实验室仪表盘 */
         .lab-dashboard {
             display: grid;
             grid-template-columns: 1fr;
             gap: 16px;
             margin-bottom: 24px;
         }
-
-        @media (min-width: 1024px) {
-            .lab-dashboard {
-                grid-template-columns: 2fr 1fr 1fr;
-                align-items: stretch;
-            }
-        }
-
         .dashboard-item {
             background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(248, 250, 252, 0.8));
             backdrop-filter: blur(20px);
@@ -385,107 +227,17 @@
             flex-direction: column;
             justify-content: center;
         }
-
         .dashboard-item:hover {
             background: white;
-            border-color: var(--primary);
+            border-color: #6366f1;
             box-shadow: 0 8px 24px -10px rgba(99, 102, 241, 0.15);
         }
-
-        .label-tech {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 10px;
-            font-weight: 900;
-            color: #64748b;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 12px;
-        }
-
-        .led-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: #6366f1;
-            box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
-            animation: ice-pulse 2s infinite;
-        }
-
-        @keyframes ice-pulse {
-
-            0%,
-            100% {
-                opacity: 1;
-                transform: scale(1);
-            }
-
-            50% {
-                opacity: 0.5;
-                transform: scale(0.8);
-            }
-        }
-
-        .numeric-control {
-            display: flex;
-            align-items: center;
-            background: #f1f5f9;
-            border: 1.5px solid #e2e8f0;
-            border-radius: 10px;
-            padding: 2px;
-            height: 32px;
-            transition: all 0.2s;
-        }
-
-        .dashboard-item:hover .numeric-control {
-            border-color: rgba(99, 102, 241, 0.2);
-            background: white;
-        }
-
-        .numeric-btn {
-            width: 24px;
-            height: 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: white;
-            color: #64748b;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 900;
-            transition: all 0.2s;
-            cursor: pointer;
-            border: none;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
-        }
-
-        .numeric-btn:hover {
-            background: #6366f1;
-            color: white;
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-        }
-
-        .numeric-input {
-            flex: 1;
-            min-width: 0;
-            background: transparent !important;
-            border: none !important;
-            text-align: center;
-            color: #1e293b !important;
-            font-family: inherit;
-            font-weight: 800;
-            font-size: 16px;
-            outline: none;
-        }
-
         .slider-tech-label {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 14px;
         }
-
         .val-display {
             font-family: inherit;
             font-size: 14px;
@@ -496,9 +248,7 @@
             border-radius: 8px;
             border: 1px solid #e0e7ff;
         }
-
-        /* 极地风格滑块 */
-        input[type="range"] {
+        input[type="range"]:not(.star-slider) {
             -webkit-appearance: none;
             appearance: none;
             background: #f1f5f9;
@@ -509,17 +259,17 @@
             border-radius: 10px;
             outline: none;
         }
-
         #simIter {
             background-image: linear-gradient(#fbbf24, #fbbf24);
         }
-
-        input[type="range"]::-webkit-slider-runnable-track {
+        #targetCount {
+            background-image: linear-gradient(#8b5cf6, #8b5cf6);
+        }
+        input[type="range"]:not(.star-slider)::-webkit-slider-runnable-track {
             background: transparent;
             border: none;
         }
-
-        input[type="range"]::-webkit-slider-thumb {
+        input[type="range"]:not(.star-slider)::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
             width: 18px;
@@ -527,1125 +277,496 @@
             background: white;
             border: 2px solid #6366f1;
             border-radius: 50%;
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
             cursor: pointer;
-            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
-            transition: all 0.15s ease;
+            margin-top: -6px;
         }
-
         #simIter::-webkit-slider-thumb {
-            border-color: #fbbf24;
+            border-color: #f59e0b;
+            box-shadow: 0 2px 8px rgba(245, 158, 11, 0.22);
         }
-
-        input[type="range"]::-webkit-slider-thumb:hover {
-            transform: scale(1.1);
+        #targetCount::-webkit-slider-thumb {
+            border-color: #8b5cf6;
+            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.22);
         }
-
-        /* 卡牌唤醒动画 */
-        @keyframes card-wake {
-            0% {
-                transform: scale(1);
-                box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
-            }
-
-            50% {
-                transform: scale(1.05);
-                box-shadow: 0 0 20px 5px var(--primary-glow);
-            }
-
-            100% {
-                transform: scale(1);
-                box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
-            }
+        input[type="range"] { width: 100%; accent-color: #6366f1; }
+        .card-hover-panel {
+            position: absolute;
+            left: 10px;
+            right: 10px;
+            top: calc(100% - 6px);
+            z-index: 60;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(6px) scale(0.98);
+            pointer-events: none;
+            transition: opacity .16s ease, transform .16s ease, visibility .16s ease;
+            border: 1px solid rgba(148,163,184,.22);
+            border-radius: 16px;
+            background: rgba(255,255,255,.98);
+            box-shadow: 0 18px 36px rgba(15, 23, 42, 0.16);
+            padding: 12px 13px;
         }
-
-        .wake-up {
-            animation: card-wake 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+        .card-box:hover .card-hover-panel,
+        .card-box:focus-within .card-hover-panel {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0) scale(1);
         }
-
-        /* 占位符样式 */
+        .card-copy p {
+            margin: 0 0 6px;
+            color: #334155;
+            line-height: 1.55;
+            font-size: 12px;
+        }
+        .card-copy .upgrade-line {
+            color: #4338ca;
+            font-weight: 700;
+        }
+        .mechanic-list {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+        .mechanic-list span {
+            background: rgba(226,232,240,.55);
+            color: #475569;
+            padding: 4px 8px;
+            font-size: 10px;
+            border-radius: 999px;
+            font-weight: 800;
+        }
+        .fee-warning {
+            background: #ef4444 !important;
+            color: white !important;
+            animation: fee-shake 0.5s ease-in-out infinite, fee-glow 1.5s ease-in-out infinite;
+        }
+        @keyframes fee-shake {
+            0%,100% { transform: translateX(0); }
+            25% { transform: translateX(-2px); }
+            75% { transform: translateX(2px); }
+        }
+        @keyframes fee-glow {
+            0%,100% { box-shadow: 0 0 5px #ef4444; }
+            50% { box-shadow: 0 0 20px #ef4444; }
+        }
+        .card-controls label {
+            display: flex;
+            justify-content: space-between;
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 700;
+        }
+        input[type="range"] { width: 100%; accent-color: #6366f1; }
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0,1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .field {
+            display: grid;
+            gap: 8px;
+        }
+        .field label {
+            font-size: 13px;
+            font-weight: 800;
+            color: var(--muted);
+        }
+        .field input {
+            width: 100%;
+            border-radius: 16px;
+            border: 1px solid rgba(148,163,184,.26);
+            background: white;
+            padding: 12px 14px;
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--ink);
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0,1fr));
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+        .stat-card {
+            border-radius: 20px;
+            padding: 18px;
+        }
+        .stat-card span {
+            display: block;
+            font-size: 12px;
+            color: var(--muted);
+            font-weight: 800;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+        }
+        .stat-card strong {
+            display: block;
+            font-size: 30px;
+            font-weight: 900;
+            letter-spacing: -.03em;
+        }
+        .stat-card small {
+            color: var(--muted);
+            font-size: 12px;
+        }
+        .chart-box {
+            height: 290px;
+            border-radius: 22px;
+            border: 1px solid var(--line);
+            background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.9));
+            padding: 14px;
+        }
+        .detail-grid {
+            margin-top: 18px;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0,1fr));
+            gap: 14px;
+        }
+        .detail-card {
+            border-radius: 20px;
+            border: 1px solid var(--line);
+            padding: 16px;
+            background: rgba(255,255,255,.9);
+        }
+        .detail-card h3 {
+            margin: 0 0 12px;
+            font-size: 15px;
+            font-weight: 900;
+        }
+        .detail-card ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: grid;
+            gap: 10px;
+        }
+        .detail-card li {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px dashed rgba(148,163,184,.25);
+            color: #334155;
+            font-size: 13px;
+        }
+        .detail-card li:last-child { border-bottom: none; padding-bottom: 0; }
+        .warning-card {
+            margin-top: 14px;
+            border-radius: 18px;
+            padding: 16px;
+            background: rgba(254,249,195,.5);
+            border: 1px solid rgba(234,179,8,.26);
+        }
+        .warning-card h3 {
+            margin: 0 0 10px;
+            font-size: 14px;
+            font-weight: 900;
+            color: #854d0e;
+        }
+        .warning-card ul {
+            margin: 0;
+            padding-left: 18px;
+            color: #713f12;
+            line-height: 1.65;
+            font-size: 13px;
+        }
+        .tab-btn.active {
+            background: white;
+            color: #6366f1;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+        .progress-shimmer {
+            position: relative;
+            overflow: hidden;
+        }
+        .progress-shimmer::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+            animation: shimmer 1.5s infinite;
+        }
+        @keyframes shimmer {
+            100% { left: 100%; }
+        }
         .empty-placeholder {
-            border: 2px dashed #e2e8f0;
-            border-radius: 24px;
-            padding: 40px 20px;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            color: #cbd5e1;
-            transition: all 0.3s;
+            min-height: 170px;
+            border: 1px dashed rgba(148,163,184,0.28);
+            border-radius: 16px;
+            background: rgba(248,250,252,0.72);
+            color: #94a3b8;
         }
-
         .empty-placeholder svg {
-            width: 48px;
-            height: 48px;
-            margin-bottom: 12px;
-            opacity: 0.5;
+            width: 32px;
+            height: 32px;
+            margin-bottom: 10px;
+        }
+        .bf-result-item {
+            border: 1px solid rgba(148,163,184,0.18);
+            border-radius: 16px;
+            background: rgba(255,255,255,0.94);
+            padding: 12px 14px;
+            cursor: pointer;
+            transition: all .18s ease;
+        }
+        .bf-result-item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 20px rgba(15,23,42,0.06);
+        }
+        .bf-rank {
+            width: 22px;
+            height: 22px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 900;
+            color: white;
+            background: #6366f1;
+            flex: 0 0 auto;
+        }
+        .bf-rank.top-1 { background: #f59e0b; }
+        .bf-rank.top-2 { background: #8b5cf6; }
+        .bf-rank.top-3 { background: #06b6d4; }
+        @media (min-width: 640px) {
+            .race-section {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+        @media (min-width: 1024px) {
+            .lab-dashboard {
+                grid-template-columns: 2fr 1fr 1fr;
+                align-items: stretch;
+            }
+            .race-section {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+        @media (min-width: 1280px) {
+            .race-section {
+                grid-template-columns: repeat(5, minmax(0, 1fr));
+            }
+        }
+        @media (max-width: 1200px) {
+            .layout { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 720px) {
+            .shell { padding: 16px; }
+            .hero { flex-direction: column; }
+            .controls-grid, .stats-grid, .detail-grid, .race-section { grid-template-columns: 1fr; }
         }
     </style>
 </head>
+<body>
+    <div class="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-sky-50 text-slate-700">
+        <div class="max-w-[1720px] mx-auto px-3 sm:px-4 lg:px-5 py-8">
+            <div class="glass-panel rounded-[32px] p-6 lg:p-8">
+                <div class="flex flex-col xl:flex-row gap-8">
+                    <div class="flex-1 min-w-0">
+                        <div class="mb-4 px-2 flex items-center gap-2">
+                            <span class="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></span>
+                            <h1 class="text-xl sm:text-2xl font-black tracking-tight text-slate-800 leading-none">丹青模拟器S4</h1>
+                        </div>
 
-<body class="bg-slate-50 text-slate-900 min-h-screen">
-
-    <header
-        class="bg-white/80 backdrop-blur-md px-8 py-1.5 sticky top-0 z-50 flex justify-between items-center border-b border-slate-200">
-        <div class="flex items-center gap-2">
-            <div class="w-6 h-6 bg-indigo-600 rounded flex items-center justify-center shadow-lg shadow-indigo-100">
-                <span class="text-white font-black text-sm">D</span>
-            </div>
-            <h1
-                class="text-base font-black bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600 tracking-tight">
-                丹青模拟器 <span class="text-indigo-500 font-medium text-xs ml-1">Pro</span>
-            </h1>
-        </div>
-    </header>
-
-    <div class="flex flex-col lg:flex-row gap-6 p-6 max-w-[1600px] mx-auto">
-
-        <div class="flex-1 lg:w-3/5">
-
-            <div class="lab-dashboard !mb-3">
-                <div class="dashboard-item">
-                    <div class="grid grid-cols-3 gap-3">
-                        <div class="space-y-1">
-                            <span class="text-[13px] font-black text-slate-400 uppercase ml-1">基础攻击</span>
-                            <div class="numeric-control">
-                                <button class="numeric-btn"
-                                    onclick="changeNumericValue('baseAtk', -100, 0, 99999)">-</button>
-                                <input type="number" id="baseAtk" value="10000" class="numeric-input !text-base"
-                                    onchange="updateFee()">
-                                <button class="numeric-btn"
-                                    onclick="changeNumericValue('baseAtk', 100, 0, 99999)">+</button>
+                        <div class="lab-dashboard">
+                            <div class="dashboard-item">
+                                <div class="slider-tech-label !mb-1.5 flex items-center justify-between">
+                                    <span class="text-[13px] font-black text-slate-400 uppercase">战斗时长</span>
+                                    <span class="val-display !py-0.5 !px-1.5 !text-sm"><span id="timeVal">240</span>s</span>
+                                </div>
+                                <input type="range" id="simTime" min="10" max="600" value="240" class="w-full">
                             </div>
-                        </div>
-                        <div class="space-y-1">
-                            <span class="text-[13px] font-black text-slate-400 uppercase ml-1">初始秒伤</span>
-                            <div class="numeric-control">
-                                <button class="numeric-btn"
-                                    onclick="changeNumericValue('baseDps', -1000, 0, 999999)">-</button>
-                                <input type="number" id="baseDps" value="60000" class="numeric-input !text-base"
-                                    onchange="updateFee()">
-                                <button class="numeric-btn"
-                                    onclick="changeNumericValue('baseDps', 1000, 0, 999999)">+</button>
+                            <div class="dashboard-item">
+                                <div class="slider-tech-label !mb-1.5 flex items-center justify-between">
+                                    <span class="text-[13px] font-black text-slate-400 uppercase">模拟轮次</span>
+                                    <span class="val-display !py-0.5 !px-1.5 !text-xs" style="color:#b45309;background:#fffbeb;border-color:#fde68a"><span id="iterVal">200</span>x</span>
+                                </div>
+                                <input type="range" id="simIter" min="1" max="1000" value="200" class="w-full">
                             </div>
-                        </div>
-                        <div class="space-y-1">
-                            <span class="text-[13px] font-black text-slate-400 uppercase ml-1">目标数量</span>
-                            <div class="numeric-control">
-                                <button class="numeric-btn"
-                                    onclick="changeNumericValue('targetCount', -1, 1, 10)">-</button>
-                                <input type="number" id="targetCount" value="1" min="1" max="10"
-                                    class="numeric-input !text-base" onchange="updateFee()">
-                                <button class="numeric-btn"
-                                    onclick="changeNumericValue('targetCount', 1, 1, 10)">+</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 时空矩阵 -->
-                <div class="dashboard-item">
-                    <div class="slider-tech-label !mb-1.5">
-                        <span class="text-[13px] font-black text-slate-400 uppercase">战斗时长</span>
-                        <span class="val-display !py-0.5 !px-1.5 !text-sm"><span id="timeVal">240</span>s</span>
-                    </div>
-                    <input type="range" id="simTime" min="30" max="600" value="240" class="w-full">
-                </div>
-
-                <!-- 运算引擎 -->
-                <div class="dashboard-item">
-                    <div class="slider-tech-label !mb-1.5">
-                        <span class="text-[13px] font-black text-slate-400 uppercase">模拟轮次</span>
-                        <span class="val-display !py-0.5 !px-1.5 !text-xs"
-                            style="color:#b45309;background:#fffbeb;border-color:#fde68a">
-                            <span id="iterVal">50</span>x
-                        </span>
-                    </div>
-                    <input type="range" id="simIter" min="1" max="200" value="50" class="w-full">
-                </div>
-            </div>
-
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 px-2">
-                <h2 class="font-black text-slate-800 flex items-center gap-2">
-                    <span class="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></span>
-                    阵容编成
-                    <span id="feeLabel"
-                        class="ml-2 text-[15px] px-2 py-0.5 rounded-full font-black bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase">
-                        0 / 25 费
-                    </span>
-                </h2>
-
-                <div class="flex flex-wrap gap-3">
-                    <div class="flex p-1 bg-slate-200/50 rounded-xl">
-                        <button onclick="selectAll()"
-                            class="px-3 py-1.5 text-[13px] font-black text-slate-600 hover:text-indigo-600 hover:bg-white rounded-lg transition-all">全选</button>
-                        <button onclick="reset()"
-                            class="px-3 py-1.5 text-[13px] font-black text-slate-600 hover:text-red-500 hover:bg-white rounded-lg transition-all">重置</button>
-                    </div>
-
-                    <div class="flex p-1 bg-slate-200/50 rounded-xl items-center">
-                        <span class="px-2 text-[11px] font-black text-slate-400 uppercase tracking-tighter">★</span>
-                        <div class="flex gap-0.5">
-                            <button onclick="batchSetStars(0)"
-                                class="w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">0</button>
-                            <button onclick="batchSetStars(1)"
-                                class="w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">1</button>
-                            <button onclick="batchSetStars(2)"
-                                class="w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">2</button>
-                            <button onclick="batchSetStars(3)"
-                                class="w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">3</button>
-                            <button onclick="batchSetStars(4)"
-                                class="w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">4</button>
-                            <button onclick="batchSetStars(5)"
-                                class="w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">5</button>
-                            <button onclick="batchSetStars(6)"
-                                class="w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">6</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="cardGrid"></div>
-        </div>
-
-        <div class="w-full lg:w-[450px] xl:w-[520px] sidebar-sticky">
-            <!-- 选项卡导航 -->
-            <div class="flex p-1.5 bg-slate-200/50 backdrop-blur-sm rounded-2xl mb-6">
-                <button onclick="switchTab('basic')" id="btn-tab-basic"
-                    class="tab-btn active flex-1 py-2.5 rounded-xl text-sm font-black transition-all">基础模拟</button>
-                <button onclick="switchTab('advanced')" id="btn-tab-advanced"
-                    class="tab-btn flex-1 py-2.5 rounded-xl text-sm font-black text-slate-500 hover:text-slate-700 transition-all">高级推演</button>
-            </div>
-
-            <div id="tab-basic">
-                <section class="space-y-4">
-                    <!-- 顶部操作区：收敛阴影以消除渲染残留 -->
-                    <button onclick="doSim()"
-                        class="w-full bg-slate-800 text-white py-4 rounded-xl font-black text-lg shadow-sm hover:bg-slate-700 hover:shadow-indigo-500/30 hover:scale-[1.01] active:scale-[0.98] transition-all flex justify-center items-center gap-2 group relative"
-                        style="backface-visibility: hidden;">
-                        <span class="group-hover:rotate-12 transition-transform">🔥</span>
-                        <span>开始基础模拟</span>
-                    </button>
-
-                    <!-- 核心指标卡 -->
-                    <div class="grid grid-cols-2 gap-3">
-                        <!-- 总 DPS -->
-                        <div
-                            class="col-span-2 bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center relative overflow-hidden">
-                            <div class="absolute top-0 right-0 p-3 opacity-10">
-                                <svg class="w-16 h-16 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                                    <path
-                                        d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z">
-                                    </path>
-                                </svg>
-                            </div>
-                            <div class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">当前平均
-                                DPS</div>
-                            <div id="resTotal" class="text-4xl font-black text-slate-800 tracking-tight">0
-                            </div>
-                            <div id="resPercent"
-                                class="text-xs font-bold text-green-500 mt-2 bg-green-50 px-2 py-1 rounded-full">
-                                +0.0%</div>
-                        </div>
-
-                        <!-- 细分数据 -->
-                        <div
-                            class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center">
-                            <div class="text-[11px] text-slate-400 font-bold uppercase mb-1">丹青技能伤害</div>
-                            <div id="resCardDps" class="text-lg font-black text-slate-700">0</div>
-                        </div>
-                        <div
-                            class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center">
-                            <div class="text-[11px] text-slate-400 font-bold uppercase mb-1">丹青属性增益</div>
-                            <div id="resBoostDps" class="text-lg font-black text-slate-700">0</div>
-                        </div>
-                    </div>
-
-                    <!-- 波动范围 -->
-                    <div id="rangeInfo" class="hidden bg-slate-50 p-4 rounded-xl border border-dashed border-slate-200">
-                        <div class="flex justify-between text-[11px] font-bold text-slate-500 mb-2">
-                            <span>最低 <span id="resMin" class="text-slate-700">0</span></span>
-                            <span>最高 <span id="resMax" class="text-slate-700">0</span></span>
-                        </div>
-                        <div
-                            class="relative h-2 bg-slate-100 rounded-full overflow-hidden mb-2 border border-slate-200/50">
-                            <div id="rangeBar"
-                                class="absolute h-full bg-gradient-to-r from-indigo-400 to-indigo-600 rounded-full transition-all duration-500 shadow-sm"
-                                style="left: 0%; width: 0%;"></div>
-                        </div>
-                        <div class="text-center text-[11px] text-slate-400">
-                            预期波动: ±<span id="resErr">0</span> (95% CI)
-                        </div>
-                    </div>
-
-                    <!-- 图表 -->
-                    <div id="dpsChartInfo"
-                        class="hidden bg-white p-4 rounded-2xl shadow-sm border border-slate-100 h-[250px]">
-                        <div class="text-[11px] font-bold text-slate-400 uppercase mb-2 ml-1">DPS 演进曲线</div>
-                        <canvas id="dpsChart"></canvas>
-                    </div>
-
-                    <!-- 历史记录 -->
-                    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                        <div
-                            class="px-4 py-3 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
-                            <h3 class="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
-                                📜 历史记录
-                            </h3>
-                            <button onclick="clearHistory()"
-                                class="text-[10px] text-slate-400 hover:text-red-500 transition-colors">清空</button>
-                        </div>
-                        <div class="max-h-[300px] overflow-y-auto" id="historyList">
-                            <div class="p-8 text-center text-slate-300 text-xs">暂无模拟数据</div>
-                        </div>
-                    </div>
-                </section>
-
-
-            </div>
-
-            <div id="tab-advanced" class="hidden">
-                <section>
-                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-                        <div class="grid grid-cols-2 gap-4 mb-4">
-                            <div>
-                                <label class="block text-[11px] font-bold text-slate-400 uppercase mb-1">最大费用</label>
-                                <input type="number" id="bfMaxCost" value="15"
-                                    class="w-full border-b font-bold py-1 outline-none text-purple-600 focus:border-purple-400">
-                            </div>
-                            <div>
-                                <label class="block text-[11px] font-bold text-slate-400 uppercase mb-1">演算轮次</label>
-                                <input type="number" id="bfIter" value="5"
-                                    class="w-full border-b font-bold py-1 outline-none text-purple-600 focus:border-purple-400">
+                            <div class="dashboard-item">
+                                <div class="slider-tech-label !mb-1.5 flex items-center justify-between">
+                                    <span class="text-[13px] font-black text-slate-400 uppercase">目标数量</span>
+                                    <span class="val-display !py-0.5 !px-1.5 !text-sm" style="color:#7c3aed;background:#f5f3ff;border-color:#ddd6fe"><span id="targetVal">1</span>个</span>
+                                </div>
+                                <input type="range" id="targetCount" min="1" max="15" value="1" class="w-full">
                             </div>
                         </div>
 
-                        <div class="flex gap-2">
-                            <button onclick="startBruteForce()" id="btnStartBF"
-                                class="flex-1 bg-purple-500 text-white py-3 rounded-xl font-bold shadow-lg shadow-purple-200 hover:bg-purple-600 transition-all flex justify-center items-center gap-2">
-                                <span>🚀 开始高级推演</span>
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 px-2">
+                            <h2 class="font-black text-slate-800 flex items-center gap-2">
+                                <span class="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></span>
+                                阵容编成
+                                <span id="feeLabel" class="ml-2 text-[15px] px-2 py-0.5 rounded-full font-black bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase">0 / 15 费</span>
+                            </h2>
+                            <div class="flex flex-wrap gap-3">
+                                <div class="flex p-1 bg-slate-200/50 rounded-xl">
+                                    <button id="fullDeck" class="px-3 py-1.5 text-[13px] font-black text-slate-600 hover:text-indigo-600 hover:bg-white rounded-lg transition-all">全选</button>
+                                    <button data-element="fire" class="element-select-btn px-3 py-1.5 text-[13px] font-black text-red-500 hover:bg-white rounded-lg transition-all">火</button>
+                                    <button data-element="ice" class="element-select-btn px-3 py-1.5 text-[13px] font-black text-cyan-600 hover:bg-white rounded-lg transition-all">冰</button>
+                                    <button data-element="wood" class="element-select-btn px-3 py-1.5 text-[13px] font-black text-emerald-600 hover:bg-white rounded-lg transition-all">木</button>
+                                    <button data-element="thunder" class="element-select-btn px-3 py-1.5 text-[13px] font-black text-violet-600 hover:bg-white rounded-lg transition-all">雷</button>
+                                    <button id="clearDeck" class="px-3 py-1.5 text-[13px] font-black text-slate-600 hover:text-red-500 hover:bg-white rounded-lg transition-all">重置</button>
+                                </div>
+                                <div class="flex p-1 bg-slate-200/50 rounded-xl items-center">
+                                    <span class="px-2 text-[11px] font-black text-slate-400 uppercase tracking-tighter">★</span>
+                                    <div class="flex gap-0.5">
+                                        <button data-star="0" class="star-batch-btn w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">0</button>
+                                        <button data-star="1" class="star-batch-btn w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">1</button>
+                                        <button data-star="2" class="star-batch-btn w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">2</button>
+                                        <button data-star="3" class="star-batch-btn w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">3</button>
+                                        <button data-star="4" class="star-batch-btn w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">4</button>
+                                        <button data-star="5" class="star-batch-btn w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">5</button>
+                                        <button data-star="6" class="star-batch-btn w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">6</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="cardGrid"></div>
+                    </div>
+
+                    <div class="w-full xl:w-[450px] 2xl:w-[520px]">
+                        <div class="flex p-1.5 bg-slate-200/50 backdrop-blur-sm rounded-2xl mb-6">
+                            <button id="btn-tab-basic" class="tab-btn active flex-1 py-2.5 rounded-xl text-sm font-black transition-all">基础模拟</button>
+                            <button id="btn-tab-advanced" class="tab-btn flex-1 py-2.5 rounded-xl text-sm font-black text-slate-500 hover:text-slate-700 transition-all">高级推演</button>
+                        </div>
+
+                        <section id="tab-basic" class="space-y-4">
+                            <button id="runButton" class="w-full bg-slate-800 text-white py-4 rounded-xl font-black text-lg shadow-sm hover:bg-slate-700 hover:shadow-indigo-500/30 hover:scale-[1.01] active:scale-[0.98] transition-all flex justify-center items-center gap-2 group relative" style="backface-visibility: hidden;">
+                                <span class="group-hover:rotate-12 transition-transform">🔥</span>
+                                <span>开始基础模拟</span>
                             </button>
-                            <button onclick="stopBruteForce()" id="btnStopBF"
-                                class="hidden w-24 bg-red-100 text-red-500 rounded-xl font-bold hover:bg-red-200 transition-all">
-                                ⏹ 停止
-                            </button>
-                        </div>
 
-                        <!-- 进度条 -->
-                        <div id="bfProgressBox" class="hidden mt-4">
-                            <div class="flex justify-between text-[10px] text-indigo-600 font-black mb-1.5">
-                                <span id="bfStatusText">正在执行推演...</span>
-                                <span id="bfPercent">0%</span>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="col-span-2 bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center relative overflow-hidden">
+                                    <div class="absolute top-0 right-0 p-3 opacity-10">
+                                        <svg class="w-16 h-16 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"></path>
+                                        </svg>
+                                    </div>
+                                    <div class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">当前平均 DPS</div>
+                                    <div id="avgDps" class="text-4xl font-black text-slate-800 tracking-tight">0.00</div>
+                                    <div id="simMeta" class="text-xs font-bold text-green-500 mt-2 bg-green-50 px-2 py-1 rounded-full">240s · 1 目标 · 200 次</div>
+                                </div>
+                                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center">
+                                    <div class="text-[11px] text-slate-400 font-bold uppercase mb-1">最低 DPS</div>
+                                    <div id="dpsMin" class="text-lg font-black text-slate-700">0.00</div>
+                                </div>
+                                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center">
+                                    <div class="text-[11px] text-slate-400 font-bold uppercase mb-1">最高 DPS</div>
+                                    <div id="dpsMax" class="text-lg font-black text-slate-700">0.00</div>
+                                </div>
                             </div>
-                            <div class="h-2.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
-                                <div id="bfProgressBar"
-                                    class="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-300 progress-shimmer"
-                                    style="width: 0%"></div>
-                            </div>
-                        </div>
 
-                        <div id="bfPlaceholder" class="empty-placeholder">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z">
-                                </path>
-                            </svg>
-                            <p class="text-xs font-black">等待推演指令</p>
-                            <p class="text-[10px] opacity-60 mt-1 uppercase font-bold tracking-widest">Awaiting Command
-                            </p>
-                        </div>
-
-                        <!-- 结果列表 -->
-                        <div id="bfResultBox" class="mt-4 hidden">
-                            <div class="text-[10px] font-bold text-slate-400 uppercase mb-2">推演结果 (Top 10)</div>
-                            <div id="bfResultList" class="space-y-2">
-                                <!-- Items -->
+                            <div id="rangeInfo" class="bg-slate-50 p-4 rounded-xl border border-dashed border-slate-200">
+                                <div class="flex justify-between text-[11px] font-bold text-slate-500 mb-2">
+                                    <span>最低 <span id="rangeMin" class="text-slate-700">0.00</span></span>
+                                    <span>最高 <span id="rangeMax" class="text-slate-700">0.00</span></span>
+                                </div>
+                                <div class="relative h-2 bg-slate-100 rounded-full overflow-hidden mb-2 border border-slate-200/50">
+                                    <div id="rangeBar" class="absolute h-full bg-gradient-to-r from-indigo-400 to-indigo-600 rounded-full transition-all duration-500 shadow-sm" style="left: 0%; width: 0%;"></div>
+                                </div>
+                                <div class="text-center text-[11px] text-slate-400">预期波动: ±<span id="dpsCi">0.00</span> (95% CI)</div>
                             </div>
+
+                            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 h-[250px]">
+                                <div class="text-[11px] font-bold text-slate-400 uppercase mb-2 ml-1">DPS 演进曲线</div>
+                                <canvas id="dpsChart"></canvas>
+                            </div>
+
+                            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                                <div class="px-4 py-3 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+                                    <h3 class="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">📜 输出拆解</h3>
+                                </div>
+                                <div class="grid grid-cols-1 gap-4 p-4">
+                                    <div class="detail-card">
+                                        <h3>按卡牌贡献</h3>
+                                        <ul id="cardBreakdown"></ul>
+                                    </div>
+<!--                                    <div class="detail-card">-->
+<!--                                        <h3>按机制贡献</h3>-->
+<!--                                        <ul id="mechanicBreakdown"></ul>-->
+<!--                                    </div>-->
+                                    <div class="detail-card">
+                                        <h3>激化触发次数</h3>
+                                        <ul id="amplifyList"></ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <div id="tab-advanced" class="hidden">
+                            <section>
+                                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                                    <div class="grid grid-cols-2 gap-4 mb-4">
+                                        <div>
+                                            <label class="block text-[11px] font-bold text-slate-400 uppercase mb-1">最大费用</label>
+                                            <input type="number" id="bfMaxCost" value="15" class="w-full border-b font-bold py-1 outline-none text-purple-600 focus:border-purple-400 bg-transparent">
+                                        </div>
+                                        <div>
+                                            <label class="block text-[11px] font-bold text-slate-400 uppercase mb-1">演算轮次</label>
+                                            <input type="number" id="bfIter" value="20" class="w-full border-b font-bold py-1 outline-none text-purple-600 focus:border-purple-400 bg-transparent">
+                                        </div>
+                                    </div>
+
+                                    <div class="flex gap-2">
+                                        <button id="btnStartBF" class="flex-1 bg-purple-500 text-white py-3 rounded-xl font-bold shadow-lg shadow-purple-200 hover:bg-purple-600 transition-all flex justify-center items-center gap-2">
+                                            <span>🚀 开始高级推演</span>
+                                        </button>
+                                        <button id="btnStopBF" class="hidden w-24 bg-red-100 text-red-500 rounded-xl font-bold hover:bg-red-200 transition-all">
+                                            ⏹ 停止
+                                        </button>
+                                    </div>
+
+                                    <div id="bfProgressBox" class="hidden mt-4">
+                                        <div class="flex justify-between text-[10px] text-indigo-600 font-black mb-1.5">
+                                            <span id="bfStatusText">正在执行推演...</span>
+                                            <span id="bfPercent">0%</span>
+                                        </div>
+                                        <div class="h-2.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
+                                            <div id="bfProgressBar" class="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-300 progress-shimmer" style="width: 0%"></div>
+                                        </div>
+                                    </div>
+
+                                    <div id="bfPlaceholder" class="empty-placeholder mt-4">
+                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                                        </svg>
+                                        <p class="text-xs font-black">等待推演指令</p>
+                                        <p class="text-[10px] opacity-60 mt-1 uppercase font-bold tracking-widest">Awaiting Command</p>
+                                    </div>
+
+                                    <div id="bfResultBox" class="mt-4 hidden">
+                                        <div class="text-[10px] font-bold text-slate-400 uppercase mb-2">推演结果 (Top 10)</div>
+                                        <div id="bfResultList" class="space-y-2"></div>
+                                    </div>
+                                </div>
+                            </section>
                         </div>
                     </div>
-                </section>
+                </div>
             </div>
-
         </div>
     </div>
 
+    <div class="text-center text-[12px] text-slate-400 font-bold py-6">
+        世外桃源 · 香香卤面馆
+    </div>
 
+    <script src="data.js"></script>
     <script src="engine.js"></script>
-    <script>
-        let selected = new Map();
-
-        function changeNumericValue(id, delta, min, max) {
-            const el = document.getElementById(id);
-            let val = parseInt(el.value) + delta;
-            if (val < min) val = min;
-            if (max !== undefined && val > max) val = max;
-            el.value = val;
-            updateFee();
-        }
-
-        function animateNumber(id, endValue, duration = 800) {
-            const obj = document.getElementById(id);
-            const startValue = parseInt(obj.innerText.replace(/,/g, '')) || 0;
-            if (startValue === endValue) return;
-
-            const startTime = performance.now();
-            function step(currentTime) {
-                const elapsed = currentTime - startTime;
-                const progress = Math.min(elapsed / duration, 1);
-                const current = Math.floor(progress * (endValue - startValue) + startValue);
-                obj.innerText = current.toLocaleString();
-                if (progress < 1) {
-                    requestAnimationFrame(step);
-                }
-            }
-            requestAnimationFrame(step);
-        }
-
-        const races = ["Human", "Beast", "Tool"];
-        const raceConfig = {
-            "Human": { border: "race-human", tag: "tag-human", title: "人" },
-            "Beast": { border: "race-beast", tag: "tag-beast", title: "兽" },
-            "Tool": { border: "race-tool", tag: "tag-tool", title: "器" }
-        };
-
-        const CARDS = window.CARD_DATABASE;
-
-        let dpsChartInstance = null;
-
-        function init() {
-            const grid = document.getElementById('cardGrid');
-
-            let html = '';
-            races.forEach(race => {
-                const raceCards = CARDS.filter(c => c.race === race);
-                const conf = raceConfig[race];
-                const cardsHtml = raceCards.map(c => `
-                            <div id="card-anchor-${c.className}" class="card-box rounded-2xl ${conf.border} relative" onclick="toggle('${c.className}')">
-                                ${selected.has(c.className) ? `<div class="selected-badge">✓</div>` : ''}
-                                <div class="w-full">
-                                    <div class="flex justify-between items-center mb-1">
-                                        <div class="flex items-center gap-2 overflow-hidden">
-                                            <span class="text-[16px] font-black text-slate-800 tracking-tight leading-none truncate">${c.name}</span>
-                                            <span class="text-[11px] font-black px-2 py-0.5 rounded-md ${conf.tag} shrink-0">${conf.title}</span>
-                                        </div>
-                                        <div class="flex flex-col items-end shrink-0 ml-2">
-                                            <span class="text-[10px] bg-gradient-to-br from-slate-50 to-slate-100 text-slate-600 px-2 py-1 rounded-lg font-black tracking-tight border border-slate-200 shadow-sm">${c.fee}</span>
-                                        </div>
-                                    </div>
-                                    
-                                    <div id="star-ui-${c.className}" class="star-ui ${selected.has(c.className) ? '' : 'hidden'}" onclick="event.stopPropagation()">
-                                        <div class="flex items-center gap-3 mt-4 mb-1">
-                                            <div class="flex-1 relative group/slider">
-                                                <input type="range" min="0" max="6" value="${selected.has(c.className) ? selected.get(c.className).level : 6}" 
-                                                    class="w-full h-1.5 star-slider" oninput="updateLv('${c.className}', this.value)">
-                                                <div class="absolute -top-7 left-[calc(var(--p,100%)-10px)] bg-slate-800 text-white text-[9px] px-1.5 py-0.5 rounded opacity-0 group-hover/slider:opacity-100 transition-opacity pointer-events-none font-black shadow-xl">
-                                                    <span id="bubble-${c.className}">${selected.has(c.className) ? selected.get(c.className).level : 6}</span>★
-                                                </div>
-                                            </div>
-                                            <div class="flex flex-col items-center min-w-[24px]">
-                                                <span class="text-[11px] font-black text-indigo-600 leading-none"><span id="lv-${c.className}">${selected.has(c.className) ? selected.get(c.className).level : 6}</span></span>
-                                                <span class="text-[10px] font-black text-indigo-400">★</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        `).join('');
-
-                html += `<div class="race-section">${cardsHtml}</div>`;
-            });
-
-            grid.innerHTML = html;
-            CARDS.forEach(c => {
-                if (selected.has(c.className)) updateLv(c.className, selected.get(c.className).level);
-                else {
-                    const el = document.querySelector(`#star-ui-${c.className} input`);
-                    if (el) el.style.backgroundSize = '100% 100%';
-                }
-            });
-        }
-
-        function toggle(name) {
-            const node = document.getElementById(`card-anchor-${name}`);
-            const starUi = document.getElementById(`star-ui-${name}`);
-            if (selected.has(name)) {
-                selected.delete(name);
-                node.classList.remove('selected');
-                starUi.classList.add('hidden');
-                // 移除勋章
-                const badge = node.querySelector('.selected-badge');
-                if (badge) badge.remove();
-            } else {
-                selected.set(name, { name, level: 6 });
-                node.classList.add('selected');
-                starUi.classList.remove('hidden');
-                // 添加勋章
-                node.insertAdjacentHTML('afterbegin', `<div class="selected-badge">✓</div>`);
-            }
-            updateFee();
-        }
-
-        function updateLv(name, val) {
-            if (selected.has(name)) {
-                selected.get(name).level = parseInt(val);
-                document.getElementById(`lv-${name}`).innerText = val;
-                document.getElementById(`bubble-${name}`).innerText = val;
-
-                const slider = document.querySelector(`#star-ui-${name} input`);
-                if (slider) {
-                    const pct = (val / 6 * 100);
-                    slider.style.backgroundSize = pct + '% 100%';
-                    slider.parentElement.style.setProperty('--p', `${pct}%`);
-                }
-            }
-        }
-
-        function updateFee() {
-            let total = 0;
-            selected.forEach(v => {
-                const info = CARDS.find(c => c.className === v.name);
-                total += info.fee;
-            });
-            const label = document.getElementById('feeLabel');
-            label.innerText = `${total} / 25 费`;
-
-            const baseStyle = "ml-2 text-[15px] px-2 py-0.5 rounded-full font-black transition-all duration-300 ";
-            if (total > 25) {
-                label.className = baseStyle + "fee-warning";
-            } else {
-                label.className = baseStyle + "bg-emerald-50 text-emerald-600 border border-emerald-100";
-            }
-        }
-
-
-        function doSim() {
-            if (selected.size === 0) return alert("请先选卡");
-
-            const btn = document.querySelector('button[onclick="doSim()"]');
-            const resPanel = document.getElementById('resTotal').parentElement;
-            const originalText = btn.innerHTML;
-
-            btn.innerHTML = `<span class="flex items-center gap-2 justify-center">CORE 解析中<span class="animate-bounce">.</span><span class="animate-bounce" style="animation-delay: 0.2s">.</span><span class="animate-bounce" style="animation-delay: 0.4s">.</span></span>`;
-            btn.disabled = true;
-            resPanel.classList.add('parsing-mode');
-
-            setTimeout(() => {
-                const deckConfig = Array.from(selected.values()).map(val => {
-                    const cardMeta = CARDS.find(c => c.className === val.name);
-                    return { classRef: cardMeta.classRef, level: val.level };
-                });
-
-                const baseAtk = parseInt(document.getElementById('baseAtk').value);
-                const baseDps = parseInt(document.getElementById('baseDps').value);
-                const simTime = parseInt(document.getElementById('simTime').value);
-                const iterations = parseInt(document.getElementById('simIter').value);
-                const targetCount = parseInt(document.getElementById('targetCount').value) || 1;
-
-                let results = [];
-                for (let i = 0; i < iterations; i++) {
-                    const currentDeck = deckConfig.map(c => new c.classRef(c.level));
-                    const engine = new RaceCombatEngine(currentDeck, baseAtk, baseDps, targetCount);
-                    results.push(engine.simulate(simTime));
-                }
-
-                const totals = results.map(r => r.total);
-                const avgTotal = totals.reduce((a, b) => a + b, 0) / iterations;
-                const avgCard = results.reduce((a, b) => a + b.card_dps, 0) / iterations;
-                const avgBoost = results.reduce((a, b) => a + b.boost_dps, 0) / iterations;
-                const minVal = Math.min(...totals);
-                const maxVal = Math.max(...totals);
-
-                const stdDev = Math.sqrt(totals.map(x => Math.pow(x - avgTotal, 2)).reduce((a, b) => a + b) / iterations);
-                const ci95 = 1.96 * (stdDev / Math.sqrt(iterations));
-
-                animateNumber('resTotal', Math.round(avgTotal));
-                animateNumber('resCardDps', Math.round(avgCard));
-                animateNumber('resBoostDps', Math.round(avgBoost));
-
-                const increaseDps = Math.round(avgTotal - baseDps).toLocaleString();
-                document.getElementById('resPercent').innerText = `相比无丹青提升 +${((avgTotal - baseDps) / baseDps * 100).toFixed(1)}% (${increaseDps})`;
-
-                document.getElementById('rangeInfo').classList.remove('hidden');
-                document.getElementById('dpsChartInfo').classList.remove('hidden');
-                document.getElementById('resMin').innerText = Math.round(minVal).toLocaleString();
-                document.getElementById('resMax').innerText = Math.round(maxVal).toLocaleString();
-                document.getElementById('resErr').innerText = Math.round(ci95).toLocaleString();
-
-                const rangePercent = ((2 * ci95) / (maxVal - minVal + 1)) * 100;
-                const leftPercent = ((avgTotal - ci95 - minVal) / (maxVal - minVal + 1)) * 100;
-                document.getElementById('rangeBar').style.left = Math.max(0, leftPercent) + "%";
-                document.getElementById('rangeBar').style.width = Math.min(100, rangePercent) + "%";
-
-                addHistory(Math.round(avgTotal), ci95);
-                const historyLength = results[0].dpsHistory.length;
-                let averageCurve = new Array(historyLength).fill(0);
-
-                for (let i = 0; i < historyLength; i++) {
-                    let sum = 0;
-                    for (let j = 0; j < iterations; j++) {
-                        sum += results[j].dpsHistory[i];
-                    }
-                    averageCurve[i] = Math.round(sum / iterations);
-                }
-                renderChart(averageCurve, simTime);
-
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-                resPanel.classList.remove('parsing-mode');
-            }, 500);
-        }
-
-        function renderChart(curveData, totalTime) {
-            const ctx = document.getElementById('dpsChart').getContext('2d');
-            if (dpsChartInstance) dpsChartInstance.destroy();
-
-            // 创建渐变背景
-            const gradient = ctx.createLinearGradient(0, 0, 0, 200);
-            gradient.addColorStop(0, 'rgba(99, 102, 241, 0.2)');
-            gradient.addColorStop(1, 'rgba(99, 102, 241, 0.0)');
-
-            const labels = curveData.map((_, i) => (i + 1) + 's');
-
-            dpsChartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: '平均 DPS',
-                        data: curveData,
-                        borderColor: '#6366f1',
-                        backgroundColor: gradient,
-                        borderWidth: 3,
-                        pointRadius: 0,
-                        fill: true,
-                        tension: 0.4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    layout: {
-                        padding: {
-                            bottom: 10
-                        }
-                    },
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            mode: 'index',
-                            intersect: false,
-                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                            padding: 10,
-                            titleFont: { size: 10, weight: 'bold' },
-                            bodyFont: { size: 12, weight: '900' }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            display: true,
-                            grid: { display: false },
-                            ticks: {
-                                padding: 2,
-                                maxRotation: 0,
-                                autoSkip: true,
-                                maxTicksLimit: 6,
-                                font: { size: 9, weight: 'bold' },
-                                color: '#94a3b8'
-                            }
-                        },
-                        y: {
-                            beginAtZero: false,
-                            grid: { color: 'rgba(0,0,0,0.03)', drawTicks: false },
-                            ticks: {
-                                font: { size: 10, weight: 'bold' },
-                                color: '#94a3b8',
-                                callback: v => (v >= 10000 ? (v / 1000).toFixed(0) + 'K' : v)
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        function highlightCard(className, active) {
-            const el = document.getElementById(`card-anchor-${className}`);
-            if (el) {
-                if (active) el.classList.add('card-anchor-active');
-                else el.classList.remove('card-anchor-active');
-            }
-        }
-
-        function addHistory(dps, error) {
-            const list = document.getElementById('historyList');
-            if (list.innerText.includes("暂无")) list.innerHTML = '';
-
-            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-            const lineupCards = Array.from(selected.values()).map(s => {
-                const meta = window.CARD_DATABASE.find(c => c.className === s.name);
-                return { ...s, race: meta ? meta.race : 'Human', fee: meta ? meta.fee : 0 };
-            }).sort((a, b) => b.fee - a.fee);
-
-            const totalFee = lineupCards.reduce((sum, c) => sum + c.fee, 0);
-            const lineupHtml = lineupCards.map(card => {
-                const chineseName = window.CARD_NAME_MAP[card.name] || card.name;
-                const starPart = card.level === 6 ? '' : `<span class="opacity-60 ml-0.5">${card.level}★</span>`;
-                const raceClass = `tag-${card.race.toLowerCase()}`;
-                return `<span class="lineup-tag ${raceClass}" onmouseenter="highlightCard('${card.name}', true)" onmouseleave="highlightCard('${card.name}', false)">${chineseName}${starPart}</span>`;
-            }).join("");
-
-            const item = `
-                <div onclick="copyAndRestore('${lineupCards.map(c => (window.CARD_NAME_MAP[c.name] || c.name) + (c.level === 6 ? '' : `(${c.level}★)`)).join(" + ")}', event)" 
-                     class="group relative p-3 mb-3 transition-all duration-300 cursor-pointer overflow-hidden rounded-2xl border border-white/40 bg-white/40 backdrop-blur-md hover:bg-white/80 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:scale-[1.01] active:scale-[0.99]">
-                    
-                    <div class="absolute -right-10 -top-10 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl transition-opacity group-hover:opacity-100 opacity-0"></div>
-                    
-                    <div class="flex items-center gap-4 relative z-10">
-                        <div class="text-left shrink-0 min-w-[95px] border-r border-slate-200/40 pr-3 flex flex-col justify-center">
-                            <div class="flex items-baseline gap-1 mb-1">
-                                <span class="text-[16px] font-black text-slate-800 leading-none tracking-tight">
-                                    ${dps.toLocaleString()}
-                                </span>
-                                <span class="text-[9px] font-bold text-slate-400 opacity-80 italic">DPS</span>
-                            </div>
-                            <div class="text-[10px] text-indigo-500/80 font-black leading-none mb-2">
-                                ±${Math.round(error).toLocaleString()}
-                            </div>
-                            <div class="flex items-center gap-1.5 pt-1 border-t border-slate-200/20">
-                                <span class="text-[9px] text-slate-400 font-mono font-medium">${time}</span>
-                                <span class="w-1 h-1 bg-slate-300 rounded-full opacity-40"></span>
-                                <span class="px-1.5 py-0.5 rounded-md bg-slate-100 text-[8px] font-black text-slate-500 leading-none uppercase tracking-tighter border border-slate-200/50">${totalFee}</span>
-                            </div>
-                        </div>
-                        
-                        <div class="flex-1 min-w-0">
-                             <div class="flex flex-wrap gap-1.5 mb-1.5">${lineupHtml}</div>
-                             <div class="flex items-center gap-1.5 translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
-                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                <span class="text-[9px] text-emerald-600 font-black uppercase tracking-widest">点击复制并还原</span>
-                             </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            list.insertAdjacentHTML('afterbegin', item);
-        }
-
-        function clearHistory() {
-            const list = document.getElementById('historyList');
-            list.innerHTML = '<div class="p-8 text-center text-slate-300">暂无模拟数据</div>';
-        }
-
-        function batchSetStars(s) {
-            selected.forEach((v, k) => {
-                v.level = s;
-                document.getElementById(`lv-${k}`).innerText = s;
-                const input = document.querySelector(`#star-ui-${k} input`);
-                if (input) {
-                    input.value = s;
-                    input.style.backgroundSize = (s / 6 * 100) + '% 100%';
-                }
-            });
-        }
-
-        function clearSelection() {
-            selected.clear();
-            init();
-            updateFee();
-        }
-
-        function reset() {
-            clearSelection();
-        }
-
-        function selectAll() {
-            const allNames = window.CARD_DATABASE.map(c => c.className);
-            allNames.forEach(n => {
-                if (!selected.has(n)) toggle(n);
-            });
-        }
-
-        document.getElementById('simTime').oninput = function () {
-            document.getElementById('timeVal').innerText = this.value;
-            const pct = (this.value - 30) / (600 - 30) * 100;
-            this.style.background = `linear-gradient(to right, var(--primary) ${pct}%, #e2e8f0 0%)`;
-        };
-        document.getElementById('simIter').oninput = function () {
-            document.getElementById('iterVal').innerText = this.value;
-            const pct = (this.value - 1) / (200 - 1) * 100;
-            this.style.background = `linear-gradient(to right, var(--primary) ${pct}%, #e2e8f0 0%)`;
-        };
-
-        let bfWorkerPool = [];
-        let isStopped = false;
-
-        /**
-         * 组合生成算法 (Backtracking)
-         * 移至主线程以方便任务预处理
-         */
-        function generateCombos(availableCards, maxCost) {
-            const results = [];
-            const sorted = [...availableCards].sort((a, b) => b.fee - a.fee);
-
-            function backtrack(start, current, currentCost) {
-                if (currentCost > maxCost) return;
-                if (current.length > 0) {
-                    results.push({
-                        cost: currentCost,
-                        deckRef: [...current]
-                    });
-                }
-                for (let i = start; i < sorted.length; i++) {
-                    const card = sorted[i];
-                    if (currentCost + card.fee <= maxCost) {
-                        current.push(card);
-                        backtrack(i + 1, current, currentCost + card.fee);
-                        current.pop();
-                    }
-                }
-            }
-            backtrack(0, [], 0);
-            return results;
-        }
-
-        async function startBruteForce() {
-            isStopped = true;
-            if (bfWorkerPool.length > 0) {
-                bfWorkerPool.forEach(w => w.terminate());
-                bfWorkerPool = [];
-            }
-
-            isStopped = false;
-            const btn = document.getElementById('btnStartBF');
-            const progressBox = document.getElementById('bfProgressBox');
-            const progressBar = document.getElementById('bfProgressBar');
-            const statusText = document.getElementById('bfStatusText');
-            const percentText = document.getElementById('bfPercent');
-            const resultBox = document.getElementById('bfResultBox');
-            const resultList = document.getElementById('bfResultList');
-
-            const maxCost = parseInt(document.getElementById('bfMaxCost').value) || 15;
-            const iterations = parseInt(document.getElementById('bfIter').value) || 5;
-            const baseAtk = parseInt(document.getElementById('baseAtk').value);
-            const baseDps = parseInt(document.getElementById('baseDps').value);
-            const simTime = parseInt(document.getElementById('simTime').value);
-            const targetCount = parseInt(document.getElementById('targetCount').value) || 1;
-
-            let pool = [];
-            if (selected.size === 0) {
-                if (!confirm("当前未选中任何卡片，是否使用【全丹青 6★】进行推演？(计算量可能较大)")) return;
-                pool = window.CARD_DATABASE.map(c => ({ className: c.className, name: c.name, fee: c.fee, level: 6 }));
-            } else {
-                pool = Array.from(selected.values()).map(v => {
-                    const meta = window.CARD_DATABASE.find(c => c.className === v.name);
-                    return { className: v.name, name: meta.name, fee: meta.fee, level: v.level };
-                });
-            }
-
-            // UI 准备
-            btn.disabled = true;
-            btn.innerHTML = `<svg class="animate-spin h-5 w-5 mr-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 正在推演...`;
-            document.getElementById('btnStopBF').classList.remove('hidden');
-            const placeholder = document.getElementById('bfPlaceholder');
-            if (placeholder) placeholder.style.display = 'none';
-            resultBox.classList.add('hidden');
-            progressBox.classList.remove('hidden');
-
-            statusText.innerText = "正在生成组合...";
-            const rawCombos = generateCombos(pool, maxCost);
-            let maxFound = 0;
-            rawCombos.forEach(c => { if (c.cost > maxFound) maxFound = c.cost; });
-            const allCombos = rawCombos.filter(c => c.cost === maxFound);
-
-            // 给每个组合分配一个唯一 ID，方便精准还原
-            allCombos.forEach((c, idx) => c.id = idx);
-
-            if (allCombos.length === 0) {
-                alert("未找到有效组合"); finishBF(); return;
-            }
-
-            // 2. 环境准备：多线程池
-            const threadCount = Math.max(1, (navigator.hardwareConcurrency || 4) - 1);
-            bfWorkerPool = [];
-            for (let i = 0; i < threadCount; i++) {
-                bfWorkerPool.push(new Worker('sim_worker.js'));
-            }
-
-            // 辅助：并行分发
-            const runParallel = (combos, iters, onProgress) => {
-                return new Promise((resolve) => {
-                    let finishedWorkers = 0;
-                    let processedCombos = 0;
-                    let allResults = [];
-                    const chunkSize = Math.ceil(combos.length / threadCount);
-
-                    bfWorkerPool.forEach((worker, i) => {
-                        const start = i * chunkSize;
-                        const end = Math.min(combos.length, (i + 1) * chunkSize);
-                        const chunk = combos.slice(start, end);
-
-                        if (chunk.length === 0) {
-                            finishedWorkers++;
-                            if (finishedWorkers === threadCount) resolve(allResults);
-                            return;
-                        }
-
-                        worker.onerror = (err) => {
-                            console.error("Worker Error:", err);
-                            finishedWorkers++;
-                            if (finishedWorkers === threadCount) resolve(allResults);
-                        };
-
-                        worker.onmessage = (e) => {
-                            if (isStopped) return;
-                            if (e.data.type === 'PROGRESS_TICK') {
-                                processedCombos++;
-                                onProgress(processedCombos, combos.length);
-                            } else if (e.data.type === 'BATCH_DONE') {
-                                allResults = allResults.concat(e.data.results);
-                                finishedWorkers++;
-                                if (finishedWorkers === threadCount) resolve(allResults);
-                            }
-                        };
-
-                        worker.postMessage({
-                            type: 'BATCH',
-                            data: { combos: chunk, baseAtk, baseDps, timeLimit: simTime, iterations: iters, targetCount }
-                        });
-                    });
-                });
-            };
-
-            // 计算总工作量用于动态进度条
-            const w1 = allCombos.length; // Phase 1: 每组 1 次
-            const topN = Math.min(100, w1);
-            const w2 = topN * iterations; // Phase 2: 每组 iterations 次
-            const wTotal = w1 + w2;
-
-            // Phase 1：海选 (每组合 1 次迭代)
-            statusText.innerText = `[1/2] 正在海选 (${w1} 组)...`;
-            progressBar.style.width = '0%';
-            const phase1Results = await runParallel(allCombos, 1, (f, t) => {
-                const p = Math.floor((f / wTotal) * 100);
-                progressBar.style.width = p + '%';
-                percentText.innerText = p + '%';
-                statusText.innerText = `[1/2] 海选进度: ${f} / ${t}`;
-            });
-
-            if (isStopped) return;
-
-            // Phase 2：精选 (前 100 名跑完整 iterations)
-            const topTier = phase1Results.sort((a, b) => b.dps - a.dps).slice(0, topN);
-            statusText.innerText = `[2/2] 正在精选 Top ${topN}...`;
-
-            // 还原 deckRef (通过 ID 精准查找)
-            const detailedTopTier = topTier.map(t => allCombos[t.id]).filter(Boolean);
-
-            const finalResults = await runParallel(detailedTopTier, iterations, (f, t) => {
-                // 精选阶段每完成一个组合，相当于完成了 iterations 次模拟
-                const currentProcessed = w1 + (f * iterations);
-                const p = Math.min(99, Math.floor((currentProcessed / wTotal) * 100));
-                progressBar.style.width = p + '%';
-                percentText.innerText = p + '%';
-                statusText.innerText = `[2/2] 精选进度: ${f} / ${t}`;
-            });
-
-            if (isStopped) return;
-
-            renderBFResults(finalResults);
-            finishBF();
-        }
-
-        function stopBruteForce() {
-            isStopped = true;
-            bfWorkerPool.forEach(w => w.terminate());
-            bfWorkerPool = [];
-            document.getElementById('bfStatusText').innerText = "已手动停止";
-            finishBF();
-        }
-
-        function finishBF() {
-            const btn = document.getElementById('btnStartBF');
-            btn.disabled = false;
-            btn.innerHTML = `🚀 开始高级推演`;
-            document.getElementById('btnStopBF').classList.add('hidden');
-            if (document.getElementById('bfStatusText').innerText !== "已手动停止") {
-                document.getElementById('bfStatusText').innerText = "完成";
-                document.getElementById('bfPercent').innerText = "100%";
-                document.getElementById('bfProgressBar').style.width = '100%';
-            }
-        }
-
-        function renderBFResults(data) {
-            const list = document.getElementById('bfResultList');
-            const box = document.getElementById('bfResultBox');
-            const placeholder = document.getElementById('bfPlaceholder');
-            if (placeholder) {
-                placeholder.style.display = 'none';
-                placeholder.classList.add('hidden');
-            }
-            box.classList.remove('hidden');
-
-            const top = data.sort((a, b) => b.dps - a.dps).slice(0, 10);
-            const maxDps = top[0].dps;
-
-            list.innerHTML = top.map((item, idx) => {
-                const isFirst = idx === 0;
-                const rankColor = isFirst ? 'bg-amber-400 text-white shadow-sm' : (idx < 3 ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-500');
-                const cardBg = isFirst ? 'bg-gradient-to-r from-amber-50 to-white border-amber-200 shadow-md scale-[1.01] z-10' : 'bg-white/50 border-white hover:bg-white hover:shadow-lg';
-                const badge = isFirst ? '🏆' : `${idx + 1}`;
-                const barWidth = (item.dps / maxDps * 100) + '%';
-
-                return `
-                    <div onclick="copyAndRestore('${item.deckDetails.join(' + ')}', event)" 
-                         class="group relative border p-3 rounded-2xl transition-all cursor-pointer overflow-hidden mb-2 ${cardBg}">
-                        <div class="absolute bottom-0 left-0 h-0.5 bg-indigo-500/20" style="width: ${barWidth}"></div>
-                        
-                        <div class="flex items-center justify-between gap-3 relative z-10">
-                            <div class="flex items-center gap-3 flex-1 overflow-hidden">
-                            <span class="shrink-0 w-7 h-7 rounded-lg ${rankColor} flex items-center justify-center font-black text-[11px]">${badge}</span>
-                            <div class="flex-1 min-w-0">
-                                <div class="flex flex-wrap gap-1 mb-1">
-                                    ${item.deckDetails.map(d => {
-                    let name = d;
-                    let star = '';
-                    if (d.includes('(')) {
-                        const match = d.match(/(.+)\((\d+)\)/);
-                        if (match) {
-                            name = match[1];
-                            star = `<span class="opacity-60 ml-0.5">${match[2]}★</span>`;
-                        }
-                    }
-                    const cardMeta = window.CARD_DATABASE.find(c => c.name === name);
-                    const raceClass = cardMeta ? `tag-${cardMeta.race.toLowerCase()}` : '';
-                    const firstClass = isFirst ? '!border-amber-400/50' : '';
-                    return `<span class="lineup-tag !m-0 ${raceClass} ${firstClass}">${name}${star}</span>`;
-                }).join('')}
-                                </div>
-                                    <div class="tip-label text-[9px] text-indigo-500 font-black opacity-0 group-hover:opacity-100 transition-all uppercase leading-none">点击复制并还原</div>
-                                </div>
-                            </div>
-                            
-                            <div class="text-right shrink-0 border-l border-slate-200/60 pl-3 min-w-[70px]">
-                                <div class="text-[10px] font-black ${isFirst ? 'text-amber-600' : 'text-slate-400'} uppercase leading-none mb-1">${item.cost} 费</div>
-                                <div class="text-[15px] font-black ${isFirst ? 'text-amber-700' : 'text-slate-900'} font-mono tracking-tighter leading-tight">${Math.round(item.dps).toLocaleString()}</div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-
-
-        function switchTab(tab) {
-            const basic = document.getElementById('tab-basic');
-            const adv = document.getElementById('tab-advanced');
-            const btnBasic = document.getElementById('btn-tab-basic');
-            const btnAdv = document.getElementById('btn-tab-advanced');
-
-            if (tab === 'basic') {
-                basic.classList.remove('hidden');
-                adv.classList.add('hidden');
-                btnBasic.classList.add('active');
-                btnAdv.classList.remove('active');
-            } else {
-                basic.classList.add('hidden');
-                adv.classList.remove('hidden');
-                btnAdv.classList.add('active');
-                btnBasic.classList.remove('active');
-            }
-        }
-
-        async function copyAndRestore(lineupStr, event) {
-            if (event) event.stopPropagation();
-            try {
-                await navigator.clipboard.writeText(lineupStr);
-                const tip = event.currentTarget.querySelector('.tip-label');
-                if (tip) {
-                    const oldText = tip.innerText;
-                    tip.innerText = "已复制阵容 !";
-                    tip.classList.remove('text-indigo-500');
-                    tip.classList.add('text-emerald-500', 'opacity-100');
-                    setTimeout(() => {
-                        tip.innerText = oldText;
-                        tip.classList.remove('text-emerald-500', 'opacity-100');
-                        tip.classList.add('text-indigo-500');
-                    }, 1500);
-                }
-            } catch (e) {
-                console.error("Copy failed", e);
-            }
-            restoreLineup(lineupStr);
-        }
-
-        function restoreLineup(lineupStr) {
-            clearSelection();
-            const parts = lineupStr.split(' + ');
-            parts.forEach((p, idx) => {
-                let name = p;
-                let lv = 6;
-                if (p.includes('(')) {
-                    name = p.split('(')[0];
-                    lv = parseInt(p.match(/\d+/)[0]);
-                }
-                // 查找对应的 className
-                const meta = window.CARD_DATABASE.find(c => c.name === name);
-                if (meta) {
-                    setTimeout(() => {
-                        toggle(meta.className);
-                        updateLv(meta.className, lv);
-                        // 同步滑块和显示文字
-                        const input = document.querySelector(`#star-ui-${meta.className} input`);
-                        if (input) {
-                            input.value = lv;
-                            const pct = (lv / 6 * 100);
-                            input.style.backgroundSize = pct + '% 100%';
-                            input.parentElement.style.setProperty('--p', `${pct}%`);
-                        }
-                        const lvLabel = document.getElementById(`lv-${meta.className}`);
-                        if (lvLabel) lvLabel.innerText = lv;
-
-                        // 触发波纹唤醒动画
-                        const node = document.getElementById(`card-anchor-${meta.className}`);
-                        if (node) {
-                            node.classList.remove('wake-up');
-                            void node.offsetWidth; // 触发回流
-                            node.classList.add('wake-up');
-                        }
-                    }, idx * 60);
-                }
-            });
-        }
-
-        document.getElementById('simTime').oninput = function () {
-            document.getElementById('timeVal').innerText = this.value;
-            const pct = (this.value - 30) / (600 - 30) * 100;
-            this.style.backgroundSize = pct + '% 100%';
-        };
-
-        document.getElementById('simIter').oninput = function () {
-            document.getElementById('iterVal').innerText = this.value;
-            const pct = (this.value - 1) / (200 - 1) * 100;
-            this.style.backgroundSize = pct + '% 100%';
-        };
-
-        // 初始化滑块背景色彩
-        const initSliderBg = () => {
-            const t = document.getElementById('simTime');
-            const i = document.getElementById('simIter');
-            if (t) {
-                const tpct = (t.value - 30) / (600 - 30) * 100;
-                t.style.backgroundSize = tpct + '% 100%';
-            }
-            if (i) {
-                const ipct = (i.value - 1) / (200 - 1) * 100;
-                i.style.backgroundSize = ipct + '% 100%';
-            }
-        };
-
-        initSliderBg();
-        init();
-    </script>
+    <script src="ui.js"></script>
 </body>
-
 </html>

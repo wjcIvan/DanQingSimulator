@@ -1,611 +1,755 @@
-/**
- * 丹青模拟器核心引擎 - JS/Python 逻辑完全同步版
- */
-
-const EVENTS = {
-    ICE: "ice", ICE_D: "ice_d",
-    BURN: "burn", BURN_D: "burn_d",
-    PULSE: "pulse", PULSE_D: "pulse_d",
-    TIME: "time", SNOW_MAN: "qihao"
-};
-
-const BASE_CORE = [225, 449, 674, 898, 1123];
-const INCREMENTS = [11, 22, 33, 44, 55];
-
-const TARGET_DECAY_COEFFICIENTS = [
-    1.00, 0.90, 0.85, 0.81, 0.77, 0.73, 0.69, 0.66,
-    0.63, 0.60, 0.55, 0.51, 0.48, 0.45, 0.42
-];
-
-const getTargetCoefficient = (targetCount) => {
-    if (targetCount <= 0) return 0;
-    if (targetCount >= 15) return 0.42;
-    return TARGET_DECAY_COEFFICIENTS[targetCount - 1];
-};
-
-const pyRound = (val) => Math.round(val * 10) / 10;
-
-const ALL_CARD_CLASSES = [];
-
-class Card {
-    constructor(name, race, fee, level = 6) {
-        this.name = name;
-        this.race = race;
-        this.fee = fee;
-        this.level = level;
-        this.core = BASE_CORE[fee - 1] + level * INCREMENTS[fee - 1];
-        this.internal_timer = 0.0;
+(function (global) {
+    const Data = global.Data || (typeof require !== "undefined" ? require("./data.js") : null);
+    if (!Data) {
+        throw new Error("Data is required before engine.js");
     }
-    check(type) { return false; }
-    trigger(engine, event_dmg = 0) { return 0; }
-}
 
-// --- 1. 人族 (Human) ---
-class YanHong extends Card {
-    constructor(lv) { super("燕虹", "Human", 1, lv); this.dmg_r = 0.28 + 0.02 * lv; this.internal_timer = 6.0; }
-    check(t) { return t === EVENTS.TIME && this.internal_timer >= 6.0; }
-    trigger(e) {
-        this.internal_timer = 0.0;
-        let dmg = e.baseAtk * this.dmg_r;
-        e.cardTotalDmg += dmg * e.effectMod;
-        e.addEvent(EVENTS.ICE, dmg);
+    const ELEMENT_LABELS = {
+        fire: "天火",
+        ice: "玄冰",
+        wood: "苍木",
+        thunder: "神雷"
+    };
+
+    const TICK_MS = 100;
+    const TICK_SECONDS = TICK_MS / 1000;
+
+    function createRng(seed) {
+        let value = seed % 2147483647;
+        if (value <= 0) value += 2147483646;
+        return function next() {
+            value = value * 16807 % 2147483647;
+            return (value - 1) / 2147483646;
+        };
     }
-}
 
-class WenMin extends Card {
-    constructor(lv) { super("文敏", "Human", 2, lv); this.trigger_interval = 16.0 - (lv * 1.0); }
-    check(t) { return t === EVENTS.TIME && this.internal_timer >= this.trigger_interval; }
-    trigger(e) {
-        this.internal_timer = 0;
-        for (let i = 0; i < 3; i++) {
-            let d = e.baseAtk * e.iceRate;
-            e.cardTotalDmg += d * e.effectMod;
-            e.addEvent(EVENTS.ICE, d);
+    function createTarget() {
+        return {
+            burnStacks: 0,
+            burnExpireAt: 0,
+            burnTickAt: 0,
+            combustAt: null,
+            staticOverloadEvents: []
+        };
+    }
+
+    class CombatEngine {
+        constructor(deckConfig, options = {}) {
+            this.duration = Math.max(1, Number(options.duration) || 60);
+            this.targetCount = Math.max(1, Number(options.targetCount) || 1);
+            this.seed = Number(options.seed) || Math.floor(Math.random() * 2147483647);
+            this.rng = createRng(this.seed);
+            this.time = 0;
+            this.deck = this.buildDeck(deckConfig);
+            this.targets = Array.from({ length: this.targetCount }, () => createTarget());
+            this.queue = [];
+            this.delayedEvents = [];
+            this.warnings = [];
+            this.breakdown = {
+                byCard: {},
+                byMechanic: {},
+                byMechanicCount: {}
+            };
+            this.meters = {
+                fire: 0,
+                ice: 0,
+                wood: 0,
+                thunder: 0
+            };
+            this.amplifyTriggers = {
+                fire: 0,
+                ice: 0,
+                wood: 0,
+                thunder: 0
+            };
+            this.timeline = [];
+            this.totalDamage = 0;
+            this.lastSecondSample = 0;
+            this.globalEffects = this.collectGlobalEffects();
+            this.nextThunderFrenzyAt = this.globalEffects.thunder.frenzyCount > 0 ? 0 : Infinity;
+            this.initializeDeckState();
         }
-    }
-}
 
-class QiHao extends Card {
-    constructor(lv) {
-        super("齐昊", "Human", 5, lv);
-        this.internal_timer = 60.0;
-        this.dmg_r = 1.04 + 0.06 * lv;
-        this.is_active = false;
-        this.timer = 0.0;
-        this.shots_fired = 0;
-    }
-
-    check(t) {
-        if (t === EVENTS.ICE || t === EVENTS.ICE_D) {
-            this.internal_timer += 1.0;
-            return false;
+        buildDeck(deckConfig) {
+            return (deckConfig || []).map(item => {
+                const def = Data.getCardDefById(item.id);
+                if (!def) {
+                    throw new Error(`Unknown season2 card id: ${item.id}`);
+                }
+                const level = Math.max(0, Math.min(6, parseInt(item.level, 10) || 0));
+                return {
+                    id: def.id,
+                    name: def.name,
+                    element: def.element,
+                    fee: def.fee,
+                    level,
+                    mechanics: def.mechanics.slice(),
+                    params: Data.resolveCardParams(def, level),
+                    notes: def.notes || [],
+                    state: {}
+                };
+            });
         }
-        if (t === EVENTS.TIME && this.is_active) return true;
-        return t === EVENTS.TIME && this.internal_timer >= 60.0;
-    }
 
-    trigger(e) {
-        if (!this.is_active) {
-            this.is_active = true;
-            this.timer = 0.0;
-            this.shots_fired = 0;
-            this.internal_timer -= 60.0;
-            this.fire(e);
-        } else {
-            this.timer = pyRound(this.timer + 0.1);
-            if (this.shots_fired < 10 && this.timer >= 0.3) {
-                this.fire(e);
-                this.timer = 0.0;
+        collectGlobalEffects() {
+            const effects = {
+                fire: {
+                    burnTickRateBonus: 0,
+                    extraStackChance: 0,
+                    burnApplyProcDamage: 0,
+                    blazeOnBurn: 0,
+                    blazeOnCombust: 0,
+                    combustThreshold: null,
+                    combustDelay: 1.5,
+                    combustDamagePerExtraLayer: 0
+                },
+                ice: {
+                    arrowDamageBonus: 0,
+                    shatterChance: 0,
+                    shatterDamage: 0,
+                    arrowMeterGain: 0,
+                    shatterMeterGain: 0,
+                    stormMeterGain: 0,
+                    triggerThreshold: null
+                },
+                wood: {
+                    pulseDamageBonus: 0,
+                    pulseDamageReductionPerExtraEnemy: 0,
+                    pulseMeterGain: 0,
+                    pulseIntervalReduction: 0,
+                    extraPulseCount: 0,
+                    extraPulseEfficiency: 0,
+                    extraPulseSpacing: 1,
+                    pulseEchoDamage: 0,
+                    pulseEchoDuration: 10,
+                    openingPulseTimes: 0,
+                    openingPulseWindow: 6,
+                    triggerThreshold: null
+                },
+                thunder: {
+                    chainDamageBonus: 0,
+                    chainExtraEnemyBonus: 0,
+                    thunderMeterGain: 0,
+                    staticOverloadDamage: 0,
+                    staticOverloadDuration: 8,
+                    extraTriggerChance: 0,
+                    frenzyEfficiency: 0,
+                    frenzyCount: 0,
+                    frenzyInterval: 30,
+                    triggerThreshold: null
+                }
+            };
+
+            this.deck.forEach(card => {
+                switch (card.id) {
+                    case "sui-shou":
+                        effects.fire.burnTickRateBonus += card.params.tickRateBonus;
+                        effects.fire.extraStackChance += card.params.extraStackChance;
+                        break;
+                    case "two-tail-fox":
+                        effects.fire.burnApplyProcDamage += card.params.procDamage;
+                        break;
+                    case "fierce-tiger":
+                        effects.fire.blazeOnBurn += card.params.burnMeterGain;
+                        effects.fire.blazeOnCombust += card.params.combustMeterGain;
+                        effects.fire.triggerThreshold = card.params.triggerThreshold;
+                        break;
+                    case "six-tail-fox":
+                        effects.fire.combustThreshold = card.params.threshold;
+                        effects.fire.combustDelay = card.params.delay;
+                        effects.fire.combustDamagePerExtraLayer += card.params.damagePerExtraLayer;
+                        break;
+                    case "wen-min":
+                        effects.ice.arrowDamageBonus += card.params.arrowDamageBonus;
+                        break;
+                    case "zuo-gui":
+                        effects.ice.arrowDamageBonus += card.params.damageBonus;
+                        effects.ice.shatterChance += card.params.shatterChance;
+                        effects.ice.shatterDamage += card.params.shatterDamage;
+                        break;
+                    case "shangguan-ce":
+                        effects.ice.arrowMeterGain += card.params.arrowMeterGain;
+                        effects.ice.shatterMeterGain += card.params.shatterMeterGain;
+                        effects.ice.stormMeterGain += card.params.stormMeterGain;
+                        effects.ice.triggerThreshold = card.params.triggerThreshold;
+                        break;
+                    case "cool-pearl":
+                        effects.wood.pulseMeterGain += card.params.meterGain;
+                        effects.wood.triggerThreshold = card.params.triggerThreshold;
+                        break;
+                    case "sacred-wood-dice":
+                        effects.wood.pulseEchoDamage += card.params.echoDamage;
+                        effects.wood.pulseEchoDuration = card.params.echoDuration;
+                        effects.wood.openingPulseTimes += card.params.openingPulseTimes;
+                        effects.wood.openingPulseWindow = Math.max(effects.wood.openingPulseWindow, card.params.openingPulseWindow);
+                        break;
+                    case "lin-feng":
+                        effects.wood.pulseDamageBonus += card.params.damageBonus;
+                        effects.wood.pulseDamageReductionPerExtraEnemy += card.params.reductionPerExtraEnemy;
+                        break;
+                    case "liu-he-mirror":
+                        effects.wood.pulseIntervalReduction += card.params.intervalReduction;
+                        effects.wood.extraPulseCount += card.params.extraPulseCount;
+                        effects.wood.extraPulseEfficiency = Math.max(effects.wood.extraPulseEfficiency, card.params.extraPulseEfficiency);
+                        effects.wood.extraPulseSpacing = card.params.extraPulseSpacing;
+                        break;
+                    case "zi-xiao-gourd":
+                        effects.thunder.thunderMeterGain += card.params.meterGain;
+                        effects.thunder.triggerThreshold = card.params.triggerThreshold;
+                        break;
+                    case "thunder-crystal":
+                        effects.thunder.staticOverloadDamage += card.params.totalDamage;
+                        effects.thunder.staticOverloadDuration = card.params.duration;
+                        break;
+                    case "chain-lightning-wall":
+                        effects.thunder.chainDamageBonus += card.params.damageBonus;
+                        effects.thunder.chainExtraEnemyBonus += card.params.extraEnemyBonus;
+                        break;
+                    case "purple-dragon":
+                        effects.thunder.extraTriggerChance = Math.max(effects.thunder.extraTriggerChance, card.params.extraTriggerChance);
+                        effects.thunder.frenzyEfficiency = Math.max(effects.thunder.frenzyEfficiency, card.params.frenzyEfficiency);
+                        effects.thunder.frenzyCount = Math.max(effects.thunder.frenzyCount, card.params.frenzyCount);
+                        effects.thunder.frenzyInterval = card.params.frenzyInterval;
+                        break;
+                    default:
+                        break;
+                }
+            });
+
+            return effects;
+        }
+
+        initializeDeckState() {
+            this.deck.forEach(card => {
+                switch (card.id) {
+                    case "scarlet-ant":
+                        card.state.nextApplyAt = 0;
+                        break;
+                    case "yan-hong":
+                        card.state.nextShotAt = 0;
+                        break;
+                    case "wen-min":
+                        card.state.nextVolleyAt = Math.max(1, card.params.volleyCooldown);
+                        break;
+                    case "qi-hao":
+                        card.state.cooldownRemaining = 0;
+                        card.state.isBursting = false;
+                        card.state.burstHitsDone = 0;
+                        card.state.nextBurstHitAt = 0;
+                        card.state.burstTickInterval = card.params.burstDuration / card.params.burstHits;
+                        break;
+                    case "folding-fan":
+                        card.state.nextPulseAt = Math.max(1, card.params.interval - this.globalEffects.wood.pulseIntervalReduction);
+                        break;
+                    case "sacred-wood-dice":
+                        card.state.openingPulsesLeft = card.params.openingPulseTimes;
+                        card.state.openingSchedule = [0, 2, 4].slice(0, card.params.openingPulseTimes);
+                        break;
+                    case "thunder-banner":
+                        card.state.nextChainAt = 0;
+                        break;
+                    case "purple-dragon":
+                        card.state.nextFrenzyAt = 0;
+                        break;
+                    default:
+                        break;
+                }
+            });
+        }
+
+        random() {
+            return this.rng();
+        }
+
+        queueEvent(event) {
+            this.queue.push(event);
+        }
+
+        scheduleEvent(triggerAt, handler) {
+            this.delayedEvents.push({ triggerAt, handler });
+        }
+
+        addDamage(amount, cardId, mechanic) {
+            const dmg = Math.max(0, amount || 0);
+            if (dmg <= 0) return;
+            this.totalDamage += dmg;
+            this.breakdown.byCard[cardId] = (this.breakdown.byCard[cardId] || 0) + dmg;
+            this.breakdown.byMechanic[mechanic] = (this.breakdown.byMechanic[mechanic] || 0) + dmg;
+            this.breakdown.byMechanicCount[mechanic] = (this.breakdown.byMechanicCount[mechanic] || 0) + 1;
+        }
+
+        addMeter(element, amount) {
+            if (!amount) return;
+            this.meters[element] += amount;
+            const threshold = this.getElementThreshold(element);
+            if (!threshold) return;
+            while (this.meters[element] >= threshold) {
+                this.meters[element] -= threshold;
+                this.scheduleEvent(this.time + TICK_SECONDS, () => {
+                    this.amplifyTriggers[element] += 1;
+                    this.triggerAmplify(element);
+                });
             }
-            if (this.shots_fired >= 10) {
-                this.is_active = false;
+        }
+
+        triggerAmplify(element) {
+            switch (element) {
+                case "fire": {
+                    [2, 4, 6, 8, 10].forEach(delay => {
+                        this.scheduleEvent(this.time + delay, () => {
+                            this.addDamage(39181, "fierce-tiger", "fire_amplify");
+                        });
+                    });
+                    break;
+                }
+                case "ice": {
+                    this.addDamage(43534, "shangguan-ce", "ice_amplify");
+                    this.scheduleEvent(this.time + 2, () => {
+                        this.addDamage(85327, "shangguan-ce", "ice_amplify");
+                    });
+                    break;
+                }
+                case "wood": {
+                    let tickCount = 0;
+                    [1, 2, 3, 4, 5, 6, 7, 8, 9].forEach(delay => {
+                        this.scheduleEvent(this.time + delay, () => {
+                            this.addDamage(24916, "cool-pearl", "wood_amplify");
+                            tickCount += 1;
+                            if (tickCount % 3 === 0) {
+                                this.addDamage(72108, "cool-pearl", "wood_bloom");
+                            }
+                        });
+                    });
+                    break;
+                }
+                case "thunder": {
+                    this.addDamage(93805 * this.targetCount, "zi-xiao-gourd", "thunder_amplify");
+                    break;
+                }
+                default:
+                    break;
             }
         }
-    }
 
-    fire(e) {
-        let single_dmg = (e.baseAtk * this.dmg_r);
-        e.cardTotalDmg += single_dmg * e.effectMod;
-        e.addEvent(EVENTS.SNOW_MAN, single_dmg);
-        this.shots_fired++;
-    }
-}
-
-class LinFeng extends Card {
-    constructor(lv) {
-        super("林峰", "Human", 3, lv);
-        this.ice_r = 0.3 - 0.05 * lv;
-        this.burn_r = 0.58 - 0.03 * lv;
-        this.lastType = EVENTS.ICE;
-    }
-    check(t) {
-        if (t === EVENTS.ICE) { this.lastType = EVENTS.ICE; return Math.random() >= this.ice_r; }
-        if (t === EVENTS.BURN) { this.lastType = EVENTS.BURN; return Math.random() >= this.burn_r; }
-        return false;
-    }
-    trigger(e, event_dmg, targetIndex = 0) {
-        if (this.lastType === EVENTS.ICE) {
-            e.cardTotalDmg += event_dmg * e.effectMod;
-            e.addEvent(EVENTS.ICE_D, event_dmg);
-        } else {
-            e.addBurnLayer(targetIndex);
-            e.addEvent(EVENTS.BURN_D, 0, targetIndex);
-        }
-    }
-}
-
-class ShangGuanCe extends Card {
-    constructor(lv) { super("上官策", "Human", 2, lv); this.burn_r = 0.62 - 0.02 * lv; }
-    check(t) { return (t === EVENTS.ICE || t === EVENTS.ICE_D) && Math.random() >= this.burn_r; }
-    trigger(e) {
-        e.addBurnLayer(0);
-        e.addEvent(EVENTS.BURN, 0, 0);
-    }
-}
-
-class ZhengDaLi extends Card {
-    constructor(lv) { super("郑大礼", "Human", 3, lv); this.dmg_r = 0.19 + 0.01 * lv; }
-    check(t) { return t === EVENTS.ICE || t === EVENTS.ICE_D || t === EVENTS.SNOW_MAN; }
-    trigger(e, event_dmg, targetIndex = 0) {
-        e.cardTotalDmg += event_dmg * this.dmg_r * e.targetCount * e.targetCoefficient;
-    }
-}
-
-// --- 2. 兽族 (Beast) ---
-class XueDiXiong extends Card {
-    constructor(lv) { super("雪地熊", "Beast", 4, lv); this.buff_stacks = []; this.dmg_r = 0.0038 + 0.0002 * lv; }
-    check(t) {
-        if (t === EVENTS.ICE || t === EVENTS.ICE_D) return true;
-        if (t === EVENTS.TIME && this.buff_stacks.length > 0) return true;
-        return false;
-    }
-    trigger(e, event_dmg) {
-        if (event_dmg > 0) {
-            if (this.buff_stacks.length < 10) this.buff_stacks.push(pyRound(e.time + 10.0));
-        } else {
-            // 时间驱动清理：只清理当前时间已经到达或超过过期时间的 buff
-            while (this.buff_stacks.length > 0 && this.buff_stacks[0] <= e.time) {
-                this.buff_stacks.shift();
+        getElementThreshold(element) {
+            switch (element) {
+                case "fire": return this.globalEffects.fire.triggerThreshold;
+                case "ice": return this.globalEffects.ice.triggerThreshold;
+                case "wood": return this.globalEffects.wood.triggerThreshold;
+                case "thunder": return this.globalEffects.thunder.triggerThreshold;
+                default: return null;
             }
         }
-    }
-    getCurrentRate() { return this.buff_stacks.length * this.dmg_r; }
-}
 
-class BaHuangHuoLong extends Card {
-    constructor(lv) { super("八荒火龙", "Beast", 4, lv); }
-}
+        simulate() {
+            while (this.time < this.duration) {
+                this.time = Number((this.time + TICK_SECONDS).toFixed(4));
+                this.updateCards();
+                this.updateTargets();
+                this.flushQueue();
+                this.sampleTimeline();
+            }
 
-class ScarletGiantAnt extends Card {
-    constructor(lv) { super("猩红巨蚁", "Beast", 1, lv); this.internal_timer = 8.0; this.dmg_r = 0.014 + 0.001 * lv; }
-    check(t) { return t === EVENTS.TIME && this.internal_timer >= 8.0; }
-    trigger(e) {
-        for (let i = 0; i < e.targets.length; i++) {
-            e.targets[i].addBurnLayer();
-            e.addEvent(EVENTS.BURN, 0, i);
+            return this.finalize();
         }
-        this.internal_timer = 0;
-    }
-}
 
-class FireBat extends Card {
-    constructor(lv) { super("火蝠", "Beast", 1, lv); this.burnEfficiency = 100 + (40 + 10 * lv); }
-}
-
-class TwoTailedFox extends Card {
-    constructor(lv) { super("二尾妖狐", "Beast", 2, lv); this.dmg_r = 0.28 + 0.02 * lv; }
-    check(t) { return t === EVENTS.BURN || t === EVENTS.BURN_D; }
-    trigger(e) { e.cardTotalDmg += (e.baseAtk * this.dmg_r); }
-}
-
-class YouMingQuan extends Card {
-    constructor(lv) {
-        super("幽冥犬", "Beast", 2, lv);
-        this.trigger_interval = 10.0 - (lv * 1.0);
-        this.internal_timer = this.trigger_interval;
-    }
-    check(t) {
-        return t === EVENTS.TIME && this.internal_timer >= this.trigger_interval;
-    }
-    trigger(e) {
-        for (let i = 0; i < e.targets.length; i++) {
-            e.targets[i].addBurnLayer();
-            e.addEvent(EVENTS.BURN, 0, i);
+        updateCards() {
+            this.deck.forEach(card => {
+                switch (card.id) {
+                    case "scarlet-ant":
+                        if (this.time >= card.state.nextApplyAt) {
+                            this.triggerScarletAnt(card);
+                            card.state.nextApplyAt += card.params.assumedApplyInterval;
+                        }
+                        break;
+                    case "yan-hong":
+                        if (this.time >= card.state.nextShotAt) {
+                            this.fireIceArrow(card, 1, this.getIceArrowDamage(card.params.arrowDamage), "ice_arrow", card.params.arrowTargets);
+                            card.state.nextShotAt += card.params.cooldown;
+                        }
+                        break;
+                    case "wen-min":
+                        if (this.time >= card.state.nextVolleyAt) {
+                            this.fireIceArrow(card, card.params.volleyArrows, this.getIceArrowDamage(this.deck.find(entry => entry.id === "yan-hong")?.params.arrowDamage || 4830), "ice_arrow_volley", card.params.arrowTargets);
+                            card.state.nextVolleyAt += Math.max(1, card.params.volleyCooldown);
+                        }
+                        break;
+                    case "qi-hao":
+                        card.state.cooldownRemaining -= TICK_SECONDS;
+                        if (!card.state.isBursting && card.state.cooldownRemaining <= 0) {
+                            card.state.isBursting = true;
+                            card.state.burstHitsDone = 0;
+                            card.state.burstTickInterval = card.params.burstDuration / card.params.burstHits;
+                            card.state.nextBurstHitAt = this.time;
+                            card.state.cooldownRemaining += card.params.cooldown;
+                        }
+                        if (card.state.isBursting && this.time >= card.state.nextBurstHitAt && card.state.burstHitsDone < card.params.burstHits) {
+                            this.castIceStorm(card, 1 / card.params.burstHits, card.state.burstHitsDone === 0);
+                            card.state.burstHitsDone += 1;
+                            card.state.nextBurstHitAt += card.state.burstTickInterval;
+                            if (card.state.burstHitsDone >= card.params.burstHits) {
+                                card.state.isBursting = false;
+                            }
+                        }
+                        break;
+                    case "folding-fan":
+                        if (this.time >= card.state.nextPulseAt) {
+                            this.triggerPulse(card, 1, "pulse");
+                            card.state.nextPulseAt += Math.max(1, card.params.interval - this.globalEffects.wood.pulseIntervalReduction);
+                        }
+                        break;
+                    case "sacred-wood-dice":
+                        if (card.state.openingSchedule && card.state.openingSchedule.length > 0 && this.time >= card.state.openingSchedule[0]) {
+                            this.triggerPulse(card, 1, "opening_pulse");
+                            card.state.openingSchedule.shift();
+                        }
+                        break;
+                    case "thunder-banner":
+                        if (this.time < this.duration && this.time >= card.state.nextChainAt) {
+                            const useFrenzy = this.time >= this.nextThunderFrenzyAt;
+                            if (useFrenzy) {
+                                this.triggerFrenzy(this.deck.find(entry => entry.id === "purple-dragon"));
+                                this.nextThunderFrenzyAt += this.globalEffects.thunder.frenzyInterval;
+                            } else {
+                                this.triggerChainLightning(card, 1, false);
+                            }
+                            card.state.nextChainAt += card.params.cooldown;
+                        }
+                        break;
+                    case "purple-dragon":
+                        break;
+                    default:
+                        break;
+                }
+            });
         }
-        this.internal_timer = 0;
-    }
-}
 
-class SixTailedFox extends Card {
-    constructor(lv) {
-        super("六尾魔狐", "Beast", 5, lv);
-        this.dmg_r = 0.5 + 0.03 * lv;
-    }
-    check(t) { return t === EVENTS.TIME; }
-    trigger(e) {
-        // 遍历每个目标，独立处理倒计时
-        e.targets.forEach(target => {
-            // 检查该目标是否达到8层
-            if (target.burnLayers >= 8) {
-                // 如果该目标还没有启动倒计时，启动它
-                if (target.explodeTimer < 0) {
-                    target.explodeTimer = 1.5;
+        updateTargets() {
+            this.targets.forEach((target, index) => {
+                if (target.burnStacks > 0 && this.time >= target.burnExpireAt) {
+                    target.burnStacks = 0;
+                    target.burnExpireAt = 0;
+                    target.burnTickAt = 0;
+                    target.combustAt = null;
                 }
 
-                // 倒计时
-                target.explodeTimer = pyRound(target.explodeTimer - 0.1);
-
-                // 倒计时结束，引爆该目标
-                if (target.explodeTimer <= 0) {
-                    // 引爆该目标的燃烧层数，对该目标和周围敌人造成伤害
-                    const explodeDmg = target.burnLayers * this.dmg_r * e.baseAtk * e.targetCount * e.targetCoefficient;
-                    e.cardTotalDmg += explodeDmg;
-                    // 清空该目标的燃烧状态（包括重置计时器）
-                    target.clearBurn();
+                if (target.burnStacks > 0 && this.time < this.duration && this.time >= target.burnTickAt) {
+                    this.queueEvent({ type: "BURN_TICK", targetIndex: index });
+                    target.burnTickAt += this.getBurnTickInterval();
                 }
-            } else {
-                // 目标层数不足8层，重置该目标的倒计时
-                target.explodeTimer = -1;
-            }
-        });
-    }
-}
 
-class SuiShou extends Card {
-    constructor(lv) { 
-        super("岁兽", "Beast", 3, lv); 
-        this.burn_r = 0.3 - 0.05 * lv;
-    }
-    check(t) { 
-        return t === EVENTS.PULSE && Math.random() >= this.burn_r;
-    }
-    trigger(e) {
-        for (let i = 0; i < 3; i++) {
-            for (let j = 0; j < e.targets.length; j++) {
-                e.targets[j].addBurnLayer();
-                e.addEvent(EVENTS.BURN, 0, j);
-            }
-        }
-    }
-}
+                if (target.combustAt !== null && this.time < this.duration && this.time >= target.combustAt) {
+                    this.queueEvent({ type: "COMBUST", targetIndex: index });
+                    target.combustAt = null;
+                }
 
-// --- 3. 器族 (Tool) ---
-class MuJian extends Card {
-    constructor(lv) {
-        super("木剑", "Tool", 1, lv);
-        this.mul = 0.0056 + 0.0004 * lv
-    }
-}
+                if (target.staticOverloadEvents.length > 0) {
+                    target.staticOverloadEvents = target.staticOverloadEvents.filter(event => {
+                        if (this.time >= event.triggerAt) {
+                            this.addDamage(event.damagePerTick, event.cardId, "static_overload");
+                            return false;
+                        }
+                        return true;
+                    });
+                }
+            });
 
-class ZheShan extends Card {
-    constructor(lv) { super("折扇", "Tool", 1, lv); this.dmg_r = 0.4 + 0.02 * lv; }
-    check(t) { return t === EVENTS.TIME && this.internal_timer >= 15.0; }
-    trigger(e) {
-        this.internal_timer = 0;
-        let dmg = e.baseAtk * this.dmg_r * e.pulseDamageMod;
-        e.cardTotalDmg += dmg * e.effectMod * e.targetCount * e.targetCoefficient;
-        e.addEvent(EVENTS.PULSE, dmg);
-    }
-}
-
-class HanBingJian extends Card {
-    constructor(lv) { super("寒冰箭", "Tool", 3, lv); this.arrow_count = 0; this.threshold = 16 - lv; }
-    check(t) { return t === EVENTS.ICE || t === EVENTS.ICE_D; }
-    trigger(e) {
-        this.arrow_count++;
-        if (this.arrow_count >= this.threshold) {
-            this.arrow_count = 0;
-            let d = e.baseAtk * e.pulseRate * e.pulseDamageMod;
-            e.cardTotalDmg += d * e.effectMod;
-            e.addEvent(EVENTS.PULSE, d);
-        }
-    }
-}
-
-class ShenMuTou extends Card {
-    constructor(lv) { super("神木骰", "Tool", 2, lv); this.is_active = false; this.duration_timer = 0.0; this.first_tick = true; this.dmg_r = 0.007 + 0.0005 * lv; }
-    check(t) {
-        if (t === EVENTS.TIME && (this.first_tick || this.is_active)) return true;
-        if (t === EVENTS.PULSE) return true;
-        return false;
-    }
-    trigger(e, event_dmg) {
-        if (this.first_tick) {
-            this.first_tick = false;
-            for (let i = 0; i < 3; i++) {
-                let d = e.baseAtk * e.pulseRate * e.pulseDamageMod;
-                e.cardTotalDmg += d * e.effectMod * e.targetCount * e.targetCoefficient;
-                e.addEvent(EVENTS.PULSE, d);
-            }
-            return;
-        }
-        if (event_dmg > 0) {
-            this.is_active = true;
-            this.duration_timer = 10.0;
-        } else if (this.is_active) {
-            e.cardTotalDmg += e.baseAtk * this.dmg_r;
-            this.duration_timer = pyRound(this.duration_timer - 0.1);
-            if (this.duration_timer <= 0) {
-                this.is_active = false;
-                this.duration_timer = 0.0;
+            if (this.delayedEvents.length > 0) {
+                const readyEvents = [];
+                const pendingEvents = [];
+                this.delayedEvents.forEach(event => {
+                    if (this.time >= event.triggerAt) {
+                        readyEvents.push(event);
+                    } else {
+                        pendingEvents.push(event);
+                    }
+                });
+                this.delayedEvents = pendingEvents;
+                readyEvents.forEach(event => {
+                    event.handler();
+                });
             }
         }
-    }
-}
 
-class LiuHeJing extends Card {
-    constructor(lv) { super("六合镜", "Tool", 5, lv); this.is_active = false; this.timer = 0.0; this.shots_fired = 0; this.dmg_r = 0.7 + 0.05 * lv; }
-    check(t) { return (t === EVENTS.PULSE && !this.is_active) || (t === EVENTS.TIME && this.is_active); }
-    trigger(e) {
-        if (!this.is_active) {
-            this.is_active = true; this.timer = 0.0; this.shots_fired = 0;
-            this.fire(e);
-        } else {
-            this.timer = pyRound(this.timer + 0.1);
-            if (this.shots_fired < 6 && this.timer >= 1.0) {
-                this.fire(e);
-                this.timer = 0.0;
-            }
-            if (this.shots_fired >= 6) this.is_active = false;
-        }
-    }
-    fire(e) {
-        let d = e.baseAtk * e.pulseRate * this.dmg_r * e.pulseDamageMod;
-        e.cardTotalDmg += d * e.targetCount * e.targetCoefficient;
-        e.addEvent(EVENTS.PULSE_D, d);
-        this.shots_fired++;
-    }
-}
-
-const QingLiangZhu = class extends Card {
-    constructor(lv) { super("清凉珠", "Tool", 3, lv); }
-};
-
-
-const GongJian = class extends Card {
-    constructor(lv) { super("弓箭", "Tool", 3, lv); }
-    getPulseDamageMod(targetCount) {
-        const baseBonus = 0.35 + 0.025 * this.level;
-        const perExtra = 0.07 + 0.005 * this.level;
-        const extraTargets = Math.max(0, targetCount - 1);
-        const effectiveBonus = Math.max(0, baseBonus - perExtra * extraTargets);
-        return 1.0 + effectiveBonus;
-    }
-};
-
-const DiZi = class extends Card { constructor(lv) { super("笛子", "Tool", 2, lv); } };
-
-// --- 被动类 ---
-class PassiveBoostCard extends Card {
-    constructor(name, race, fee, level) {
-        super(name, race, fee, level);
-        this.mul = fee == 1 ? 0.0046 : 0.0056 + 0.0004 * level;
-    }
-}
-
-const XiaoHuan = class extends PassiveBoostCard { constructor(lv) { super("小环", "Human", 1, lv); } };
-const HaiGui = class extends PassiveBoostCard { constructor(lv) { super("海龟", "Beast", 1, lv); } };
-const FengZheng = class extends PassiveBoostCard { constructor(lv) { super("风筝", "Tool", 1, lv); } };
-
-const ZhouYiXian = class extends PassiveBoostCard { constructor(lv) { super("周一仙", "Human", 2, lv); } };
-const MengHu = class extends PassiveBoostCard { constructor(lv) { super("猛虎", "Beast", 2, lv); } };
-const XianRenBuFan = class extends PassiveBoostCard { constructor(lv) { super("仙人布幡", "Tool", 2, lv); } };
-
-// --- Target 类：每个目标的独立状态 ---
-class Target {
-    constructor(index) {
-        this.index = index; // 0 = 主目标, 1+ = 副目标
-        this.isBurnActive = false;
-        this.burnLayers = 0;
-        this.burnTickTimer = 0.0;
-        this.explodeTimer = -1; // 六尾爆炸计时器，-1表示未激活
-    }
-
-    addBurnLayer() {
-        this.isBurnActive = true;
-        if (this.burnLayers < 12) this.burnLayers++;
-    }
-
-    clearBurn() {
-        this.isBurnActive = false;
-        this.burnLayers = 0;
-        this.burnTickTimer = 0.0;
-        this.explodeTimer = -1; // 清空时也重置爆炸计时器
-    }
-}
-
-class ZuoGui extends Card {
-    constructor(lv) {
-        super("左归", "Human", 4, lv);
-        this.dmg_r = 1.0 + 0.28 + 0.02 * lv;
-    }
-}
-
-class RaceCombatEngine {
-    constructor(deckConfig, baseAtk = 8000, baseDps = 35000, targetCount = 1) {
-        this.baseAtk = baseAtk;
-        this.baseDps = baseDps;
-        this.targetCount = targetCount;
-        this.targetCoefficient = getTargetCoefficient(targetCount); // 获取目标衰减系数
-        this.time = 0.0;
-        this.cardTotalDmg = 0.0;
-        this.eventQueue = [];
-
-        // 创建目标数组，每个目标独立状态
-        this.targets = [];
-        for (let i = 0; i < targetCount; i++) {
-            this.targets.push(new Target(i));
-        }
-
-        this.deck = deckConfig;
-        this.initModifiers();
-    }
-
-    initModifiers() {
-        const getC = (n) => this.deck.find(c => c.name === n);
-        const zuo = getC("左归");
-        this.effectMod = zuo ? zuo.dmg_r : 1.0;
-
-        const mu = getC("木剑");
-        this.muMod = mu ? (1 + mu.mul) : 1.0;
-
-        // 识别所有 PassiveBoostCard
-        this.passiveMod = 1.0;
-        this.deck.forEach(c => {
-            if (c instanceof PassiveBoostCard || ["小环", "海龟", "风筝"].includes(c.name)) {
-                this.passiveMod += c.mul;
-            }
-        });
-
-        const counts = { Human: 0, Beast: 0, Tool: 0 };
-        this.deck.forEach(c => counts[c.race]++);
-
-        this.atkMul = 1.0;
-        const zyx = getC("周一仙"); if (zyx) this.atkMul += counts.Human * zyx.mul;
-        const tiger = getC("猛虎"); if (tiger) this.atkMul += counts.Beast * tiger.mul;
-        const fan = getC("仙人布幡"); if (fan) this.atkMul += counts.Tool * fan.mul;
-
-        const yan = getC("燕虹"); this.iceRate = yan ? yan.dmg_r : 0.26;
-        const ant = getC("猩红巨蚁"); this.burnRate = ant ? ant.dmg_r : 0.013;
-        const shan = getC("折扇"); this.pulseRate = shan ? shan.dmg_r : 0.38;
-        
-        // 计算脉冲伤害倍率（弓箭提供）
-        const gong = getC("弓箭");
-        this.pulseDamageMod = gong ? gong.getPulseDamageMod(this.targetCount) : 1.0;
-
-        // 计算燃烧效率（火蝠提供）
-        const bat = getC("火蝠");
-        this.burnEfficiency = bat ? bat.burnEfficiency : 100;
-        
-        // 计算燃烧触发间隔
-        this.burnInterval = pyRound(3.0 / (this.burnEfficiency / 100.0));
-
-        // 【优化】筛选活动卡
-        this.activeCards = this.deck.filter(c => {
-            return c.check !== Card.prototype.check || (c instanceof XueDiXiong);
-        });
-
-        // 【优化】缓存雪地熊引用
-        this.xdxRef = this.deck.find(c => c instanceof XueDiXiong);
-    }
-
-    // 辅助方法：增加燃烧层数
-    addBurnLayer(targetIndex = 0) {
-        this.targets[targetIndex].addBurnLayer();
-    }
-
-    addEvent(type, dmg, targetIndex = 0) { 
-        this.eventQueue.push({ type, dmg, targetIndex }); 
-    }
-
-    simulate(duration) {
-        let dynamicBaseBoost = 0.0;
-        const steps = Math.round(duration / 0.1);
-        const dpsHistory = [];
-
-        for (let i = 0; i <= steps; i++) {
-            this.time = pyRound(i * 0.1);
-            let dmgBefore = this.cardTotalDmg;
-
-            // 1. 系统时间驱动 + 计时器更新
-            for (let j = 0; j < this.activeCards.length; j++) {
-                const c = this.activeCards[j];
-                c.internal_timer = pyRound(c.internal_timer + 0.1);
-                if (c.check(EVENTS.TIME)) c.trigger(this, 0);
-            }
-
-            // 2. 消费事件队列
-            while (this.eventQueue.length > 0) {
-                const e = this.eventQueue.shift();
-                if (e.type === EVENTS.TIME) continue;
-                for (let j = 0; j < this.activeCards.length; j++) {
-                    const c = this.activeCards[j];
-                    if (c.check(e.type)) c.trigger(this, e.dmg, e.targetIndex);
+        flushQueue() {
+            while (this.queue.length > 0) {
+                const event = this.queue.shift();
+                switch (event.type) {
+                    case "BURN_TICK":
+                        this.handleBurnTick(event.targetIndex);
+                        break;
+                    case "COMBUST":
+                        this.handleCombust(event.targetIndex);
+                        break;
+                    default:
+                        break;
                 }
             }
+        }
 
-            // 3. 系统燃烧逻辑
-            for (let j = 0; j < this.targets.length; j++) {
-                const target = this.targets[j];
-                if (target.isBurnActive) {
-                    target.burnTickTimer = pyRound(target.burnTickTimer + 0.1);
-                    if (target.burnTickTimer >= this.burnInterval) {
-                        this.cardTotalDmg += (target.burnLayers * this.baseAtk * this.burnRate * this.effectMod);
-                        target.burnTickTimer = 0;
+        sampleTimeline() {
+            const currentSecond = Math.floor(this.time + 1e-9);
+            if (currentSecond > this.lastSecondSample && currentSecond <= this.duration) {
+                this.timeline.push(Math.round(this.totalDamage / currentSecond));
+                this.lastSecondSample = currentSecond;
+            }
+        }
+
+        getBurnTickInterval() {
+            const bonus = this.globalEffects.fire.burnTickRateBonus;
+            return Math.max(0.3, 3 / (1 + bonus));
+        }
+
+        getIceArrowDamage(baseDamage = 4830) {
+            return baseDamage * (1 + this.globalEffects.ice.arrowDamageBonus);
+        }
+
+        getPulseDamage(baseDamage) {
+            const extraEnemies = Math.max(0, this.targetCount - 1);
+            const bonus = this.globalEffects.wood.pulseDamageBonus - (this.globalEffects.wood.pulseDamageReductionPerExtraEnemy * extraEnemies);
+            return baseDamage * (1 + Math.max(-0.95, bonus));
+        }
+
+        getChainDamage(baseDamage, targetsHit) {
+            const extraEnemies = Math.max(0, targetsHit - 1);
+            const bonus = this.globalEffects.thunder.chainDamageBonus + this.globalEffects.thunder.chainExtraEnemyBonus * extraEnemies;
+            return baseDamage * (1 + bonus);
+        }
+
+        triggerScarletAnt(card) {
+            const hits = Math.min(card.params.maxTargets, this.targetCount);
+            for (let i = 0; i < hits; i++) {
+                this.applyBurn(i, card, 1, true, true);
+            }
+        }
+
+        applyBurn(targetIndex, card, stacks, refreshDuration, shouldIgnite = true, preserveTick = false) {
+            const target = this.targets[targetIndex];
+            const beforeStacks = target.burnStacks;
+            const maxStacks = card.params.burnMaxStacks;
+            const existingTickAt = target.burnTickAt;
+            target.burnStacks = Math.min(maxStacks, target.burnStacks + stacks);
+            if (refreshDuration) {
+                target.burnExpireAt = this.time + card.params.burnDuration;
+            }
+            if (preserveTick && existingTickAt > this.time) {
+                target.burnTickAt = existingTickAt;
+            } else if (!target.burnTickAt || target.burnTickAt <= this.time) {
+                target.burnTickAt = this.time + this.getBurnTickInterval();
+            }
+
+            if (shouldIgnite && this.globalEffects.fire.burnApplyProcDamage > 0) {
+                this.addDamage(this.globalEffects.fire.burnApplyProcDamage, "two-tail-fox", "ignite");
+            }
+
+            if (this.globalEffects.fire.combustThreshold !== null && target.burnStacks >= this.globalEffects.fire.combustThreshold && beforeStacks < this.globalEffects.fire.combustThreshold) {
+                target.combustAt = this.time + this.globalEffects.fire.combustDelay;
+            }
+        }
+
+        handleBurnTick(targetIndex) {
+            const target = this.targets[targetIndex];
+            if (target.burnStacks <= 0) return;
+
+            const scarletAnt = this.deck.find(card => card.id === "scarlet-ant");
+            if (!scarletAnt) return;
+
+            const perLayerBase = scarletAnt.params.burnDamage;
+            const damage = perLayerBase * (1 + Math.max(0, target.burnStacks - 1) * scarletAnt.params.extraLayerBonus);
+            this.addDamage(damage, scarletAnt.id, "burn_tick");
+            this.addMeter("fire", this.globalEffects.fire.blazeOnBurn);
+
+            if (this.globalEffects.fire.extraStackChance > 0 && target.burnStacks < scarletAnt.params.burnMaxStacks && this.random() < this.globalEffects.fire.extraStackChance) {
+                this.applyBurn(targetIndex, scarletAnt, 1, false, true);
+            }
+        }
+
+        handleCombust(targetIndex) {
+            const target = this.targets[targetIndex];
+            const threshold = this.globalEffects.fire.combustThreshold;
+            if (threshold === null || target.burnStacks < threshold) return;
+            const damage = target.burnStacks * this.globalEffects.fire.combustDamagePerExtraLayer;
+            this.addDamage(damage, "six-tail-fox", "combust");
+            this.addMeter("fire", this.globalEffects.fire.blazeOnCombust);
+            const preservedTickAt = target.burnTickAt;
+            target.burnStacks = 0;
+            target.burnExpireAt = 0;
+            target.burnTickAt = preservedTickAt;
+            const scarletAnt = this.deck.find(card => card.id === "scarlet-ant");
+            if (scarletAnt) {
+                this.applyBurn(targetIndex, scarletAnt, 1, true, true, true);
+            }
+        }
+
+        fireIceArrow(card, arrowCount, damagePerArrow, mechanic, maxTargets) {
+            const targetsHit = Math.min(this.targetCount, maxTargets || this.targetCount);
+            for (let i = 0; i < arrowCount; i++) {
+                const totalDamage = damagePerArrow * targetsHit;
+                this.addDamage(totalDamage, card.id, mechanic);
+                if (this.globalEffects.ice.arrowMeterGain > 0) {
+                    this.addMeter("ice", this.globalEffects.ice.arrowMeterGain * targetsHit);
+                }
+                if (this.globalEffects.ice.shatterChance > 0 && this.random() < this.globalEffects.ice.shatterChance) {
+                    this.addDamage(this.globalEffects.ice.shatterDamage * this.targetCount, "zuo-gui", "shatter");
+                    if (this.globalEffects.ice.shatterMeterGain > 0) {
+                        this.addMeter("ice", this.globalEffects.ice.shatterMeterGain * this.targetCount);
+                    }
+                }
+
+                const qiHao = this.deck.find(entry => entry.id === "qi-hao");
+                if (qiHao) {
+                    qiHao.state.cooldownRemaining = Math.max(0, qiHao.state.cooldownRemaining - (qiHao.params.cooldownReductionPerArrowHit * targetsHit));
+                }
+            }
+        }
+
+        castIceStorm(card, efficiency, shouldAddStormMeter = true) {
+            const stormOnlyBonus = this.deck.find(entry => entry.id === "zuo-gui") ? this.deck.find(entry => entry.id === "zuo-gui").params.damageBonus : 0;
+            const damage = card.params.stormDamage * (1 + stormOnlyBonus) * efficiency;
+            this.addDamage(damage, card.id, efficiency < 1 ? "ice_storm_frenzy" : "ice_storm");
+            if (shouldAddStormMeter && this.globalEffects.ice.stormMeterGain > 0) {
+                this.addMeter("ice", this.globalEffects.ice.stormMeterGain);
+            }
+            if (this.globalEffects.ice.shatterChance > 0 && this.random() < this.globalEffects.ice.shatterChance) {
+                this.addDamage(this.globalEffects.ice.shatterDamage * this.targetCount, "zuo-gui", "shatter");
+                if (this.globalEffects.ice.shatterMeterGain > 0) {
+                    this.addMeter("ice", this.globalEffects.ice.shatterMeterGain * this.targetCount);
+                }
+            }
+        }
+
+        triggerPulse(card, efficiency, mechanic) {
+            const base = this.getPulseDamage(card.params.pulseDamage || 9792);
+            const damage = base * this.targetCount * efficiency;
+            this.addDamage(damage, card.id, mechanic);
+            if (this.globalEffects.wood.pulseMeterGain > 0) {
+                this.addMeter("wood", this.globalEffects.wood.pulseMeterGain * this.targetCount);
+            }
+            if (this.globalEffects.wood.pulseEchoDamage > 0) {
+                const echoTickDamage = (this.globalEffects.wood.pulseEchoDamage * this.targetCount * efficiency) / 5;
+                [2, 4, 6, 8, 10].forEach(delay => {
+                    this.scheduleEvent(this.time + delay, () => {
+                        this.addDamage(echoTickDamage, "sacred-wood-dice", "pulse_echo");
+                    });
+                });
+            }
+            if (this.globalEffects.wood.extraPulseCount > 0 && mechanic !== "pulse_followup") {
+                for (let i = 0; i < this.globalEffects.wood.extraPulseCount; i++) {
+                    const delay = i === 0 ? 0 : this.globalEffects.wood.extraPulseSpacing * i;
+                    const rawTriggerAt = this.time + delay;
+                    const triggerAt = rawTriggerAt > this.duration && rawTriggerAt <= this.duration + 1
+                        ? this.duration
+                        : rawTriggerAt;
+                    this.scheduleEvent(triggerAt, () => {
+                        this.triggerPulse(card, this.globalEffects.wood.extraPulseEfficiency, "pulse_followup");
+                    });
+                }
+            }
+        }
+
+        triggerChainLightning(card, efficiency, canTriggerFrenzy = false) {
+            const targetsHit = Math.min(this.targetCount, card.params.maxEnemyTargets || 3);
+            const damagePerTarget = this.getChainDamage(card.params.chainDamage, targetsHit) * efficiency;
+            this.addDamage(damagePerTarget * targetsHit, card.id, efficiency < 1 ? "chain_lightning_frenzy" : "chain_lightning");
+            if (this.globalEffects.thunder.thunderMeterGain > 0) {
+                this.addMeter("thunder", this.globalEffects.thunder.thunderMeterGain * targetsHit);
+            }
+            if (this.globalEffects.thunder.staticOverloadDamage > 0) {
+                this.applyStaticOverload(card.id, targetsHit, 1);
+            }
+            if (this.globalEffects.thunder.extraTriggerChance > 0 && this.random() < this.globalEffects.thunder.extraTriggerChance) {
+                this.addDamage(damagePerTarget * targetsHit, "purple-dragon", "chain_lightning_extra");
+                if (this.globalEffects.thunder.thunderMeterGain > 0) {
+                    this.addMeter("thunder", this.globalEffects.thunder.thunderMeterGain * targetsHit);
+                }
+                if (this.globalEffects.thunder.staticOverloadDamage > 0) {
+                    this.applyStaticOverload("purple-dragon", targetsHit, 1);
+                }
+                if (canTriggerFrenzy) {
+                    for (let i = 0; i < this.globalEffects.thunder.frenzyCount; i++) {
+                        this.triggerChainLightning(card, this.globalEffects.thunder.frenzyEfficiency, false);
                     }
                 }
             }
+        }
 
-            // 4. 雪地熊动态加成 (逻辑对齐：由于雪地熊是活动卡，其 Buff 状态已在 activeCards 循环中更新)
-            if (this.xdxRef) {
-                const xdxRate = this.xdxRef.getCurrentRate();
-                dynamicBaseBoost += (this.baseDps * this.passiveMod / 10 * xdxRate);
-                let dmgAdd = this.cardTotalDmg - dmgBefore;
-                this.cardTotalDmg += (dmgAdd * xdxRate);
-            }
-
-            if (i % 10 === 0 && i > 0) {
-                const currentRes = this.finalize(this.time, dynamicBaseBoost);
-                dpsHistory.push(currentRes.total);
+        triggerFrenzy(card) {
+            if (!card || this.globalEffects.thunder.frenzyCount <= 0) return;
+            const thunderBanner = this.deck.find(entry => entry.id === "thunder-banner");
+            if (!thunderBanner) return;
+            for (let i = 0; i < this.globalEffects.thunder.frenzyCount; i++) {
+                this.triggerChainLightning(thunderBanner, this.globalEffects.thunder.frenzyEfficiency, false);
             }
         }
 
-        const finalRes = this.finalize(duration, dynamicBaseBoost);
-        finalRes.dpsHistory = dpsHistory;
-        return finalRes;
+        applyStaticOverload(cardId, targetsHit, efficiency) {
+            const totalDamage = this.globalEffects.thunder.staticOverloadDamage * efficiency;
+            const ticks = 4;
+            const perTick = totalDamage / ticks;
+            for (let targetIndex = 0; targetIndex < targetsHit; targetIndex++) {
+                for (let i = 1; i <= ticks; i++) {
+                    this.targets[targetIndex].staticOverloadEvents.push({
+                        triggerAt: this.time + (this.globalEffects.thunder.staticOverloadDuration / ticks) * i,
+                        damagePerTick: perTick,
+                        cardId: cardId === "thunder-banner" ? "thunder-crystal" : cardId
+                    });
+                }
+            }
+        }
+
+        finalize() {
+            const duration = Math.max(1, this.duration);
+            const byCard = Object.entries(this.breakdown.byCard)
+                .map(([cardId, damage]) => {
+                    const card = this.deck.find(item => item.id === cardId) || Data.getCardDefById(cardId) || { name: cardId };
+                    return {
+                        id: cardId,
+                        name: card.name,
+                        damage: Math.round(damage),
+                        dps: Number((damage / duration).toFixed(2))
+                    };
+                })
+                .sort((a, b) => b.damage - a.damage);
+
+            const byMechanic = Object.entries(this.breakdown.byMechanic)
+                .map(([mechanic, damage]) => ({
+                    mechanic,
+                    damage: Math.round(damage),
+                    dps: Number((damage / duration).toFixed(2)),
+                    count: this.breakdown.byMechanicCount[mechanic] || 0
+                }))
+                .sort((a, b) => b.damage - a.damage);
+
+            return {
+                totalDamage: Math.round(this.totalDamage),
+                totalDps: Number((this.totalDamage / duration).toFixed(2)),
+                duration,
+                targetCount: this.targetCount,
+                dpsHistory: this.timeline,
+                breakdown: {
+                    byCard,
+                    byMechanic
+                },
+                meters: {
+                    fire: Math.round(this.meters.fire),
+                    ice: Math.round(this.meters.ice),
+                    wood: Math.round(this.meters.wood),
+                    thunder: Math.round(this.meters.thunder)
+                },
+                amplifyTriggers: { ...this.amplifyTriggers },
+                warnings: this.warnings.slice(),
+                seed: this.seed
+            };
+        }
     }
 
-    finalize(duration, dynamicBaseBoost) {
-        const totalCore = this.deck.reduce((s, c) => s + c.core, 0);
-        const coreIncPct = (totalCore * 1.04) / 5.0 / this.baseAtk;
-        const totalMulMod = this.muMod * this.atkMul;
+    const api = {
+        CombatEngine,
+        ELEMENT_LABELS
+    };
 
-        const absoluteRawTotal = this.baseDps * duration;
-        const passiveCardInc = absoluteRawTotal * (this.passiveMod - 1.0);
-
-        const baseWithPassiveAndDynamic = absoluteRawTotal + passiveCardInc + dynamicBaseBoost;
-        const coreIncOnBase = baseWithPassiveAndDynamic * coreIncPct;
-        const mulIncOnBase = (baseWithPassiveAndDynamic + coreIncOnBase) * (totalMulMod - 1.0);
-
-        const skillFinal = this.cardTotalDmg * (1 + coreIncPct) * totalMulMod;
-
-        const finalTotalDmg = (baseWithPassiveAndDynamic + coreIncOnBase + mulIncOnBase + skillFinal);
-
-        return {
-            total: Math.round((finalTotalDmg / duration) * 100) / 100,
-            card_dps: Math.round((skillFinal / duration) * 100) / 100,
-            boost_dps: Math.round(((finalTotalDmg - absoluteRawTotal - skillFinal) / duration) * 100) / 100,
-            raw_base_dps: this.baseDps
-        };
+    global.Engine = api;
+    if (typeof module !== "undefined" && module.exports) {
+        module.exports = api;
     }
-
-}
-
-ALL_CARD_CLASSES.push(
-    XiaoHuan, YanHong, WenMin, ZhouYiXian, ZuoGui, QiHao, LinFeng, ShangGuanCe, ZhengDaLi,
-    HaiGui, MengHu, XueDiXiong, BaHuangHuoLong, ScarletGiantAnt, FireBat, TwoTailedFox, YouMingQuan, SixTailedFox, SuiShou,
-    FengZheng, MuJian, ZheShan, HanBingJian, ShenMuTou, XianRenBuFan, QingLiangZhu, GongJian, DiZi, LiuHeJing
-);
-
-/**
- * 自动转换类引用为 UI 所需的元数据，并排序
- */
-function getSortedCardDatabase() {
-    return ALL_CARD_CLASSES.map(Cls => {
-        const sample = new Cls(6); // 实例化一个样本获取元数据
-        return {
-            className: Cls.name,
-            name: sample.name,
-            fee: sample.fee,
-            race: sample.race,
-            classRef: Cls
-        };
-    }).sort((a, b) => a.fee - b.fee || a.name.localeCompare(a.name));
-}
-
-// 导出全局供 HTML 使用
-window.CARD_DATABASE = getSortedCardDatabase();
-
-window.CARD_NAME_MAP = Object.fromEntries(
-    window.CARD_DATABASE.map(c => [c.className, c.name])
-);
+})(typeof window !== "undefined" ? window : globalThis);
