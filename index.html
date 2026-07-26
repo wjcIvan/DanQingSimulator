@@ -146,10 +146,17 @@
         .tag-thunder { background-color: #f5f3ff; color: #7c3aed; }
         .race-section {
             display: grid;
-            grid-template-columns: repeat(1, minmax(0, 1fr));
+            grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
             gap: 1rem;
             margin-bottom: 2.5rem;
         }
+        .machine-race-section {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .machine-race-section:last-child { margin-bottom: 0; }
         .race-title {
             grid-column: 1 / -1;
             font-size: 0.85rem;
@@ -542,22 +549,20 @@
         .bf-rank.top-3 { background: #06b6d4; }
         @media (min-width: 640px) {
             .race-section {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
+                grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
             }
         }
         @media (min-width: 1024px) {
             .lab-dashboard {
-                grid-template-columns: 2fr 1fr 1fr;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
                 align-items: stretch;
             }
             .race-section {
-                grid-template-columns: repeat(3, minmax(0, 1fr));
+                grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
             }
         }
         @media (min-width: 1280px) {
-            .race-section {
-                grid-template-columns: repeat(5, minmax(0, 1fr));
-            }
+            .machine-race-section { grid-template-columns: repeat(5, minmax(0, 1fr)); }
         }
         @media (max-width: 1200px) {
             .layout { grid-template-columns: 1fr; }
@@ -565,7 +570,8 @@
         @media (max-width: 720px) {
             .shell { padding: 16px; }
             .hero { flex-direction: column; }
-            .controls-grid, .stats-grid, .detail-grid, .race-section { grid-template-columns: 1fr; }
+            .controls-grid, .stats-grid, .detail-grid { grid-template-columns: 1fr; }
+            .race-section { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }
         }
     </style>
 </head>
@@ -602,6 +608,14 @@
                                 </div>
                                 <input type="range" id="targetCount" min="1" max="15" value="1" class="w-full">
                             </div>
+                            <div class="dashboard-item">
+                                <div class="slider-tech-label !mb-1.5 flex items-center justify-between">
+                                    <span class="text-[13px] font-black text-slate-400 uppercase">职业/法宝秒伤</span>
+                                    <span class="val-display !py-0.5 !px-1.5 !text-sm"><span id="externalDpsVal">150000</span></span>
+                                </div>
+                                <input id="externalSkillDps" type="number" min="0" value="150000" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-700">
+                                <div class="mt-2 text-[11px] font-bold text-slate-400">天雷护佑3/5按 秒伤 × 10s × 5% 计算</div>
+                            </div>
                         </div>
 
                         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 px-2">
@@ -635,6 +649,32 @@
                         </div>
 
                         <div id="cardGrid"></div>
+
+                        <section class="mt-8">
+                            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 px-2">
+                                <h2 class="font-black text-slate-800 flex items-center gap-2">
+                                    <span class="w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></span>
+                                    机巧石编成
+                                    <span id="machineFeeLabel" class="ml-2 text-[15px] px-2 py-0.5 rounded-full font-black bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase">0 / 18 费</span>
+                                </h2>
+                                <label class="flex items-center gap-2 text-xs font-black text-slate-500">
+                                    费用上限
+                                    <input id="machineFeeLimit" type="number" min="0" value="18" class="w-20 rounded-xl border border-slate-200 bg-white px-3 py-2 text-center text-sm font-black text-cyan-700">
+                                </label>
+                            </div>
+                            <div id="machineStoneGrid"></div>
+                        </section>
+
+                        <section class="mt-8">
+                            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 px-2">
+                                <h2 class="font-black text-slate-800 flex items-center gap-2">
+                                    <span class="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>
+                                    匠心石
+                                    <span class="ml-2 text-[11px] px-2 py-1 rounded-full font-black bg-amber-50 text-amber-600 border border-amber-100">4选1 · 占1费</span>
+                                </h2>
+                            </div>
+                            <div id="craftStoneGrid" class="race-section"></div>
+                        </section>
                     </div>
 
                     <div class="w-full xl:w-[450px] 2xl:w-[520px]">

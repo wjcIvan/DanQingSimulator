@@ -88,7 +88,14 @@
         PULSE_TRIGGERED: "pulse_triggered",
         CHAIN_LIGHTNING_HIT: "chain_lightning_hit",
         THUNDER_FRENZY: "thunder_frenzy",
-        ELEMENT_AMPLIFY: "element_amplify"
+        ELEMENT_AMPLIFY: "element_amplify",
+        ICE_AMPLIFY_FREEZE: "ice_amplify_freeze",
+        ICE_ELEMENTAL_SUMMONED: "ice_elemental_summoned",
+        FIRE_AMPLIFY_TICK: "fire_amplify_tick",
+        WOOD_BLOOM: "wood_bloom",
+        THUNDER_AMPLIFY_TICK: "thunder_amplify_tick",
+        CRAFT_STONE_CAST_START: "craft_stone_cast_start",
+        CRAFT_STONE_CAST_END: "craft_stone_cast_end"
     };
     const FIRE_AMPLIFY_DELAYS = [2, 4, 6, 8, 10];
     const ICE_AMPLIFY_FINAL_DELAY = 2;
@@ -96,6 +103,7 @@
     const WOOD_ECHO_DELAYS = [2, 4, 6, 8, 10];
     const OPENING_PULSE_SCHEDULE = [0, 2, 4];
     const STATIC_OVERLOAD_TICKS = 4;
+    const ELEMENT_TRIGGER_THRESHOLD = 10000;
 
     // Shared helpers
     function clampLevel(level) {
@@ -129,16 +137,19 @@
                 blazeOnCombust: 0,
                 combustThreshold: null,
                 combustDelay: 1.5,
-                combustDamagePerExtraLayer: 0
+                combustDamagePerExtraLayer: 0,
+                triggerThreshold: null
             },
             ice: {
                 arrowDamageBonus: 0,
                 shatterChance: 0,
                 shatterDamage: 0,
+                amplifyDamageBonus: 0,
+                freezeMeterBonus: 0,
                 arrowMeterGain: 0,
                 shatterMeterGain: 0,
                 stormMeterGain: 0,
-                triggerThreshold: null
+                triggerThreshold: ELEMENT_TRIGGER_THRESHOLD
             },
             wood: {
                 pulseDamageBonus: 0,
@@ -152,7 +163,8 @@
                 pulseEchoDuration: 10,
                 openingPulseTimes: 0,
                 openingPulseWindow: 6,
-                triggerThreshold: null
+                luckStacks: 0,
+                triggerThreshold: ELEMENT_TRIGGER_THRESHOLD
             },
             thunder: {
                 chainDamageBonus: 0,
@@ -412,9 +424,10 @@
         }
 
         onElementAmplify(engine) {
-            engine.addDamage(43534, this.id, "ice_amplify");
+            engine.addDamage(43534 * (1 + engine.effects.ice.amplifyDamageBonus), this.id, "ice_amplify");
             engine.scheduleEvent(engine.time + ICE_AMPLIFY_FINAL_DELAY, () => {
-                engine.addDamage(85327, this.id, "ice_amplify");
+                engine.addDamage(85327 * (1 + engine.effects.ice.amplifyDamageBonus), this.id, "ice_amplify");
+                engine.notifyIceAmplifyFreeze({ element: "ice" });
             });
         }
     }
@@ -500,6 +513,7 @@
                 this.burstTickInterval = this.params.burstDuration / this.params.burstHits;
                 this.nextBurstHitAt = engine.time;
                 this.cooldownRemaining += this.params.cooldown;
+                engine.notifyIceElementalSummoned({ sourceCardId: this.id });
             }
             if (!this.isBursting) return;
             if (engine.time < this.nextBurstHitAt || this.burstHitsDone >= this.params.burstHits) return;
@@ -512,7 +526,7 @@
             }
         }
 
-        onIceArrowHit(engine, event) {
+        onIceArrowHit(_engine, event) {
             this.cooldownRemaining = Math.max(0, this.cooldownRemaining - (this.params.cooldownReductionPerArrowHit * event.targetsHit));
         }
     }
@@ -560,6 +574,7 @@
                     tickCount += 1;
                     if (tickCount % 3 === 0) {
                         engine.addDamage(72108, this.id, "wood_bloom");
+                        engine.notifyWoodBloom({ element: "wood" });
                     }
                 });
             });
@@ -692,6 +707,7 @@
         }
 
         onChainLightningHit(engine, event) {
+            if (event.skipStaticOverload) return;
             engine.applyStaticOverload(event.sourceCardId, event.targetsHit, 1);
         }
     }
@@ -725,6 +741,7 @@
         }
 
         onChainLightningHit(engine, event) {
+            if (event.skipPurpleDragonExtra) return;
             if (engine.effects.thunder.extraTriggerChance <= 0) return;
             if (engine.random() >= engine.effects.thunder.extraTriggerChance) return;
             engine.addDamage(event.damagePerTarget * event.targetsHit, this.id, "chain_lightning_extra");
@@ -793,9 +810,11 @@
     // Combat engine
     class CombatEngine {
         constructor(deckConfig, options = {}) {
+            const config = Array.isArray(deckConfig) ? { deck: deckConfig } : (deckConfig || {});
             this.duration = Math.max(1, Number(options.duration) || 60);
             this.targetCount = Math.max(1, Number(options.targetCount) || 1);
             this.seed = Number(options.seed) || Math.floor(Math.random() * 2147483647);
+            this.externalSkillDps = Math.max(0, Number(options.externalSkillDps) || 0);
             this.rng = createRng(this.seed);
             this.time = 0;
             this.targets = Array.from({ length: this.targetCount }, () => new Target());
@@ -805,13 +824,18 @@
             this.breakdown = createBreakdown();
             this.meters = { fire: 0, ice: 0, wood: 0, thunder: 0 };
             this.amplifyTriggers = { fire: 0, ice: 0, wood: 0, thunder: 0 };
+            this.amplifyTimeline = { fire: [], ice: [], wood: [], thunder: [] };
             this.timeline = [];
             this.totalDamage = 0;
             this.lastSecondSample = 0;
             this.nextThunderFrenzyAt = Infinity;
             this.effects = createEffects();
-            this.deck = this.buildDeck(deckConfig);
+            this.deck = this.buildDeck(config.deck);
             this.cardMap = new Map(this.deck.map(card => [card.id, card]));
+            this.machineStones = this.buildMachineStones(config.machineStones);
+            this.machineStoneMap = new Map(this.machineStones.map(stone => [stone.id, stone]));
+            this.craftStone = this.buildCraftStone(config.craftStone);
+            this.hasExtendedSystems = this.machineStones.length > 0 || Boolean(this.craftStone);
             this.tickCards = CARD_ORDER.map(id => this.cardMap.get(id)).filter(card => card && typeof card.onTick === "function");
             this.eventCards = Object.fromEntries(
                 Object.entries(EVENT_CARD_ORDER).map(([eventType, cardIds]) => [
@@ -820,9 +844,10 @@
                 ])
             );
             this.initializeDeckState();
+            this.initializeMachineStoneState();
         }
 
-        // 按配置把牌组实例化成具体卡类。
+        // 按配置把丹青实例化成具体卡类。
         buildDeck(deckConfig) {
             return (deckConfig || []).map(item => {
                 const CardClass = CARD_REGISTRY[item.id];
@@ -831,6 +856,41 @@
                 }
                 return new CardClass(item.level);
             });
+        }
+
+        buildMachineStones(stoneConfig) {
+            return (stoneConfig || []).map(item => {
+                const def = Data.getMachineStoneDefById(item.id);
+                if (!def) throw new Error(`Unknown machine stone id: ${item.id}`);
+                const rank = Math.max(1, Math.min(5, parseInt(item.rank ?? item.level, 10) || 1));
+                return { ...def, rank, params: Data.resolveMachineStoneParams(def, rank) };
+            });
+        }
+
+        buildCraftStone(stoneConfig) {
+            if (!stoneConfig) return null;
+            const def = Data.getCraftStoneDefById(stoneConfig.id || stoneConfig);
+            if (!def) throw new Error(`Unknown craft stone id: ${stoneConfig.id || stoneConfig}`);
+            return { ...def, params: { ...def.params } };
+        }
+
+        initializeMachineStoneState() {
+            this.machineStones.forEach(stone => {
+                stone.nextAt = 0;
+                stone.counter = 0;
+                stone.pendingCharges = 0;
+                stone.activated = false;
+                if (stone.id === "frost-surge" && stone.rank >= 3) {
+                    this.effects.ice.amplifyDamageBonus += stone.params.iceAmplifyBonusAtRank3 || 0;
+                }
+                if (stone.id === "frost-surge" && stone.rank >= 5) {
+                    this.effects.ice.freezeMeterBonus += stone.params.freezeMeterAtRank5 || 0;
+                }
+            });
+            if (this.craftStone) {
+                this.craftStone.nextCastAt = 0;
+                this.warnings.push(...(this.craftStone.notes || []));
+            }
         }
 
         // 对整套牌执行同名生命周期钩子。
@@ -904,6 +964,8 @@
         addDamage(amount, cardId, mechanic) {
             const dmg = Math.max(0, amount || 0);
             if (dmg <= 0) return;
+            const machineStone = this.machineStoneMap ? this.machineStoneMap.get(cardId) : null;
+            if (machineStone) machineStone.activated = true;
             this.totalDamage += dmg;
             this.breakdown.byCard[cardId] = (this.breakdown.byCard[cardId] || 0) + dmg;
             this.breakdown.byMechanic[mechanic] = (this.breakdown.byMechanic[mechanic] || 0) + dmg;
@@ -921,6 +983,7 @@
                 // 激化效果在下一拍入队，保持与旧实现相同的触发时机。
                 this.scheduleEvent(this.time + TICK_SECONDS, () => {
                     this.amplifyTriggers[element] += 1;
+                    this.amplifyTimeline[element].push(Number(this.time.toFixed(1)));
                     this.triggerAmplify(element);
                 });
             }
@@ -930,13 +993,13 @@
         getElementThreshold(element) {
             switch (element) {
                 case "fire":
-                    return this.effects.fire.triggerThreshold;
+                    return this.effects.fire.triggerThreshold || (this.hasExtendedSystems ? ELEMENT_TRIGGER_THRESHOLD : null);
                 case "ice":
-                    return this.effects.ice.triggerThreshold;
+                    return this.effects.ice.triggerThreshold || (this.hasExtendedSystems ? ELEMENT_TRIGGER_THRESHOLD : null);
                 case "wood":
-                    return this.effects.wood.triggerThreshold;
+                    return this.effects.wood.triggerThreshold || (this.hasExtendedSystems ? ELEMENT_TRIGGER_THRESHOLD : null);
                 case "thunder":
-                    return this.effects.thunder.triggerThreshold;
+                    return this.effects.thunder.triggerThreshold || (this.hasExtendedSystems ? ELEMENT_TRIGGER_THRESHOLD : null);
                 default:
                     return null;
             }
@@ -951,11 +1014,464 @@
                         card.trigger(this, EVENTS.TIME);
                     }
                 });
+                this.tickMachineStones();
+                this.tickCraftStone();
                 this.updateTargets();
                 this.flushQueue();
                 this.sampleTimeline();
             }
             return this.finalize();
+        }
+
+        tickMachineStones() {
+            this.machineStones.forEach(stone => {
+                const params = stone.params;
+                if (stone.mechanics.includes("periodic_attack") || stone.mechanics.includes("periodic_next_attack") || stone.mechanics.includes("periodic_summon")) {
+                    const interval = stone.id === "cold-tide" && stone.rank >= 3 ? (params.rank3Interval || params.interval || 20) : (params.interval || 20);
+                    if (this.time >= stone.nextAt) {
+                        if (stone.id === "fire-meteor") {
+                            this.triggerFireMeteor(stone, "machine_periodic");
+                        } else if (stone.id === "flame-body") {
+                            this.triggerFlameBody(stone, 3, "machine_flame_body");
+                        } else if (stone.id === "paper-forest") {
+                            this.triggerPaperForest(stone);
+                        } else if (stone.id === "five-thunder-orb") {
+                            this.triggerFiveThunderOrb(stone);
+                        } else if (stone.id === "cold-tide") {
+                            stone.pendingCharges += 1;
+                        } else {
+                            this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_periodic");
+                            if (params.meter) this.addMeter(stone.element, params.meter);
+                        }
+                        stone.nextAt += interval;
+                    }
+                }
+            });
+            this.consumeColdTideCharge();
+        }
+
+        tickCraftStone() {
+            if (!this.craftStone || this.time < this.craftStone.nextCastAt) return;
+            const stone = this.craftStone;
+            this.emit(EVENTS.CRAFT_STONE_CAST_START, { stoneId: stone.id });
+            const impactAt = this.time + stone.castTime;
+            if (impactAt <= this.duration) {
+                if (stone.id === "frost-glory") {
+                    const tickCount = Math.max(1, Math.round(stone.castTime));
+                    const perTick = stone.params.damage / tickCount;
+                    for (let i = 1; i <= tickCount; i += 1) {
+                        this.scheduleEvent(this.time + i, () => {
+                            this.addDamage(perTick * this.targetCount, stone.id, "craft_stone");
+                            this.consumeColdTideCharge();
+                        });
+                    }
+                    this.scheduleEvent(impactAt, () => {
+                        this.notifyCraftStoneCastEnd({ stoneId: stone.id });
+                    });
+                } else {
+                    this.scheduleEvent(impactAt, () => {
+                        this.addDamage(stone.params.damage * this.targetCount, stone.id, "craft_stone");
+                        if (stone.id === "thunder-aegis") {
+                            this.scheduleThunderAegisChains(stone);
+                        }
+                        this.notifyCraftStoneCastEnd({ stoneId: stone.id });
+                    });
+                }
+            }
+            stone.nextCastAt += stone.cooldown;
+        }
+
+        scheduleThunderAegisChains(stone) {
+            const duration = stone.params.chainDuration || 10;
+            const interval = stone.params.chainInterval || 2;
+            const sourceCard = this.getCard(CARD_IDS.THUNDER_BANNER) || {
+                id: stone.id,
+                params: { chainDamage: 9660, maxEnemyTargets: 3 }
+            };
+            for (let delay = interval; delay <= duration + 1e-9; delay += interval) {
+                this.scheduleEvent(this.time + delay, () => {
+                    this.triggerChainLightning(sourceCard, 1);
+                });
+            }
+        }
+
+        triggerFireMeteor(stone, mechanic) {
+            const params = stone.params;
+            this.addDamage((params.damage || 0) * this.targetCount, stone.id, mechanic);
+            this.addMeter("fire", params.meter || 0);
+            if (stone.rank >= 3 && params.burnDamage) {
+                for (let delay = 2; delay <= params.burnDuration; delay += 2) {
+                    this.scheduleEvent(this.time + delay, () => {
+                        this.addDamage(params.burnDamage * this.targetCount, stone.id, "machine_fire_meteor_burn");
+                        this.addMeter("fire", 200 * this.targetCount);
+                    });
+                }
+            }
+        }
+
+        triggerFlameBody(stone, stacks, mechanic) {
+            const params = stone.params;
+            const ticks = Math.floor(params.duration || 12);
+            for (let stack = 0; stack < stacks; stack += 1) {
+                for (let delay = 1; delay <= ticks; delay += 1) {
+                    this.scheduleEvent(this.time + delay, () => {
+                        this.addDamage((params.damage || 0) * Math.min(3, this.targetCount), stone.id, mechanic);
+                    });
+                }
+            }
+        }
+
+        triggerPaperForest(stone) {
+            const params = stone.params;
+            const attackCount = stone.rank >= 3 ? (params.upgradedAttacks || 3) : (params.attacks || 6);
+            const attackInterval = params.attackInterval || 2;
+            for (let i = 0; i < attackCount; i += 1) {
+                this.scheduleEvent(this.time + i * attackInterval, () => {
+                    this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_paper_forest");
+                    if (stone.rank >= 5) this.addMeter("wood", 80 * this.targetCount);
+                    const earthRift = this.machineStoneMap.get("earth-rift");
+                    if (earthRift && earthRift.rank >= 5) {
+                        this.addDamage((earthRift.params.echoDamage || 0) * this.targetCount, earthRift.id, "machine_earth_rift_echo_followup");
+                    }
+                });
+            }
+            if (stone.rank >= 3) {
+                const stormInterval = (params.stormDuration || 4) / ((params.stormHits || 11) - 1);
+                for (let i = 0; i < (params.stormHits || 11); i += 1) {
+                    this.scheduleEvent(this.time + i * stormInterval, () => {
+                        this.addDamage((params.stormDamage || 4513) * this.targetCount, stone.id, "machine_paper_storm");
+                        if (stone.rank >= 5) this.addMeter("wood", 80 * this.targetCount);
+                        const earthRift = this.machineStoneMap.get("earth-rift");
+                        if (earthRift && earthRift.rank >= 5) {
+                            this.addDamage((earthRift.params.echoDamage || 0) * this.targetCount, earthRift.id, "machine_earth_rift_echo_followup");
+                        }
+                    });
+                }
+            }
+        }
+
+        triggerColdTideCraftWaves(stone) {
+            const waves = stone.rank >= 5 ? 4 : 0;
+            for (let i = 0; i < waves; i += 1) {
+                stone.pendingCharges += 1;
+            }
+        }
+
+        triggerFiveThunderOrb(stone) {
+            const params = stone.params;
+            const targetsHit = this.targetCount;
+            this.addDamage((params.damage || 0) * targetsHit, stone.id, "machine_thunder_orb");
+            if (stone.rank >= 3) {
+                this.addDamage((params.burstDamage || 0) * targetsHit, stone.id, "machine_thunder_orb_burst");
+            }
+            if (stone.rank >= 5) {
+                const thunderBanner = this.getCard(CARD_IDS.THUNDER_BANNER);
+                if (!thunderBanner) return;
+                const hasPurpleDragon = Boolean(this.getCard(CARD_IDS.PURPLE_DRAGON));
+                const chainCount = hasPurpleDragon ? 6 : 3;
+                for (let i = 0; i < chainCount; i += 1) {
+                    this.triggerChainLightning(thunderBanner, 0.8, {
+                        skipPurpleDragonExtra: true,
+                        skipStaticOverload: true
+                    });
+                }
+            }
+        }
+
+        triggerWoodSpirit(stone, count) {
+            const params = stone.params;
+            const attackCount = Math.floor((params.duration || 30) / (params.attackInterval || 3));
+            for (let summon = 0; summon < count; summon += 1) {
+                for (let i = 1; i <= attackCount; i += 1) {
+                    this.scheduleEvent(this.time + i * (params.attackInterval || 3), () => {
+                        this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_wood_spirit");
+                        if (stone.rank >= 3 && this.craftStone && this.craftStone.id === "verdant-life") {
+                            this.craftStone.nextCastAt = Math.max(this.time, this.craftStone.nextCastAt - 1);
+                        }
+                        const earthRift = this.machineStoneMap.get("earth-rift");
+                        if (earthRift && earthRift.rank >= 5) {
+                            this.addDamage((earthRift.params.echoDamage || 0) * this.targetCount, earthRift.id, "machine_earth_rift_echo_followup");
+                        }
+                    });
+                }
+            }
+        }
+
+        triggerEarthRift(stone) {
+            const params = stone.params;
+            this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_earth_rift");
+            if (stone.rank >= 3) {
+                for (let delay = 1; delay <= (params.echoDuration || 30); delay += 1) {
+                    this.scheduleEvent(this.time + delay, () => {
+                        this.addDamage((params.echoDamage || 0) * this.targetCount, stone.id, "machine_earth_rift_echo");
+                    });
+                }
+            }
+        }
+
+        handleWoodDice() {
+            const stone = this.machineStoneMap.get("wood-dice");
+            if (!stone) return;
+            stone.counter = (stone.counter || 0) + 1;
+            const threshold = stone.params.pulseThreshold || 6;
+            if (stone.counter < threshold) return;
+            stone.counter = 0;
+            const maxStacks = stone.rank >= 3 ? 6 : 3;
+            this.effects.wood.luckStacks = maxStacks;
+            if (stone.rank >= 5) {
+                this.addDamage((stone.params.burstDamage || 0) * this.targetCount, stone.id, "machine_wood_dice_burst");
+            }
+        }
+
+        applyWoodDicePulseMeter() {
+            const stone = this.machineStoneMap.get("wood-dice");
+            if (!stone || stone.rank < 3) return;
+            this.addMeter("wood", 200 * this.targetCount);
+        }
+
+        consumeWoodDiceBonus(damage) {
+            if (this.effects.wood.luckStacks <= 0) return damage;
+            const stone = this.machineStoneMap.get("wood-dice");
+            if (!stone) return damage;
+            this.effects.wood.luckStacks -= 1;
+            return damage * (1 + (stone.params.damageBonus || 0));
+        }
+
+        triggerNineSkyThunder(stone) {
+            const params = stone.params;
+            const bolts = (params.bolts || 2) + (stone.rank >= 3 ? 1 : 0) + (stone.rank >= 5 ? 1 : 0);
+            this.addDamage((params.damage || 0) * bolts * this.targetCount, stone.id, "machine_nine_sky_thunder");
+            if (stone.rank >= 3) this.addMeter("thunder", 100 * bolts * this.targetCount);
+            if (stone.rank >= 5 && this.targetCount > 1) {
+                this.addDamage((params.damage || 0) * bolts * (this.targetCount - 1), stone.id, "machine_nine_sky_thunder_copy");
+            }
+        }
+
+        triggerThunderSpearDot(stone, hits) {
+            if (stone.rank < 3) return;
+            for (let second = 1; second <= 8; second += 1) {
+                this.scheduleEvent(this.time + second, () => {
+                    this.addDamage(95 * hits, stone.id, "machine_thunder_spear_dot");
+                });
+            }
+        }
+
+        triggerThunderShock(stone) {
+            const params = stone.params;
+            const interval = stone.rank >= 3 ? 0.5 : (params.interval || 1);
+            const targets = Math.min(this.targetCount, stone.rank >= 3 ? 2 : 1);
+            for (let delay = interval; delay <= (params.duration || 10) + 1e-9; delay += interval) {
+                this.scheduleEvent(this.time + delay, () => {
+                    this.addDamage((params.damage || 0) * targets, stone.id, "machine_thunder_shock");
+                });
+            }
+            if (stone.rank >= 5) {
+                this.scheduleEvent(this.time + (params.duration || 10), () => {
+                    this.addDamage((params.burstDamage || 0) * this.targetCount, stone.id, "machine_thunder_shock_burst");
+                    this.addMeter("thunder", 500 * this.targetCount);
+                });
+            }
+        }
+
+        scheduleThunderAmplifyTicks() {
+            const shock = this.machineStoneMap.get("thunder-shock");
+            if (shock) this.triggerThunderShock(shock);
+            const thunder = this.machineStoneMap.get("nine-sky-thunder");
+            if (thunder) this.triggerNineSkyThunder(thunder);
+        }
+
+        triggerFrostCrystalSpike(stone) {
+            const params = stone.params;
+            this.addDamage((params.damage || 0) * (params.spikeCount || 3), stone.id, "machine_frost_crystal_spike");
+            if (stone.rank >= 3) this.notifyShatter();
+        }
+
+        grantFrostCrystalSpikeCharges(count) {
+            const stone = this.machineStoneMap.get("frost-crystal-spike");
+            if (!stone) return;
+            stone.pendingCharges = (stone.pendingCharges || 0) + count;
+        }
+
+        consumeColdTideCharge() {
+            const stone = this.machineStoneMap.get("cold-tide");
+            if (!stone || !stone.pendingCharges) return false;
+            stone.pendingCharges -= 1;
+            this.addDamage((stone.params.damage || 0) * this.targetCount, stone.id, "machine_cold_tide");
+            if (stone.rank >= 3 && stone.params.meterAtRank3) {
+                this.addMeter("ice", stone.params.meterAtRank3 * this.targetCount);
+            }
+            return true;
+        }
+
+        handleMachineIceArrow(count) {
+            const stone = this.machineStoneMap.get("frost-crystal-spike");
+            if (!stone) return;
+            stone.counter = (stone.counter || 0) + count;
+            while (stone.counter >= (stone.params.arrowThreshold || 10)) {
+                stone.counter -= stone.params.arrowThreshold || 10;
+                this.grantFrostCrystalSpikeCharges(1);
+            }
+        }
+
+        consumeFrostCrystalSpikeCharge() {
+            const stone = this.machineStoneMap.get("frost-crystal-spike");
+            if (!stone || !stone.pendingCharges) return;
+            stone.pendingCharges -= 1;
+            this.triggerFrostCrystalSpike(stone);
+        }
+
+        triggerScarletRing(stone) {
+            const params = stone.params;
+            const ticks = stone.rank >= 3 ? 2 : 1;
+            for (let i = 0; i < ticks; i += 1) {
+                this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_fire_tick");
+                if (this.random() < 0.20) {
+                    const scarletAnt = this.getCard(CARD_IDS.SCARLET_ANT);
+                    if (scarletAnt) this.applyBurn(0, scarletAnt, 1, true, true);
+                }
+            }
+        }
+
+        scheduleScarletRingTicks() {
+            const stone = this.machineStoneMap.get("scarlet-ring");
+            if (!stone) return;
+            const interval = stone.rank >= 5 ? 1.5 : 2;
+            const duration = stone.rank >= 5 ? 12 : 10;
+            for (let delay = interval; delay <= duration + 1e-9; delay += interval) {
+                this.scheduleEvent(this.time + delay, () => {
+                    this.dispatchMachineStones(EVENTS.FIRE_AMPLIFY_TICK, { element: "fire" });
+                });
+            }
+        }
+
+        dispatchMachineStones(eventType, event = {}) {
+            this.machineStones.forEach(stone => {
+                const mechanics = stone.mechanics || [];
+                const matches = (eventType === EVENTS.ELEMENT_AMPLIFY && mechanics.includes(`on_${event.element}_amplify`))
+                    || (eventType === EVENTS.FIRE_AMPLIFY_TICK && mechanics.includes("during_fire_amplify"))
+                    || (eventType === EVENTS.ICE_AMPLIFY_FREEZE && mechanics.includes("on_ice_freeze"))
+                    || (eventType === EVENTS.ICE_ELEMENTAL_SUMMONED && mechanics.includes("on_ice_elemental"))
+                    || (eventType === EVENTS.WOOD_BLOOM && mechanics.includes("on_wood_bloom"))
+                    || (eventType === EVENTS.CHAIN_LIGHTNING_HIT && mechanics.includes("on_chain_hit"))
+                    || (eventType === EVENTS.CRAFT_STONE_CAST_END && mechanics.includes("on_craft_fire_end") && event.stoneId === "blazing-skyfire")
+                    || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "thunder-guard" && event.stoneId === "thunder-aegis")
+                    || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "cold-tide" && event.stoneId === "frost-glory")
+                    || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "frost-rain" && event.stoneId === "frost-glory")
+                    || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "frost-shatter" && event.stoneId === "frost-glory")
+                    || (eventType === EVENTS.ICE_ELEMENTAL_SUMMONED && stone.id === "frost-crystal-spike")
+                    || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "rotten-gale" && event.stoneId === "verdant-life")
+                    || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "earth-rift" && event.stoneId === "verdant-life")
+                    || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "wood-spirit" && event.stoneId === "verdant-life")
+                    || (eventType === EVENTS.COMBUST && stone.id === "flame-body");
+                if (!matches) return;
+                const params = stone.params;
+                let amount = params.damage || 0;
+                if (eventType === EVENTS.FIRE_AMPLIFY_TICK && stone.id === "scarlet-ring") {
+                    this.triggerScarletRing(stone);
+                    return;
+                }
+                if (eventType === EVENTS.ELEMENT_AMPLIFY && event.element === "fire" && stone.id === "fire-meteor" && stone.rank < 5) {
+                    return;
+                }
+                if (eventType === EVENTS.ELEMENT_AMPLIFY && event.element === "fire" && stone.id === "fire-meteor") {
+                    this.triggerFireMeteor(stone, "machine_fire_meteor_amplify");
+                    return;
+                }
+                if (eventType === EVENTS.ICE_ELEMENTAL_SUMMONED && stone.id === "frost-shatter") {
+                    this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_frost_shatter");
+                    if (stone.rank >= 3) {
+                        for (let delay = 1; delay <= (params.extraDuration || 6); delay += 1) {
+                            this.scheduleEvent(this.time + delay, () => this.addDamage((params.extraDamage || 0) / (params.extraDuration || 6) * this.targetCount, stone.id, "machine_frost_shatter_dot"));
+                        }
+                    }
+                    return;
+                }
+                if (eventType === EVENTS.ICE_AMPLIFY_FREEZE && stone.id === "frost-rain") {
+                    this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_frost_rain");
+                    return;
+                }
+                if (eventType === EVENTS.ICE_ELEMENTAL_SUMMONED && stone.id === "frost-crystal-spike" && stone.rank >= 5) {
+                    this.grantFrostCrystalSpikeCharges(2);
+                    return;
+                }
+                if (eventType === EVENTS.ELEMENT_AMPLIFY && event.element === "ice" && stone.id === "frost-surge") {
+                    this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_ice_amplify");
+                    return;
+                }
+                if (eventType === EVENTS.ELEMENT_AMPLIFY && event.element === "wood" && stone.id === "wood-spirit") {
+                    this.triggerWoodSpirit(stone, stone.rank >= 5 ? 3 : 1);
+                    return;
+                }
+                if (eventType === EVENTS.ELEMENT_AMPLIFY && event.element === "thunder") {
+                    return;
+                }
+                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "blazing-land") {
+                    for (let delay = 1; delay <= (params.duration || 8); delay += (params.interval || 1)) {
+                        this.scheduleEvent(this.time + delay, () => {
+                            this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_blazing_land");
+                            if (stone.rank >= 3) this.addMeter("fire", 1500 * this.targetCount);
+                        });
+                    }
+                    return;
+                }
+                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "cold-tide" && stone.rank >= 5) {
+                    this.triggerColdTideCraftWaves(stone);
+                    return;
+                }
+                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "frost-rain" && stone.rank >= 3 && this.craftStone?.id === "frost-glory") {
+                    this.scheduleEvent(this.time + 0.001, () => {
+                        this.addDamage(this.craftStone.params.damage * 0.30 * this.targetCount, stone.id, "machine_frost_rain_craft_bonus");
+                    });
+                    return;
+                }
+                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "frost-shatter" && stone.rank >= 5) {
+                    this.notifyIceElementalSummoned({ sourceCardId: stone.id });
+                    return;
+                }
+                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "rotten-gale" && stone.rank >= 5) {
+                    this.addMeter("wood", 10000 * Math.min(5, this.targetCount));
+                    return;
+                }
+                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "earth-rift") {
+                    this.triggerEarthRift(stone);
+                    return;
+                }
+                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "wood-spirit" && stone.rank >= 5) {
+                    this.triggerWoodSpirit(stone, 2);
+                    return;
+                }
+                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "thunder-guard") {
+                    const duration = params.duration || 10;
+                    stone.guardExpiresAt = this.time + duration;
+                    if (stone.rank >= 3 && this.externalSkillDps > 0) {
+                        const total = this.externalSkillDps * duration * (params.externalSkillBonus || 0);
+                        this.addDamage(total, stone.id, "machine_thunder_guard_external");
+                    }
+                    return;
+                }
+                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "flame-body" && event.stoneId === "blazing-skyfire" && stone.rank >= 5) {
+                    this.triggerFlameBody(stone, 12, "machine_flame_body_craft");
+                    return;
+                }
+                if (eventType === EVENTS.COMBUST && stone.id === "flame-body" && stone.rank >= 3) {
+                    this.triggerFlameBody(stone, 2, "machine_flame_body_combust");
+                    return;
+                }
+                if (eventType === EVENTS.CHAIN_LIGHTNING_HIT) {
+                    amount *= event.targetsHit || 1;
+                    const hits = stone.rank >= 5 ? 1 + (params.extraAtRank5 || 0) : 1;
+                    for (let i = 0; i < hits; i++) {
+                        this.addDamage(amount, stone.id, "machine_chain");
+                    }
+                    this.triggerThunderSpearDot(stone, hits);
+                } else {
+                    const count = eventType === EVENTS.ELEMENT_AMPLIFY && event.element === "fire" && stone.id === "fireburst" && stone.rank >= 5 ? 2 : 1;
+                    this.addDamage(amount * this.targetCount * count, stone.id, "machine_link");
+                }
+                if (eventType === EVENTS.ICE_AMPLIFY_FREEZE && stone.rank >= 5 && params.freezeMeterAtRank5) {
+                    this.addMeter("ice", this.effects.ice.freezeMeterBonus || params.freezeMeterAtRank5);
+                }
+            });
         }
 
         // 处理目标身上的持续状态，如燃烧、爆燃和静电过载。
@@ -1096,6 +1612,7 @@
         // 结算一次爆燃事件。
         handleCombust(targetIndex) {
             this.notifyCombust({ targetIndex });
+            this.dispatchMachineStones(EVENTS.COMBUST, { targetIndex });
         }
 
         // 发射冰箭；每一段命中后都向冰系联动广播事件。
@@ -1104,6 +1621,10 @@
             for (let i = 0; i < arrowCount; i++) {
                 const totalDamage = damagePerArrow * targetsHit;
                 this.addDamage(totalDamage, card.id, mechanic);
+                const consumedColdTide = this.consumeColdTideCharge();
+                this.handleMachineIceArrow(1);
+                if (!consumedColdTide) this.consumeColdTideCharge();
+                this.consumeFrostCrystalSpikeCharge();
                 this.notifyIceArrowHit({
                     card,
                     targetsHit,
@@ -1120,6 +1641,8 @@
             const stormOnlyBonus = zuoGui ? zuoGui.params.damageBonus : 0;
             const damage = card.params.stormDamage * (1 + stormOnlyBonus) * efficiency;
             this.addDamage(damage, card.id, efficiency < 1 ? "ice_storm_frenzy" : "ice_storm");
+            this.consumeColdTideCharge();
+            this.consumeFrostCrystalSpikeCharge();
             this.notifyIceStormHit({
                 card,
                 efficiency,
@@ -1131,7 +1654,8 @@
         // 触发一次木系脉冲，并广播给木系联动丹青。
         triggerPulse(card, efficiency, mechanic) {
             const base = this.getPulseDamage(card.params.pulseDamage || 9792);
-            const damage = base * this.targetCount * efficiency;
+            const boostedBase = this.consumeWoodDiceBonus(base);
+            const damage = boostedBase * this.targetCount * efficiency;
             this.addDamage(damage, card.id, mechanic);
             this.notifyPulseTriggered({
                 card,
@@ -1139,19 +1663,41 @@
                 mechanic,
                 damage
             });
+            this.applyWoodDicePulseMeter();
+            this.handleWoodDice();
         }
 
         // 触发一次雷链，并广播给神雷联动丹青。
-        triggerChainLightning(card, efficiency) {
+        triggerChainLightning(card, efficiency, options = {}) {
             const targetsHit = Math.min(this.targetCount, card.params.maxEnemyTargets || 3);
-            const damagePerTarget = this.getChainDamage(card.params.chainDamage, targetsHit) * efficiency;
+            let damagePerTarget = this.getChainDamage(card.params.chainDamage, targetsHit) * efficiency;
+            const thunderGuard = this.machineStoneMap.get("thunder-guard");
+            if (thunderGuard && thunderGuard.guardExpiresAt && this.time <= thunderGuard.guardExpiresAt) {
+                damagePerTarget *= 1 + (thunderGuard.params.chainBonus || 0);
+            }
             this.addDamage(damagePerTarget * targetsHit, card.id, efficiency < 1 ? "chain_lightning_frenzy" : "chain_lightning");
             this.notifyChainLightningHit({
                 sourceCardId: card.id,
                 targetsHit,
                 damagePerTarget,
+                efficiency,
+                skipPurpleDragonExtra: Boolean(options.skipPurpleDragonExtra),
+                skipStaticOverload: Boolean(options.skipStaticOverload)
+            });
+            this.dispatchMachineStones(EVENTS.CHAIN_LIGHTNING_HIT, {
+                sourceCardId: card.id,
+                targetsHit,
+                damagePerTarget,
                 efficiency
             });
+        }
+
+        applyThunderGuardLinyinBonus() {
+            const thunderGuard = this.machineStoneMap.get("thunder-guard");
+            if (!thunderGuard || thunderGuard.rank < 5) return;
+            if (!thunderGuard.guardExpiresAt || this.time > thunderGuard.guardExpiresAt) return;
+            const total = 93805 * this.targetCount * (thunderGuard.params.allLinyinBonus || 0);
+            this.addDamage(total, thunderGuard.id, "machine_thunder_guard_linyin");
         }
 
         // 给目标挂上静电过载的未来伤害 tick。
@@ -1178,6 +1724,14 @@
         // 触发对应元素的激化效果。
         triggerAmplify(element) {
             this.emit(EVENTS.ELEMENT_AMPLIFY, { element });
+            this.dispatchMachineStones(EVENTS.ELEMENT_AMPLIFY, { element });
+            if (element === "fire") {
+                this.scheduleScarletRingTicks();
+            }
+            if (element === "thunder") {
+                this.scheduleThunderAmplifyTicks();
+            }
+            this.applyThunderGuardLinyinBonus();
         }
 
         // 以下 notifyXxx 方法都是语义化事件入口，便于阅读调用链。
@@ -1205,6 +1759,26 @@
             this.emit(EVENTS.ICE_STORM_HIT, event);
         }
 
+        notifyIceAmplifyFreeze(event = {}) {
+            this.emit(EVENTS.ICE_AMPLIFY_FREEZE, event);
+            this.dispatchMachineStones(EVENTS.ICE_AMPLIFY_FREEZE, event);
+        }
+
+        notifyIceElementalSummoned(event = {}) {
+            this.emit(EVENTS.ICE_ELEMENTAL_SUMMONED, event);
+            this.dispatchMachineStones(EVENTS.ICE_ELEMENTAL_SUMMONED, event);
+        }
+
+        notifyWoodBloom(event = {}) {
+            this.emit(EVENTS.WOOD_BLOOM, event);
+            this.dispatchMachineStones(EVENTS.WOOD_BLOOM, event);
+        }
+
+        notifyCraftStoneCastEnd(event = {}) {
+            this.emit(EVENTS.CRAFT_STONE_CAST_END, event);
+            this.dispatchMachineStones(EVENTS.CRAFT_STONE_CAST_END, event);
+        }
+
         notifyPulseTriggered(event) {
             this.emit(EVENTS.PULSE_TRIGGERED, event);
         }
@@ -1217,12 +1791,46 @@
             this.emit(EVENTS.THUNDER_FRENZY);
         }
 
+        describeInactiveMachineStone(stone) {
+            switch (stone.id) {
+                case "wood-dice":
+                    return `${stone.name} 未触发：脉冲次数不足 ${stone.params.pulseThreshold || 6} 次`;
+                case "thunder-shock":
+                case "nine-sky-thunder":
+                    return `${stone.name} 未触发：本局未达成神雷激化`;
+                case "frost-rain":
+                    return `${stone.name} 未触发：本局未触发玄冰冻结`;
+                case "frost-shatter":
+                    return `${stone.name} 未触发：本局未出现冰霜元素`;
+                case "frost-crystal-spike":
+                    return `${stone.name} 未触发：冰箭数量不足 ${stone.params.arrowThreshold || 10} 枚，或未消费寒晶刺效果`;
+                case "cold-tide":
+                    return `${stone.name} 未触发：未产生可消耗的寒潮攻击机会`;
+                case "rotten-gale":
+                    return `${stone.name} 未触发：本局未触发苍木激化·绽放`;
+                case "wood-spirit":
+                    return `${stone.name} 未触发：本局未达成苍木激化`;
+                case "earth-rift":
+                    return `${stone.name} 未触发：本局未召唤苍木树人近似事件`;
+                case "thunder-spear":
+                    return `${stone.name} 未触发：本局连锁闪电命中次数不足`;
+                case "thunder-guard":
+                    return `${stone.name} 未单列伤害：当前作为连锁闪电增伤窗口生效`;
+                default:
+                    return `${stone.name} 未触发：当前组合缺少其前置触发条件或时长不足`;
+            }
+        }
+
         // 把内部累计结果整理成最终返回结构。
         finalize() {
+            const inactiveMachineStones = this.machineStones
+                .filter(stone => !stone.activated)
+                .map(stone => this.describeInactiveMachineStone(stone));
+            this.warnings.push(...inactiveMachineStones);
             const duration = Math.max(1, this.duration);
             const byCard = Object.entries(this.breakdown.byCard)
                 .map(([cardId, damage]) => {
-                    const card = this.getCard(cardId) || Data.getCardDefById(cardId) || { name: cardId };
+                    const card = this.getCard(cardId) || Data.getCardDefById(cardId) || Data.getMachineStoneDefById(cardId) || Data.getCraftStoneDefById(cardId) || { name: cardId };
                     return {
                         id: cardId,
                         name: card.name,
@@ -1258,6 +1866,12 @@
                     thunder: Math.round(this.meters.thunder)
                 },
                 amplifyTriggers: { ...this.amplifyTriggers },
+                amplifyTimeline: {
+                    fire: this.amplifyTimeline.fire.slice(),
+                    ice: this.amplifyTimeline.ice.slice(),
+                    wood: this.amplifyTimeline.wood.slice(),
+                    thunder: this.amplifyTimeline.thunder.slice()
+                },
                 warnings: this.warnings.slice(),
                 seed: this.seed
             };

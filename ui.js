@@ -1,5 +1,5 @@
 (function () {
-    const { CARD_DEFS } = window.Data;
+    const { CARD_DEFS, MACHINE_STONE_DEFS, CRAFT_STONE_DEFS } = window.Data;
     const { CombatEngine, ELEMENT_LABELS } = window.Engine;
 
     const ELEMENT_META = {
@@ -10,6 +10,8 @@
     };
 
     const selected = new Map();
+    const selectedMachineStones = new Map();
+    let selectedCraftStone = null;
     let chart = null;
     let lastResult = null;
     let currentTab = "basic";
@@ -18,10 +20,23 @@
 
     function initDefaults() {
         selected.clear();
+        selectedMachineStones.clear();
+        selectedCraftStone = null;
     }
 
     function getSelectedDeck() {
         return Array.from(selected.values());
+    }
+
+    function getSelectedMachineStones() {
+        return Array.from(selectedMachineStones.values());
+    }
+
+    function getMachineFee() {
+        return getSelectedMachineStones().reduce((sum, item) => {
+            const stone = MACHINE_STONE_DEFS.find(entry => entry.id === item.id);
+            return sum + (stone ? item.rank : 0);
+        }, 0);
     }
 
     function getTotalFee() {
@@ -147,6 +162,127 @@
                 </div>
             </div>
         `;
+    }
+
+    function renderMachineStones() {
+        const grid = document.getElementById("machineStoneGrid");
+        if (!grid) return;
+        const sections = Object.keys(ELEMENT_META).map(element => {
+            const meta = ELEMENT_META[element];
+            const stones = MACHINE_STONE_DEFS.filter(stone => stone.element === element);
+            return `<div class="machine-race-section">
+                ${stones.map(stone => renderMachineStone(stone, meta)).join("")}
+            </div>`;
+        }).join("");
+        grid.innerHTML = sections;
+        grid.querySelectorAll("[data-machine-stone]").forEach(node => {
+            const id = node.dataset.machineStone;
+            node.addEventListener("click", event => {
+                if (event.target.closest("input")) return;
+                if (selectedMachineStones.has(id)) {
+                    selectedMachineStones.delete(id);
+                } else {
+                    selectedMachineStones.set(id, { id, rank: 5 });
+                }
+                renderMachineStones();
+                updateMachineSummary();
+            });
+        });
+        grid.querySelectorAll(".machine-rank-slider").forEach(slider => {
+            const id = slider.dataset.id;
+            const item = selectedMachineStones.get(id);
+            if (item) {
+                const pct = ((item.rank - 1) / 4) * 100;
+                slider.style.backgroundSize = `${pct}% 100%`;
+            }
+            slider.addEventListener("input", event => {
+                const next = selectedMachineStones.get(id);
+                if (!next) return;
+                next.rank = parseInt(event.target.value, 10);
+                const level = document.getElementById(`machine-rank-${id}`);
+                if (level) level.innerText = next.rank;
+                event.target.style.backgroundSize = `${((next.rank - 1) / 4) * 100}% 100%`;
+                updateMachineSummary();
+            });
+            slider.addEventListener("click", event => event.stopPropagation());
+            slider.addEventListener("mousedown", event => event.stopPropagation());
+        });
+    }
+
+    function renderMachineStone(stone, meta) {
+        const picked = selectedMachineStones.get(stone.id);
+        const rank = picked ? picked.rank : 1;
+        const pct = ((rank - 1) / 4) * 100;
+        return `<div class="card-box rounded-2xl ${meta.border} relative ${picked ? "selected" : ""}" data-machine-stone="${stone.id}">
+            ${picked ? `<div class="selected-badge">✓</div>` : ""}
+            <div class="w-full">
+                <div class="flex justify-between items-center mb-1">
+                    <div class="flex items-center gap-2 overflow-hidden">
+                        <span class="text-[16px] font-black text-slate-800 tracking-tight leading-none truncate">${stone.name}</span>
+                        <span class="text-[11px] font-black px-2 py-0.5 rounded-md ${meta.tag} shrink-0">${meta.title}</span>
+                    </div>
+                </div>
+                <div class="card-hover-panel">
+                    <div class="card-copy">
+                        <p>${stone.baseEffectText}</p>
+                        <p class="upgrade-line">${stone.upgradeText}</p>
+                    </div>
+                </div>
+                <div class="star-ui ${picked ? "" : "hidden"}" onclick="event.stopPropagation()">
+                    <div class="flex items-center gap-3 mt-4 mb-1">
+                        <div class="flex-1 relative">
+                            <input class="machine-rank-slider star-slider" type="range" min="1" max="5" value="${rank}" data-id="${stone.id}" style="background-size:${pct}% 100%">
+                        </div>
+                        <div class="flex flex-col items-center min-w-[30px]">
+                            <span class="text-[11px] font-black text-indigo-600 leading-none"><span id="machine-rank-${stone.id}">${rank}</span>/5</span>
+                            <span class="text-[10px] font-black text-indigo-400">★</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    function renderCraftStones() {
+        const grid = document.getElementById("craftStoneGrid");
+        if (!grid) return;
+        grid.innerHTML = CRAFT_STONE_DEFS.map(stone => {
+            const meta = ELEMENT_META[stone.element];
+            const active = selectedCraftStone === stone.id;
+            return `<div class="card-box rounded-2xl ${meta.border} relative ${active ? "selected" : ""}" data-craft-stone="${stone.id}">
+                ${active ? `<div class="selected-badge">✓</div>` : ""}
+                <div class="w-full">
+                    <div class="flex justify-between items-center mb-1">
+                        <div class="flex items-center gap-2 overflow-hidden">
+                            <span class="text-[16px] font-black text-slate-800 tracking-tight leading-none truncate">${stone.name}</span>
+                            <span class="text-[11px] font-black px-2 py-0.5 rounded-md ${meta.tag} shrink-0">${meta.title}</span>
+                        </div>
+                        <span class="text-[10px] bg-gradient-to-br from-slate-50 to-slate-100 text-slate-600 px-2 py-1 rounded-lg font-black tracking-tight border border-slate-200 shadow-sm">1费</span>
+                    </div>
+                    <div class="card-hover-panel">
+                        <div class="card-copy">
+                            <p>${stone.baseEffectText}</p>
+                            <p class="upgrade-line">基础技能 · ${stone.castTime}s 施法 · ${stone.cooldown}s 冷却</p>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        }).join("");
+        grid.querySelectorAll("[data-craft-stone]").forEach(node => node.addEventListener("click", () => {
+            selectedCraftStone = selectedCraftStone === node.dataset.craftStone ? null : node.dataset.craftStone;
+            renderCraftStones();
+            updateMachineSummary();
+        }));
+    }
+
+    function updateMachineSummary() {
+        const limit = parseInt(document.getElementById("machineFeeLimit")?.value, 10) || 18;
+        const label = document.getElementById("machineFeeLabel");
+        if (!label) return;
+        label.innerText = `${getMachineFee()} / ${limit} 费`;
+        label.className = getMachineFee() > limit
+            ? "rounded-full bg-red-500 px-2 py-1 text-white"
+            : "rounded-full bg-white px-2 py-1 text-cyan-700";
     }
 
     function updateSummary() {
@@ -410,21 +546,29 @@
         const duration = parseInt(document.getElementById("simTime").value, 10) || 60;
         const iterations = parseInt(document.getElementById("simIter").value, 10) || 100;
         const targetCount = parseInt(document.getElementById("targetCount").value, 10) || 1;
+        const externalSkillDps = parseFloat(document.getElementById("externalSkillDps")?.value || "150000") || 150000;
         const deck = getSelectedDeck();
-        if (deck.length === 0) {
-            alert("请至少选择一张丹青");
+        const machineStones = getSelectedMachineStones();
+        if (deck.length === 0 && machineStones.length === 0 && !selectedCraftStone) {
+            alert("请至少选择一张丹青、机巧石或匠心石");
             return;
         }
+        const machineLimit = parseInt(document.getElementById("machineFeeLimit")?.value, 10) || 18;
 
         const totals = [];
         const histories = [];
         const cardMap = new Map();
         const mechanicMap = new Map();
         const amplify = { fire: 0, ice: 0, wood: 0, thunder: 0 };
+        const amplifyTimes = { fire: [], ice: [], wood: [], thunder: [] };
         const warningSet = new Set();
 
         for (let i = 0; i < iterations; i++) {
-            const engine = new CombatEngine(deck, { duration, targetCount, seed: 1000 + i });
+            const engine = new CombatEngine({
+                deck,
+                machineStones,
+                craftStone: selectedCraftStone ? { id: selectedCraftStone } : null
+            }, { duration, targetCount, seed: 1000 + i, externalSkillDps });
             const result = engine.simulate();
             totals.push(result.totalDps);
             histories.push(result.dpsHistory);
@@ -438,6 +582,9 @@
             });
             Object.keys(amplify).forEach(key => {
                 amplify[key] += result.amplifyTriggers[key] || 0;
+                if (i === 0 && result.amplifyTimeline) {
+                    amplifyTimes[key] = (result.amplifyTimeline[key] || []).slice();
+                }
             });
             result.warnings.forEach(text => warningSet.add(text));
             lastResult = result;
@@ -465,7 +612,8 @@
 
         renderOverview({ avgDps, minDps, maxDps, ci95, iterations, targetCount, duration });
         renderBreakdown(cardMap, mechanicMap, iterations, duration);
-        renderAmplify(amplify, iterations);
+        renderAmplify(amplify, iterations, amplifyTimes);
+        renderWarnings(warningSet);
         renderChart(averageCurve);
     }
 
@@ -505,12 +653,30 @@
 //        document.getElementById("mechanicBreakdown").innerHTML = mechanicRows || "<li><span>暂无</span><strong>0</strong></li>";
     }
 
-    function renderAmplify(amplify, iterations) {
+    function renderAmplify(amplify, iterations, amplifyTimes = {}) {
         const rows = Object.keys(amplify).map(key => {
             const avg = amplify[key] / iterations;
-            return `<li><span>${ELEMENT_LABELS[key]}</span><strong>${avg.toFixed(2)} 次/局</strong></li>`;
+            const times = amplifyTimes[key] || [];
+            const timeText = times.length
+                ? times.map(t => `${t}s`).join("、")
+                : "无";
+            return `<li><span class="whitespace-nowrap">${ELEMENT_LABELS[key]}</span><strong class="text-right">${avg.toFixed(2)} 次/局<br><span class="text-[11px] font-bold text-slate-400">${timeText}</span></strong></li>`;
         }).join("");
         document.getElementById("amplifyList").innerHTML = rows;
+    }
+
+    function renderWarnings(warningSet) {
+        const existing = document.getElementById("machineWarnings");
+        if (existing) existing.remove();
+        if (!warningSet || warningSet.size === 0) return;
+        const statsGrid = document.querySelector('#tab-basic .grid.grid-cols-2.gap-3');
+        if (!statsGrid) return;
+        statsGrid.insertAdjacentHTML('afterend', `
+            <div id="machineWarnings" class="warning-card">
+                <h3>机巧石提示</h3>
+                <ul>${Array.from(warningSet).map(text => `<li>${text}</li>`).join('')}</ul>
+            </div>
+        `);
     }
 
     function renderChart(data) {
@@ -589,17 +755,14 @@
         document.getElementById("btnStartBF").addEventListener("click", startSeason2BruteForce);
         document.getElementById("btnStopBF").addEventListener("click", stopSeason2BruteForce);
 
-        const simTime = document.getElementById("simTime");
-        const simIter = document.getElementById("simIter");
-        const targetCount = document.getElementById("targetCount");
-        const timeVal = document.getElementById("timeVal");
-        const iterVal = document.getElementById("iterVal");
-        const targetVal = document.getElementById("targetVal");
+        const externalSkillDpsInput = document.getElementById("externalSkillDps");
+        const externalDpsVal = document.getElementById("externalDpsVal");
 
         const syncRangeLabels = () => {
             timeVal.innerText = simTime.value;
             iterVal.innerText = simIter.value;
             targetVal.innerText = targetCount.value;
+            externalDpsVal.innerText = externalSkillDpsInput.value || "0";
 
             const timePct = (simTime.value - 10) / (600 - 10) * 100;
             simTime.style.backgroundSize = `${timePct}% 100%`;
@@ -614,6 +777,9 @@
         simTime.addEventListener("input", syncRangeLabels);
         simIter.addEventListener("input", syncRangeLabels);
         targetCount.addEventListener("input", syncRangeLabels);
+        externalSkillDpsInput.addEventListener("input", syncRangeLabels);
+
+        document.getElementById("machineFeeLimit")?.addEventListener("input", updateMachineSummary);
 
         document.querySelectorAll(".star-batch-btn").forEach(btn => {
             btn.addEventListener("click", () => {
@@ -626,8 +792,13 @@
 
         document.getElementById("clearDeck").addEventListener("click", () => {
             selected.clear();
+            selectedMachineStones.clear();
+            selectedCraftStone = null;
             renderCards();
+            renderMachineStones();
+            renderCraftStones();
             updateSummary();
+            updateMachineSummary();
         });
         document.getElementById("fullDeck").addEventListener("click", () => {
             CARD_DEFS.forEach(card => selected.set(card.id, { id: card.id, level: selected.get(card.id)?.level ?? 6 }));
@@ -644,7 +815,10 @@
     function boot() {
         initDefaults();
         renderCards();
+        renderMachineStones();
+        renderCraftStones();
         updateSummary();
+        updateMachineSummary();
         bind();
     }
 

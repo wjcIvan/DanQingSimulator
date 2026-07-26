@@ -291,6 +291,216 @@
         }
     ];
 
+    const MACHINE_STONE_DEFS = [
+        {
+            id: "frost-surge",
+            name: "凛霜寒涌",
+            element: "ice",
+            fee: 1,
+            baseEffectText: "玄冰激化时释放寒气，造成 75540 玄冰伤害。",
+            upgradeText: "2/5、4/5：伤害提高 37.5%；3/5：伤害提高 75%，玄冰激化伤害提高 30%；5/5：玄冰激化冻结时额外累加 3000 玄冰值。",
+            mechanics: ["on_ice_amplify"],
+            params: { damage: stat(75540, 75540 * 0.375), iceAmplifyBonusAtRank3: 0.30, freezeMeterAtRank5: 3000 }
+        },
+        {
+            id: "frost-shatter",
+            name: "霜寒破裂",
+            element: "ice",
+            fee: 2,
+            baseEffectText: "冰霜元素出现时，对周围敌人造成 60632 玄冰伤害。",
+            upgradeText: "伤害每提升一档 +37.5%；3/5：额外持续伤害；5/5：凝冰霜华可无视冷却召唤冰霜元素。",
+            mechanics: ["on_ice_elemental"],
+            params: { damage: stat(60632, 60632 * 0.375), extraDamage: 76692, extraDuration: 6 }
+        },
+        {
+            id: "frost-rain",
+            name: "霜刺寒雨",
+            element: "ice",
+            fee: 3,
+            baseEffectText: "玄冰激化冻结时，对目标及周围敌人造成 81740 玄冰伤害。",
+            upgradeText: "伤害每提升一档 +37.5%；3/5：凝冰霜华伤害提高 30%；5/5：触发时获得 3 层洞察。",
+            mechanics: ["on_ice_freeze"],
+            params: { damage: stat(81740, 81740 * 0.375) }
+        },
+        {
+            id: "frost-crystal-spike",
+            name: "寒晶刺",
+            element: "ice",
+            fee: 4,
+            baseEffectText: "每召唤 10 枚冰箭，下一次攻击额外召唤 3 枚寒晶刺，每枚造成 10992 玄冰伤害。",
+            upgradeText: "伤害每提升一档 +37.5%；3/5：寒晶刺命中时触发碎裂；5/5：冰霜元素出现时获得寒晶刺。",
+            mechanics: ["ice_arrow_counter"],
+            params: { damage: stat(10992, 10992 * 0.375), arrowThreshold: 10, spikeCount: 3 }
+        },
+        {
+            id: "cold-tide",
+            name: "寒潮冰涌",
+            element: "ice",
+            fee: 5,
+            baseEffectText: "进入战斗及之后周期性获得寒潮，下一次攻击造成 38144 玄冰伤害。",
+            upgradeText: "伤害每提升一档 +37.5%；3/5：间隔缩短 10 秒并累加 2000 玄冰值；5/5：凝冰霜华期间额外释放寒潮。",
+            mechanics: ["periodic_next_attack"],
+            params: { damage: stat(38144, 38144 * 0.375), interval: 30, rank3Interval: 20, meterAtRank3: 2000 }
+        },
+        {
+            id: "fire-meteor",
+            name: "天火陨星",
+            element: "fire",
+            fee: 1,
+            baseEffectText: "进入战斗及之后每 20 秒，下一次攻击投掷陨星，造成 26594 天火伤害并累加 2000 天火值。",
+            upgradeText: "伤害每提升一档 +37.5%；3/5：附加持续灼烧；5/5：天火激化时获得一次陨星。",
+            mechanics: ["periodic_next_attack", "on_fire_amplify"],
+            params: { damage: stat(26594, 26594 * 0.375), interval: 20, meter: 2000, burnDamage: 5342, burnDuration: 10 }
+        },
+        {
+            id: "scarlet-ring",
+            name: "赤焰天环",
+            element: "fire",
+            fee: 2,
+            baseEffectText: "天火激化期间持续对目标造成赤焰天环伤害，每次 3080 天火伤害。",
+            upgradeText: "伤害每提升一档 +37.5%；3/5：额外触发一次；5/5：生效间隔缩短并延长持续时间。",
+            mechanics: ["during_fire_amplify"],
+            params: { damage: stat(3080, 3080 * 0.375), interval: 2, extraTicksAtRank3: 1 }
+        },
+        {
+            id: "blazing-land",
+            name: "烈火燎原",
+            element: "fire",
+            fee: 3,
+            baseEffectText: "灼灼天炎结束时生成烈焰之地，持续 8 秒，每秒造成 29308 天火伤害。",
+            upgradeText: "伤害每提升一档 +37.5%；3/5：命中累加天火值；5/5：灼灼天炎后自身灵蕴伤害提高。",
+            mechanics: ["on_craft_fire_end"],
+            params: { damage: stat(29308, 29308 * 0.375), duration: 8, interval: 1 }
+        },
+        {
+            id: "flame-body",
+            name: "烈焰焚身",
+            element: "fire",
+            fee: 4,
+            baseEffectText: "战斗中周期获得焚尽，攻击时为敌人添加烈焰焚身，每秒造成 1082 天火伤害。",
+            upgradeText: "伤害每提升一档 +37.5%；3/5：爆燃额外添加 2 层；5/5：灼灼天炎期间最多添加 12 层。",
+            mechanics: ["periodic_next_attack"],
+            params: { damage: stat(1082, 1082 * 0.375), interval: 15, duration: 12 }
+        },
+        {
+            id: "fireburst",
+            name: "神火迸发",
+            element: "fire",
+            fee: 5,
+            baseEffectText: "受到天火激化影响的目标喷发陨星，造成 65290 天火伤害。",
+            upgradeText: "伤害每提升一档 +37.5%；3/5：天火激化伤害提高 20%；5/5：额外造成一次伤害。",
+            mechanics: ["on_fire_amplify"],
+            params: { damage: stat(65290, 65290 * 0.375), extraAtRank5: 1 }
+        },
+        {
+            id: "rotten-gale",
+            name: "腐木瘴风",
+            element: "wood",
+            fee: 1,
+            baseEffectText: "苍木激化·绽放时额外触发腐木瘴风，造成 25042 苍木伤害。",
+            upgradeText: "伤害每提升一档 +37.5%；3/5：苍木激化伤害提高 40%；5/5：青芜浮生后添加苍木值。",
+            mechanics: ["on_wood_bloom"],
+            params: { damage: stat(25042, 25042 * 0.375) }
+        },
+        {
+            id: "paper-forest",
+            name: "苍林浮生",
+            element: "wood",
+            fee: 2,
+            baseEffectText: "战斗中每 20 秒召唤小纸人，攻击造成 10022 苍木伤害。",
+            upgradeText: "小纸人伤害每提升一档 +12.5%；3/5：召唤后额外使用纸人风暴；5/5：攻击累加苍木值。",
+            mechanics: ["periodic_summon"],
+            params: { damage: stat(10022, 10022 * 0.125), interval: 20, attacks: 6, attackInterval: 2, upgradedAttacks: 3, stormDamage: stat(4513, 4513 * 0.125), stormHits: 11, stormDuration: 4 }
+        },
+        {
+            id: "wood-dice",
+            name: "神木骰",
+            element: "wood",
+            fee: 3,
+            baseEffectText: "累积触发 6 次脉冲后获得六六大顺，脉冲伤害提高 40%。",
+            upgradeText: "增幅每提升一档 +37.5%；3/5：根据点数获得 1~6 层；5/5：触发时造成 114514 苍木伤害。",
+            mechanics: ["pulse_counter"],
+            params: { pulseThreshold: 6, damageBonus: stat(0.40, 0.375), burstDamage: 114514 }
+        },
+        {
+            id: "wood-spirit",
+            name: "木引青灵",
+            element: "wood",
+            fee: 4,
+            baseEffectText: "苍木激化触发时召唤木引青灵，攻击造成 5992 苍木伤害。",
+            upgradeText: "伤害每提升一档 +12.5%；3/5：攻击使青芜浮生冷却减少；5/5：青芜浮生额外召唤 2 只。",
+            mechanics: ["on_wood_amplify"],
+            params: { damage: stat(5992, 5992 * 0.125), duration: 30, attackInterval: 3 }
+        },
+        {
+            id: "earth-rift",
+            name: "裂地崩",
+            element: "wood",
+            fee: 5,
+            baseEffectText: "苍木树人召唤后造成 207708 苍木伤害。",
+            upgradeText: "伤害每提升一档 +37.5%；3/5：附加裂地崩·回响；5/5：召唤物攻击时立即触发回响。",
+            mechanics: ["on_wood_summon"],
+            params: { damage: stat(207708, 207708 * 0.375), echoDamage: 2887, echoDuration: 30 }
+        },
+        {
+            id: "thunder-spear",
+            name: "惊雷戟",
+            element: "thunder",
+            fee: 1,
+            baseEffectText: "连锁闪电命中敌人时发射惊雷戟，造成 1816 神雷伤害。",
+            upgradeText: "伤害每提升一档 +37.5%；3/5：附加持续伤害；5/5：额外发射 2 次。",
+            mechanics: ["on_chain_hit"],
+            params: { damage: stat(1816, 1816 * 0.375), extraAtRank5: 2 }
+        },
+        {
+            id: "thunder-shock",
+            name: "雷霆震击",
+            element: "thunder",
+            fee: 2,
+            baseEffectText: "神雷激化生效时持续造成额外神雷伤害，每下 1302。",
+            upgradeText: "伤害每提升一档 +37.5%；3/5：频率提高并额外命中；5/5：结束时爆炸造成 142055 伤害。",
+            mechanics: ["on_thunder_amplify"],
+            params: { damage: stat(1302, 1302 * 0.375), duration: 10, interval: 1, burstDamage: 142055 }
+        },
+        {
+            id: "five-thunder-orb",
+            name: "五雷珠",
+            element: "thunder",
+            fee: 3,
+            baseEffectText: "周期向敌人发射五雷珠，造成 10832 神雷伤害。",
+            upgradeText: "伤害每提升一档 +37.5%；3/5：到达目标位置爆炸造成 64900 伤害；5/5：释放时触发狂雷。",
+            mechanics: ["periodic_attack"],
+            params: { damage: stat(10832, 10832 * 0.375), interval: 20, burstDamage: 64900 }
+        },
+        {
+            id: "thunder-guard",
+            name: "天雷护佑",
+            element: "thunder",
+            fee: 4,
+            baseEffectText: "雷佑灵光期间提高连锁闪电伤害。",
+            upgradeText: "每提升一档提高 8%；3/5：职业与法宝技能提高 5%；5/5：灵蕴伤害提高 70%。",
+            mechanics: ["during_craft_thunder"],
+            params: { chainBonus: stat(0.08, 0.08), duration: 10, externalSkillBonus: 0.05, allLinyinBonus: 0.70 }
+        },
+        {
+            id: "nine-sky-thunder",
+            name: "九霄雷动",
+            element: "thunder",
+            fee: 5,
+            baseEffectText: "神雷激化触发时额外召唤 2 道雷电，每道造成 27506 神雷伤害。",
+            upgradeText: "伤害每提升一档 +37.5%；3/5：额外召唤 1 道并累加神雷值；5/5：可被引雷针复制。",
+            mechanics: ["on_thunder_amplify"],
+            params: { damage: stat(27506, 27506 * 0.375), bolts: 2 }
+        }
+    ];
+
+    const CRAFT_STONE_DEFS = [
+        { id: "blazing-skyfire", name: "灼灼天炎", element: "fire", fee: 1, castTime: 5, cooldown: 120, baseEffectText: "施放 5 秒，冷却 120 秒，造成 693014 天火范围伤害。", params: { damage: 693014 } },
+        { id: "frost-glory", name: "凝冰霜华", element: "ice", fee: 1, castTime: 4, cooldown: 90, baseEffectText: "施法 4 秒，冷却 90 秒，引导霜冻射线造成 495005 玄冰伤害。", params: { damage: 495005 } },
+        { id: "verdant-life", name: "青芜浮生", element: "wood", fee: 1, castTime: 2, cooldown: 120, baseEffectText: "施法 2 秒，造成 279561 苍木伤害；持续攻击部分暂按未建模处理。", params: { damage: 279561 }, notes: ["持续攻击缺少频率与持续时间，第一版只计算明确的首次冲击波伤害。"] },
+        { id: "thunder-aegis", name: "雷佑灵光", element: "thunder", fee: 1, castTime: 1.3, cooldown: 60, baseEffectText: "施法 1.3 秒，造成 187960 神雷伤害；随后 10 秒内每 2 秒触发一次连锁闪电。", params: { damage: 187960, chainDuration: 10, chainInterval: 2 } }
+    ];
+
     function resolveValue(value, starLevel) {
         if (value && typeof value === "object" && Object.prototype.hasOwnProperty.call(value, "base") && Object.prototype.hasOwnProperty.call(value, "perStar")) {
             return value.base + value.perStar * starLevel;
@@ -313,14 +523,32 @@
         return resolveValue(cardDef.params, level);
     }
 
+    function resolveMachineStoneParams(stoneDef, rank) {
+        const level = clamp(parseInt(rank, 10) || 1, 1, 5);
+        return resolveValue(stoneDef.params || {}, level - 1);
+    }
+
     function getCardDefById(id) {
         return CARD_DEFS.find(card => card.id === id) || null;
     }
 
+    function getMachineStoneDefById(id) {
+        return MACHINE_STONE_DEFS.find(stone => stone.id === id) || null;
+    }
+
+    function getCraftStoneDefById(id) {
+        return CRAFT_STONE_DEFS.find(stone => stone.id === id) || null;
+    }
+
     const api = {
         CARD_DEFS,
+        MACHINE_STONE_DEFS,
+        CRAFT_STONE_DEFS,
         resolveCardParams,
-        getCardDefById
+        resolveMachineStoneParams,
+        getCardDefById,
+        getMachineStoneDefById,
+        getCraftStoneDefById
     };
 
     global.Data = api;
