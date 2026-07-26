@@ -990,19 +990,8 @@
         }
 
         // 读取当前元素对应的激化阈值。
-        getElementThreshold(element) {
-            switch (element) {
-                case "fire":
-                    return this.effects.fire.triggerThreshold || (this.hasExtendedSystems ? ELEMENT_TRIGGER_THRESHOLD : null);
-                case "ice":
-                    return this.effects.ice.triggerThreshold || (this.hasExtendedSystems ? ELEMENT_TRIGGER_THRESHOLD : null);
-                case "wood":
-                    return this.effects.wood.triggerThreshold || (this.hasExtendedSystems ? ELEMENT_TRIGGER_THRESHOLD : null);
-                case "thunder":
-                    return this.effects.thunder.triggerThreshold || (this.hasExtendedSystems ? ELEMENT_TRIGGER_THRESHOLD : null);
-                default:
-                    return null;
-            }
+        getElementThreshold() {
+            return ELEMENT_TRIGGER_THRESHOLD;
         }
 
         // 主模拟循环：推进时间、执行时间事件、更新目标状态并结算队列。
@@ -1068,6 +1057,17 @@
                     this.scheduleEvent(impactAt, () => {
                         this.notifyCraftStoneCastEnd({ stoneId: stone.id });
                     });
+                } else if (stone.id === "verdant-life") {
+                    const interval = stone.params.attackInterval || 2.5;
+                    this.scheduleEvent(this.time + interval, () => {
+                        this.addDamage(stone.params.damage * this.targetCount, stone.id, "craft_stone");
+                        this.notifyCraftStoneCastEnd({ stoneId: stone.id });
+                    });
+                    for (let i = 1; i <= (stone.params.attacks || 6); i += 1) {
+                        this.scheduleEvent(this.time + interval * (i + 1), () => {
+                            this.addDamage((stone.params.attackDamage || 0) * this.targetCount, stone.id, "craft_stone_attack");
+                        });
+                    }
                 } else {
                     this.scheduleEvent(impactAt, () => {
                         this.addDamage(stone.params.damage * this.targetCount, stone.id, "craft_stone");
@@ -1180,10 +1180,11 @@
 
         triggerWoodSpirit(stone, count) {
             const params = stone.params;
-            const attackCount = Math.floor((params.duration || 30) / (params.attackInterval || 3));
+            const attackInterval = params.attackInterval || 2;
+            const attackCount = params.attacks || 14;
             for (let summon = 0; summon < count; summon += 1) {
                 for (let i = 1; i <= attackCount; i += 1) {
-                    this.scheduleEvent(this.time + i * (params.attackInterval || 3), () => {
+                    this.scheduleEvent(this.time + i * attackInterval, () => {
                         this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_wood_spirit");
                         if (stone.rank >= 3 && this.craftStone && this.craftStone.id === "verdant-life") {
                             this.craftStone.nextCastAt = Math.max(this.time, this.craftStone.nextCastAt - 1);

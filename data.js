@@ -427,10 +427,10 @@
             name: "木引青灵",
             element: "wood",
             fee: 4,
-            baseEffectText: "苍木激化触发时召唤木引青灵，攻击造成 5992 苍木伤害。",
-            upgradeText: "伤害每提升一档 +12.5%；3/5：攻击使青芜浮生冷却减少；5/5：青芜浮生额外召唤 2 只。",
+            baseEffectText: "苍木激化触发时召唤 1 只木引青灵，持续 30 秒，每 2 秒攻击一次，共 14 次，每次造成 5992 苍木伤害。",
+            upgradeText: "伤害每提升一档 +12.5%；3/5：攻击使青芜浮生冷却减少 1 秒；5/5：青芜浮生额外召唤 2 只。",
             mechanics: ["on_wood_amplify"],
-            params: { damage: stat(5992, 5992 * 0.125), duration: 30, attackInterval: 3 }
+            params: { damage: stat(5992, 5992 * 0.125), duration: 30, attackInterval: 2, attacks: 14 }
         },
         {
             id: "earth-rift",
@@ -497,7 +497,7 @@
     const CRAFT_STONE_DEFS = [
         { id: "blazing-skyfire", name: "灼灼天炎", element: "fire", fee: 1, castTime: 5, cooldown: 120, baseEffectText: "施放 5 秒，冷却 120 秒，造成 693014 天火范围伤害。", params: { damage: 693014 } },
         { id: "frost-glory", name: "凝冰霜华", element: "ice", fee: 1, castTime: 4, cooldown: 90, baseEffectText: "施法 4 秒，冷却 90 秒，引导霜冻射线造成 495005 玄冰伤害。", params: { damage: 495005 } },
-        { id: "verdant-life", name: "青芜浮生", element: "wood", fee: 1, castTime: 2, cooldown: 120, baseEffectText: "施法 2 秒，造成 279561 苍木伤害；持续攻击部分暂按未建模处理。", params: { damage: 279561 }, notes: ["持续攻击缺少频率与持续时间，第一版只计算明确的首次冲击波伤害。"] },
+        { id: "verdant-life", name: "青芜浮生", element: "wood", fee: 1, castTime: 2, cooldown: 120, baseEffectText: "施法 2 秒，冷却 120 秒；召唤苍木树人，2.5 秒后释放冲击波造成 279561 苍木伤害，随后每 2.5 秒攻击一次，共 6 次，每次 36667 苍木伤害。", params: { damage: 279561, attackDamage: 36667, duration: 20, attackInterval: 2.5, attacks: 6 } },
         { id: "thunder-aegis", name: "雷佑灵光", element: "thunder", fee: 1, castTime: 1.3, cooldown: 60, baseEffectText: "施法 1.3 秒，造成 187960 神雷伤害；随后 10 秒内每 2 秒触发一次连锁闪电。", params: { damage: 187960, chainDuration: 10, chainInterval: 2 } }
     ];
 
