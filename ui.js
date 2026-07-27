@@ -3,10 +3,10 @@
     const { CombatEngine, ELEMENT_LABELS } = window.Engine;
 
     const ELEMENT_META = {
-        fire: { title: "火", chip: "天火", border: "race-fire", tag: "tag-fire" },
-        ice: { title: "冰", chip: "玄冰", border: "race-ice", tag: "tag-ice" },
-        wood: { title: "木", chip: "苍木", border: "race-wood", tag: "tag-wood" },
-        thunder: { title: "雷", chip: "神雷", border: "race-thunder", tag: "tag-thunder" }
+        fire: { title: "火", chip: "天火", border: "race-fire", tag: "tag-fire", text: "text-red-500" },
+        ice: { title: "冰", chip: "玄冰", border: "race-ice", tag: "tag-ice", text: "text-cyan-600" },
+        wood: { title: "木", chip: "苍木", border: "race-wood", tag: "tag-wood", text: "text-emerald-600" },
+        thunder: { title: "雷", chip: "神雷", border: "race-thunder", tag: "tag-thunder", text: "text-violet-600" }
     };
 
     const selected = new Map();
@@ -257,7 +257,6 @@
                             <span class="text-[16px] font-black text-slate-800 tracking-tight leading-none truncate">${stone.name}</span>
                             <span class="text-[11px] font-black px-2 py-0.5 rounded-md ${meta.tag} shrink-0">${meta.title}</span>
                         </div>
-                        <span class="text-[10px] bg-gradient-to-br from-slate-50 to-slate-100 text-slate-600 px-2 py-1 rounded-lg font-black tracking-tight border border-slate-200 shadow-sm">1费</span>
                     </div>
                     <div class="card-hover-panel">
                         <div class="card-copy">
@@ -367,31 +366,56 @@
         const top = results.slice(0, 10);
         resultList.innerHTML = top.map((item, index) => {
             const rankClass = index === 0 ? "top-1" : index === 1 ? "top-2" : index === 2 ? "top-3" : "";
+            const colorize = (element, label) => {
+                const cls = ELEMENT_META[element]?.text || "text-slate-600";
+                return `<span class="${cls}">${label}</span>`;
+            };
             const lineup = item.deck.map(entry => {
                 const card = CARD_DEFS.find(c => c.id === entry.id);
-                return card ? `${card.name}${entry.level === 6 ? '' : `(${entry.level})`}` : entry.id;
-            }).join(' / ');
+                if (!card) return entry.id;
+                return colorize(card.element, `${card.name}${entry.level === 6 ? '' : `(${entry.level})`}`);
+            }).join('<span class="text-slate-300"> / </span>');
+            const stones = (item.machineStones || []).map(entry => {
+                const stone = MACHINE_STONE_DEFS.find(s => s.id === entry.id);
+                if (!stone) return entry.id;
+                return colorize(stone.element, `${stone.name}(${entry.rank})`);
+            }).join('<span class="text-slate-300"> / </span>');
+            const craftDef = item.craftStone
+                ? CRAFT_STONE_DEFS.find(s => s.id === item.craftStone.id)
+                : null;
+            const craft = craftDef
+                ? colorize(craftDef.element, craftDef.name)
+                : (item.craftStone ? item.craftStone.id : null);
+            const machineCost = (item.machineStones || []).reduce((sum, entry) => sum + entry.rank, 0);
             return `
-                <div class="bf-result-item" data-lineup='${JSON.stringify(item.deck)}'>
+                <div class="bf-result-item" data-lineup='${JSON.stringify({ deck: item.deck, machineStones: item.machineStones || [], craftStone: item.craftStone || null })}'>
                     <div class="flex items-center justify-between gap-3 mb-2">
                         <div class="flex items-center gap-2">
                             <span class="bf-rank ${rankClass}">${index + 1}</span>
                             <span class="text-sm font-black text-slate-700">${item.avgDps.toFixed(2)} DPS</span>
                         </div>
-                        <span class="text-[11px] font-black text-slate-400 uppercase">${item.cost}费</span>
+                        <span class="text-[11px] font-black text-slate-400 uppercase">${item.cost}费 / 机巧${machineCost}费</span>
                     </div>
-                    <div class="text-[12px] leading-6 text-slate-600 font-bold">${lineup}</div>
+                    <div class="text-[12px] leading-6 font-bold">${lineup}</div>
+                    ${stones ? `<div class="text-[11px] leading-5 font-bold mt-1"><span class="text-slate-400">机巧石：</span>${stones}</div>` : ''}
+                    ${craft ? `<div class="text-[11px] leading-5 font-bold"><span class="text-slate-400">匠心石：</span>${craft}</div>` : ''}
                 </div>
             `;
         }).join("");
         resultBox.classList.remove("hidden");
         resultList.querySelectorAll(".bf-result-item").forEach(node => {
             node.addEventListener("click", () => {
-                const lineup = JSON.parse(node.dataset.lineup);
+                const payload = JSON.parse(node.dataset.lineup);
                 selected.clear();
-                lineup.forEach(item => selected.set(item.id, { id: item.id, level: item.level }));
+                payload.deck.forEach(item => selected.set(item.id, { id: item.id, level: item.level }));
+                selectedMachineStones.clear();
+                (payload.machineStones || []).forEach(item => selectedMachineStones.set(item.id, { id: item.id, rank: item.rank }));
+                selectedCraftStone = payload.craftStone ? payload.craftStone.id : null;
                 renderCards();
+                renderMachineStones();
+                renderCraftStones();
                 updateSummary();
+                updateMachineSummary();
                 switchTab("basic");
             });
         });
@@ -407,7 +431,7 @@
         document.getElementById("bfStatusText").innerText = "已停止";
     }
 
-    function runParallelSeason2(combos, iterations, duration, targetCount, onProgress) {
+    function runParallelSeason2(combos, iterations, duration, targetCount, externalSkillDps, onProgress) {
         return new Promise((resolve) => {
             const threadCount = Math.max(1, (navigator.hardwareConcurrency || 4) - 1);
             bfWorkers.forEach(worker => worker.terminate());
@@ -444,70 +468,162 @@
                     }
                 };
 
-                worker.postMessage({ type: "BATCH", data: { combos: chunk, duration, iterations, targetCount } });
+                worker.postMessage({ type: "BATCH", data: { combos: chunk, duration, iterations, targetCount, externalSkillDps } });
             });
         });
+    }
+
+    // 机巧石与丹青按元素绑定：跨系搭配时机巧石的触发源缺失，只会白占费用。
+    // 左侧有勾选时只在勾选范围内搜索，全部未选才走全量。
+    function buildElementPlans(crossElement) {
+        const elements = Object.keys(ELEMENT_META);
+        const hasPicked = selected.size > 0 || selectedMachineStones.size > 0 || Boolean(selectedCraftStone);
+        const cardPool = hasPicked && selected.size > 0
+            ? CARD_DEFS.filter(card => selected.has(card.id))
+            : CARD_DEFS;
+        const stonePool = hasPicked && selectedMachineStones.size > 0
+            ? MACHINE_STONE_DEFS.filter(stone => selectedMachineStones.has(stone.id))
+            : MACHINE_STONE_DEFS;
+        const craftPool = hasPicked && selectedCraftStone
+            ? CRAFT_STONE_DEFS.filter(stone => stone.id === selectedCraftStone)
+            : CRAFT_STONE_DEFS;
+
+        if (crossElement) {
+            return [{
+                element: null,
+                cards: cardPool,
+                stones: stonePool,
+                crafts: craftPool
+            }];
+        }
+        return elements
+            .map(element => ({
+                element,
+                cards: cardPool.filter(card => card.element === element),
+                stones: stonePool.filter(stone => stone.element === element),
+                crafts: craftPool.filter(stone => stone.element === element)
+            }))
+            .filter(plan => plan.cards.length > 0 || plan.stones.length > 0);
+    }
+
+    // 系内空间可穷举：每条机巧石取 0~5 星，只保留恰好用满费用上限的配置。
+    function generateMachineStoneCombos(stones, machineLimit) {
+        const results = [];
+        const current = [];
+
+        function backtrack(index, cost) {
+            if (index === stones.length) {
+                if (cost === machineLimit) {
+                    results.push(current.filter(item => item.rank > 0).map(item => ({ id: item.id, rank: item.rank })));
+                }
+                return;
+            }
+            const stone = stones[index];
+            for (let rank = 0; rank <= 5; rank += 1) {
+                if (cost + rank > machineLimit) break;
+                current.push({ id: stone.id, rank });
+                backtrack(index + 1, cost + rank);
+                current.pop();
+            }
+        }
+
+        backtrack(0, 0);
+        return results;
     }
 
     async function startSeason2BruteForce() {
         const maxCost = parseInt(document.getElementById("bfMaxCost").value, 10) || 15;
         const iterations = parseInt(document.getElementById("bfIter").value, 10) || 20;
+        const machineCostRaw = parseInt(document.getElementById("bfMachineCost")?.value, 10);
+        const machineLimit = Number.isFinite(machineCostRaw) ? Math.max(0, machineCostRaw) : 18;
+        const crossElement = Boolean(document.getElementById("bfCrossElement")?.checked);
         const duration = parseInt(document.getElementById("simTime").value, 10) || 240;
         const targetCount = parseInt(document.getElementById("targetCount").value, 10) || 1;
-        const sourcePool = selected.size > 0
-            ? CARD_DEFS.filter(card => selected.has(card.id)).map(card => ({ ...card, level: selected.get(card.id).level }))
-            : CARD_DEFS.map(card => ({ ...card, level: 6 }));
-        const rawCombos = generateSeason2Combos(sourcePool, maxCost);
-        if (rawCombos.length === 0) {
-            alert("没有找到符合费用条件的组合");
-            return;
-        }
+        const externalSkillDps = parseFloat(document.getElementById("externalSkillDps")?.value || "150000") || 150000;
+
+        const statusText = document.getElementById("bfStatusText");
+        const percentText = document.getElementById("bfPercent");
+        const progressBar = document.getElementById("bfProgressBar");
 
         bfStopped = false;
         document.getElementById("bfPlaceholder").classList.add("hidden");
         document.getElementById("bfResultBox").classList.add("hidden");
         document.getElementById("bfProgressBox").classList.remove("hidden");
         document.getElementById("btnStopBF").classList.remove("hidden");
-        document.getElementById("bfStatusText").innerText = "正在生成组合...";
-        document.getElementById("bfPercent").innerText = "0%";
-        document.getElementById("bfProgressBar").style.width = "0%";
+        statusText.innerText = "正在生成组合...";
+        percentText.innerText = "0%";
+        progressBar.style.width = "0%";
 
-        const combos = rawCombos;
-
-        const w1 = combos.length;
-        const topN = Math.min(50, w1);
-        const w2 = topN * iterations;
-        const wTotal = w1 + w2;
-
-        document.getElementById("bfStatusText").innerText = `[1/2] 正在海选 (${w1} 组)...`;
-        const phase1Results = await runParallelSeason2(combos, 1, duration, targetCount, (finished, total) => {
-            const percent = Math.floor((finished / wTotal) * 100);
-            document.getElementById("bfPercent").innerText = `${percent}%`;
-            document.getElementById("bfProgressBar").style.width = `${percent}%`;
-            document.getElementById("bfStatusText").innerText = `[1/2] 海选进度: ${finished} / ${total}`;
+        const plans = buildElementPlans(crossElement);
+        const combos = [];
+        plans.forEach(plan => {
+            const pool = plan.cards.map(card => ({
+                ...card,
+                level: selected.get(card.id)?.level ?? 6
+            }));
+            const deckCombos = generateSeason2Combos(pool, maxCost);
+            const stoneCombos = generateMachineStoneCombos(plan.stones, machineLimit);
+            const craftOptions = plan.crafts.length > 0
+                ? plan.crafts.map(stone => ({ id: stone.id }))
+                : [null];
+            deckCombos.forEach(deckCombo => {
+                stoneCombos.forEach(machineStones => {
+                    craftOptions.forEach(craftStone => {
+                        combos.push({
+                            id: `${combos.length}`,
+                            cost: deckCombo.cost,
+                            deck: deckCombo.deck,
+                            machineStones,
+                            craftStone
+                        });
+                    });
+                });
+            });
         });
 
+        if (combos.length === 0) {
+            alert("没有找到符合费用条件的组合");
+            document.getElementById("btnStopBF").classList.add("hidden");
+            return;
+        }
+
+        const topN = Math.min(20, combos.length);
+        const totalTicks = combos.length + topN;
+        let ticks = 0;
+        const bump = () => {
+            ticks += 1;
+            const percent = Math.min(99, Math.floor((ticks / totalTicks) * 100));
+            percentText.innerText = `${percent}%`;
+            progressBar.style.width = `${percent}%`;
+        };
+
+        // 第一阶段：全组合各跑 1 次，快速筛掉绝大多数方案。
+        statusText.innerText = `[1/2] 全量遍历 (${combos.length} 组)...`;
+        const phase1 = await runParallelSeason2(combos, 1, duration, targetCount, externalSkillDps, (finished, total) => {
+            bump();
+            statusText.innerText = `[1/2] 遍历进度: ${finished} / ${total}`;
+        });
         if (bfStopped) return;
 
-        const topTier = phase1Results.sort((a, b) => b.avgDps - a.avgDps).slice(0, topN);
         const comboMap = new Map(combos.map(combo => [combo.id, combo]));
-        const detailedTopTier = topTier.map(item => comboMap.get(item.id)).filter(Boolean);
-        document.getElementById("bfStatusText").innerText = `[2/2] 正在精选 Top ${topN}...`;
+        const finalists = phase1
+            .sort((a, b) => b.avgDps - a.avgDps)
+            .slice(0, topN)
+            .map(item => comboMap.get(item.id))
+            .filter(Boolean);
 
-        const finalResults = await runParallelSeason2(detailedTopTier, iterations, duration, targetCount, (finished, total) => {
-            const processed = w1 + (finished * iterations);
-            const percent = Math.min(99, Math.floor((processed / wTotal) * 100));
-            document.getElementById("bfPercent").innerText = `${percent}%`;
-            document.getElementById("bfProgressBar").style.width = `${percent}%`;
-            document.getElementById("bfStatusText").innerText = `[2/2] 精选进度: ${finished} / ${total}`;
+        // 第二阶段：对入围方案做多轮精算，消除单次模拟的随机偏差。
+        statusText.innerText = `[2/2] 精算 Top ${finalists.length}...`;
+        const finalResults = await runParallelSeason2(finalists, iterations, duration, targetCount, externalSkillDps, (finished, total) => {
+            bump();
+            statusText.innerText = `[2/2] 精算进度: ${finished} / ${total}`;
         });
-
         if (bfStopped) return;
 
         renderSeason2BruteForceResults(finalResults.sort((a, b) => b.avgDps - a.avgDps));
-        document.getElementById("bfStatusText").innerText = `完成，共 ${finalResults.length} 个组合`;
-        document.getElementById("bfPercent").innerText = "100%";
-        document.getElementById("bfProgressBar").style.width = "100%";
+        statusText.innerText = `完成，共遍历 ${combos.length} 个方案`;
+        percentText.innerText = "100%";
+        progressBar.style.width = "100%";
         document.getElementById("btnStopBF").classList.add("hidden");
         if (bfWorkers.length > 0) {
             bfWorkers.forEach(worker => worker.terminate());

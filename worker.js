@@ -2,7 +2,7 @@ self.window = self;
 importScripts('data.js', 'engine.js');
 
 function runBatch(data) {
-  const { combos, duration, iterations, targetCount } = data;
+  const { combos, duration, iterations, targetCount, externalSkillDps } = data;
   const results = [];
 
   for (let i = 0; i < combos.length; i++) {
@@ -11,12 +11,18 @@ function runBatch(data) {
     let totalDamage = 0;
     let firstDps = null;
     let firstDamage = null;
+    const config = {
+      deck: combo.deck,
+      machineStones: combo.machineStones || [],
+      craftStone: combo.craftStone || null
+    };
 
     for (let iter = 0; iter < iterations; iter++) {
-      const engine = new self.Engine.CombatEngine(combo.deck, {
+      const engine = new self.Engine.CombatEngine(config, {
         duration,
         targetCount,
-        seed: 1000 + iter
+        seed: 1000 + iter,
+        externalSkillDps
       });
       const result = engine.simulate();
 
@@ -45,7 +51,9 @@ function runBatch(data) {
       cost: combo.cost,
       avgDps: totalDps / iterations,
       avgDamage: totalDamage / iterations,
-      deck: combo.deck
+      deck: combo.deck,
+      machineStones: combo.machineStones || [],
+      craftStone: combo.craftStone || null
     });
 
     postMessage({ type: 'PROGRESS_TICK' });

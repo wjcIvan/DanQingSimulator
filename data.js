@@ -408,7 +408,7 @@
             element: "wood",
             fee: 2,
             baseEffectText: "战斗状态下每 20 秒召唤小纸人：存在 10 秒，每 2 秒攻击一次共 6 次，每次造成 10022 苍木伤害。",
-            upgradeText: "伤害每提升一档+12.5%；\n\n3/5：召唤后使用一次纸人风暴，4 秒内对周围敌人造成 11 次 4513 苍木伤害（本体攻击减为 3 次）；\n\n5/5：苍林箭和纸人风暴每次命中增加目标 80 苍木值。",
+            upgradeText: "伤害每提升一档+12.5%；\n\n3/5：召唤后使用一次纸人风暴，4 秒内对周围敌人造成 11 次 4513 苍木伤害（本体攻击减为3次）；\n\n5/5：苍林箭和纸人风暴每次命中增加目标 80 苍木值。",
             mechanics: ["periodic_summon"],
             params: { damage: stat(10022, 10022 * 0.125), interval: 20, attacks: 6, attackInterval: 2, upgradedAttacks: 3, stormDamage: stat(4513, 4513 * 0.125), stormHits: 11, stormDuration: 4 }
         },
@@ -428,7 +428,7 @@
             element: "wood",
             fee: 4,
             baseEffectText: "自身的苍木激化触发时召唤 1 只木引青灵：持续 30 秒，每 2 秒攻击一次共 14 次，每次造成 5992 苍木伤害。",
-            upgradeText: "伤害每提升一档+12.5%；\n\n3/5：木引青灵攻击时青芜浮生的冷却时间减少 1 秒；\n\n5/5：青芜浮生同时召唤 2 只木引青灵。",
+            upgradeText: "伤害每提升一档+12.5%；\n\n3/5：木引青灵攻击时青芜浮生的冷却时间减少1秒；\n\n5/5：青芜浮生同时召唤 2 只木引青灵。",
             mechanics: ["on_wood_amplify"],
             params: { damage: stat(5992, 5992 * 0.125), duration: 30, attackInterval: 2, attacks: 14 }
         },
@@ -478,7 +478,7 @@
             element: "thunder",
             fee: 4,
             baseEffectText: "雷佑灵光开始时，一道天雷从天而降，使自身在其持续期间（10 秒）获得天雷护佑：连锁闪电基础伤害提升 8%。",
-            upgradeText: "连锁闪电伤害每提升一档+8%；\n\n3/5：持续期间职业和法宝技能造成的伤害提高 5%；\n\n5/5：持续期间所有灵蕴伤害提高 70%。",
+            upgradeText: "连锁闪电伤害每提升一档+8%；\n\n3/5：持续期间职业和法宝技能造成的伤害提高5%；\n\n5/5：持续期间所有灵蕴伤害提高 70%。",
             mechanics: ["during_craft_thunder"],
             params: { chainBonus: stat(0.08, 0.08), duration: 10, externalSkillBonus: 0.05, allLinyinBonus: 0.70 }
         },

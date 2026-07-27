@@ -622,7 +622,7 @@
                                     <span class="val-display !py-0.5 !px-1.5 !text-sm"><span id="externalDpsVal">150000</span></span>
                                 </div>
                                 <input id="externalSkillDps" type="number" min="0" value="150000" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-700">
-                                <div class="mt-2 text-[11px] font-bold text-slate-400">天雷护佑3/5按 秒伤 × 10s × 5% 计算</div>
+                                <div class="mt-2 text-[11px] font-bold text-slate-400">3级天雷护佑 按 秒伤 × 10s × 5% 计算</div>
                             </div>
                         </div>
 
@@ -678,7 +678,7 @@
                                 <h2 class="font-black text-slate-800 flex items-center gap-2">
                                     <span class="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>
                                     匠心石
-                                    <span class="ml-2 text-[11px] px-2 py-1 rounded-full font-black bg-amber-50 text-amber-600 border border-amber-100">4选1 · 占1费</span>
+                                    <span class="ml-2 text-[11px] px-2 py-1 rounded-full font-black bg-amber-50 text-amber-600 border border-amber-100">4选1</span>
                                 </h2>
                             </div>
                             <div id="craftStoneGrid" class="race-section"></div>
@@ -768,6 +768,16 @@
                                         <div>
                                             <label class="block text-[11px] font-bold text-slate-400 uppercase mb-1">演算轮次</label>
                                             <input type="number" id="bfIter" value="20" class="w-full border-b font-bold py-1 outline-none text-purple-600 focus:border-purple-400 bg-transparent">
+                                        </div>
+                                        <div>
+                                            <label class="block text-[11px] font-bold text-slate-400 uppercase mb-1">机巧石费用</label>
+                                            <input type="number" id="bfMachineCost" min="0" value="18" class="w-full border-b font-bold py-1 outline-none text-cyan-600 focus:border-cyan-400 bg-transparent">
+                                        </div>
+                                        <div class="flex items-end">
+                                            <label class="flex items-center gap-2 text-[11px] font-bold text-slate-500 cursor-pointer">
+                                                <input type="checkbox" id="bfCrossElement" class="w-4 h-4 accent-purple-500">
+                                                跨系搜索（适合小范围使用）
+                                            </label>
                                         </div>
                                     </div>
 
