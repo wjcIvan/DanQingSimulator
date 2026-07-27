@@ -275,7 +275,7 @@
     }
 
     function updateMachineSummary() {
-        const limit = parseInt(document.getElementById("machineFeeLimit")?.value, 10) || 18;
+        const limit = 18;
         const label = document.getElementById("machineFeeLabel");
         if (!label) return;
         label.innerText = `${getMachineFee()} / ${limit} 费`;
@@ -339,14 +339,14 @@
 
         function backtrack(startIndex, current, cost) {
             if (cost > maxCost) return;
-            if (cost === maxCost && current.length > 0) {
+            if (current.length > 0) {
                 results.push({
                     id: `${results.length + 1}`,
                     cost,
                     deck: current.map(item => ({ id: item.id, level: item.level }))
                 });
-                return;
             }
+            if (cost === maxCost) return;
             for (let i = startIndex; i < source.length; i++) {
                 const card = source[i];
                 if (cost + card.fee > maxCost) continue;
@@ -357,7 +357,15 @@
         }
 
         backtrack(0, [], 0);
-        return results;
+
+        // 15 费是理论上限，只在这一档强制用满；其余档位取费用最高的前 20 组。
+        if (maxCost === 15) {
+            const exact = results.filter(item => item.cost === 15);
+            if (exact.length > 0) return exact;
+        }
+        return results
+            .sort((a, b) => b.cost - a.cost || a.deck.length - b.deck.length)
+            .slice(0, 20);
     }
 
     function renderSeason2BruteForceResults(results) {
@@ -433,7 +441,8 @@
 
     function runParallelSeason2(combos, iterations, duration, targetCount, externalSkillDps, onProgress) {
         return new Promise((resolve) => {
-            const threadCount = Math.max(1, (navigator.hardwareConcurrency || 4) - 1);
+            // 主线程在等待期间基本空闲，用满所有核心。
+            const threadCount = Math.max(1, navigator.hardwareConcurrency || 4);
             bfWorkers.forEach(worker => worker.terminate());
             bfWorkers = [];
             for (let i = 0; i < threadCount; i++) {
@@ -457,9 +466,9 @@
 
                 worker.onmessage = (event) => {
                     if (bfStopped) return;
-                    const { type, results } = event.data;
+                    const { type, results, count } = event.data;
                     if (type === "PROGRESS_TICK") {
-                        processedCombos += 1;
+                        processedCombos += count || 1;
                         onProgress(processedCombos, combos.length);
                     } else if (type === "BATCH_DONE") {
                         allResults = allResults.concat(results);
@@ -562,10 +571,10 @@
                 level: selected.get(card.id)?.level ?? 6
             }));
             const deckCombos = generateSeason2Combos(pool, maxCost);
-            const stoneCombos = generateMachineStoneCombos(plan.stones, machineLimit);
             const craftOptions = plan.crafts.length > 0
                 ? plan.crafts.map(stone => ({ id: stone.id }))
                 : [null];
+            const stoneCombos = generateMachineStoneCombos(plan.stones, machineLimit);
             deckCombos.forEach(deckCombo => {
                 stoneCombos.forEach(machineStones => {
                     craftOptions.forEach(craftStone => {
@@ -587,8 +596,13 @@
             return;
         }
 
-        const topN = Math.min(20, combos.length);
-        const totalTicks = combos.length + topN;
+        // 粗筛用短时长换速度，只负责淘汰明显垫底的方案；长冷却技能的偏差由第二阶段纠正。
+        const coarseDuration = Math.min(60, duration);
+        const coarseTopN = Math.min(500, combos.length);
+        const midTopN = Math.min(20, coarseTopN);
+        const needCoarse = combos.length > coarseTopN;
+
+        const totalTicks = (needCoarse ? combos.length + coarseTopN : combos.length) + midTopN;
         let ticks = 0;
         const bump = () => {
             ticks += 1;
@@ -597,26 +611,43 @@
             progressBar.style.width = `${percent}%`;
         };
 
-        // 第一阶段：全组合各跑 1 次，快速筛掉绝大多数方案。
-        statusText.innerText = `[1/2] 全量遍历 (${combos.length} 组)...`;
-        const phase1 = await runParallelSeason2(combos, 1, duration, targetCount, externalSkillDps, (finished, total) => {
-            bump();
-            statusText.innerText = `[1/2] 遍历进度: ${finished} / ${total}`;
-        });
-        if (bfStopped) return;
-
         const comboMap = new Map(combos.map(combo => [combo.id, combo]));
-        const finalists = phase1
+        const pickTop = (results, count) => results
             .sort((a, b) => b.avgDps - a.avgDps)
-            .slice(0, topN)
+            .slice(0, count)
             .map(item => comboMap.get(item.id))
             .filter(Boolean);
 
-        // 第二阶段：对入围方案做多轮精算，消除单次模拟的随机偏差。
-        statusText.innerText = `[2/2] 精算 Top ${finalists.length}...`;
+        const totalStages = needCoarse ? 3 : 2;
+        let stage = 0;
+        let survivors = combos;
+
+        if (needCoarse) {
+            stage += 1;
+            statusText.innerText = `[${stage}/${totalStages}] 粗筛 (${combos.length} 组 · ${coarseDuration}s)...`;
+            const coarse = await runParallelSeason2(combos, 1, coarseDuration, targetCount, externalSkillDps, (finished, total) => {
+                bump();
+                statusText.innerText = `[${stage}/${totalStages}] 粗筛进度: ${finished} / ${total}`;
+            });
+            if (bfStopped) return;
+            survivors = pickTop(coarse, coarseTopN);
+        }
+
+        stage += 1;
+        statusText.innerText = `[${stage}/${totalStages}] 完整时长复筛 (${survivors.length} 组)...`;
+        const refined = await runParallelSeason2(survivors, 1, duration, targetCount, externalSkillDps, (finished, total) => {
+            bump();
+            statusText.innerText = `[${stage}/${totalStages}] 复筛进度: ${finished} / ${total}`;
+        });
+        if (bfStopped) return;
+
+        const finalists = pickTop(refined, midTopN);
+
+        stage += 1;
+        statusText.innerText = `[${stage}/${totalStages}] 精算 Top ${finalists.length}...`;
         const finalResults = await runParallelSeason2(finalists, iterations, duration, targetCount, externalSkillDps, (finished, total) => {
             bump();
-            statusText.innerText = `[2/2] 精算进度: ${finished} / ${total}`;
+            statusText.innerText = `[${stage}/${totalStages}] 精算进度: ${finished} / ${total}`;
         });
         if (bfStopped) return;
 
@@ -669,7 +700,6 @@
             alert("请至少选择一张丹青、机巧石或匠心石");
             return;
         }
-        const machineLimit = parseInt(document.getElementById("machineFeeLimit")?.value, 10) || 18;
 
         const totals = [];
         const histories = [];
@@ -894,8 +924,6 @@
         simIter.addEventListener("input", syncRangeLabels);
         targetCount.addEventListener("input", syncRangeLabels);
         externalSkillDpsInput.addEventListener("input", syncRangeLabels);
-
-        document.getElementById("machineFeeLimit")?.addEventListener("input", updateMachineSummary);
 
         document.querySelectorAll(".star-batch-btn").forEach(btn => {
             btn.addEventListener("click", () => {
