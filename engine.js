@@ -97,7 +97,6 @@
         CRAFT_STONE_CAST_START: "craft_stone_cast_start",
         CRAFT_STONE_CAST_END: "craft_stone_cast_end"
     };
-    const FIRE_AMPLIFY_DELAYS = [2, 4, 6, 8, 10];
     const ICE_AMPLIFY_FINAL_DELAY = 2;
     const WOOD_AMPLIFY_DELAYS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
     const WOOD_ECHO_DELAYS = [2, 4, 6, 8, 10];
@@ -138,6 +137,7 @@
                 combustThreshold: null,
                 combustDelay: 1.5,
                 combustDamagePerExtraLayer: 0,
+                amplifyDamageBonus: 0,
                 triggerThreshold: null
             },
             ice: {
@@ -164,6 +164,7 @@
                 openingPulseTimes: 0,
                 openingPulseWindow: 6,
                 luckStacks: 0,
+                amplifyDamageBonus: 0,
                 triggerThreshold: ELEMENT_TRIGGER_THRESHOLD
             },
             thunder: {
@@ -290,11 +291,15 @@
         }
 
         onElementAmplify(engine) {
-            FIRE_AMPLIFY_DELAYS.forEach(delay => {
+            const ring = engine.machineStoneMap.get("scarlet-ring");
+            const speedUp = Boolean(ring && ring.rank >= 5);
+            const interval = speedUp ? 1.5 : 2;
+            const duration = speedUp ? 12 : 10;
+            for (let delay = interval; delay <= duration + 1e-9; delay += interval) {
                 engine.scheduleEvent(engine.time + delay, () => {
-                    engine.addDamage(39181, this.id, "fire_amplify");
+                    engine.addDamage(39181 * (1 + engine.effects.fire.amplifyDamageBonus), this.id, "fire_amplify");
                 });
-            });
+            }
         }
     }
 
@@ -568,12 +573,13 @@
 
         onElementAmplify(engine) {
             let tickCount = 0;
+            const bonus = 1 + engine.effects.wood.amplifyDamageBonus;
             WOOD_AMPLIFY_DELAYS.forEach(delay => {
                 engine.scheduleEvent(engine.time + delay, () => {
-                    engine.addDamage(24916, this.id, "wood_amplify");
+                    engine.addDamage(24916 * bonus, this.id, "wood_amplify");
                     tickCount += 1;
                     if (tickCount % 3 === 0) {
-                        engine.addDamage(72108, this.id, "wood_bloom");
+                        engine.addDamage(72108 * bonus, this.id, "wood_bloom");
                         engine.notifyWoodBloom({ element: "wood" });
                     }
                 });
@@ -886,6 +892,12 @@
                 if (stone.id === "frost-surge" && stone.rank >= 5) {
                     this.effects.ice.freezeMeterBonus += stone.params.freezeMeterAtRank5 || 0;
                 }
+                if (stone.id === "rotten-gale" && stone.rank >= 3) {
+                    this.effects.wood.amplifyDamageBonus += stone.params.amplifyBonusAtRank3 || 0;
+                }
+                if (stone.id === "fireburst" && stone.rank >= 3) {
+                    this.effects.fire.amplifyDamageBonus += stone.params.amplifyBonusAtRank3 || 0;
+                }
             });
             if (this.craftStone) {
                 this.craftStone.nextCastAt = 0;
@@ -962,7 +974,7 @@
 
         // 统一累计总伤、分卡伤害和机制伤害。
         addDamage(amount, cardId, mechanic) {
-            const dmg = Math.max(0, amount || 0);
+            const dmg = Math.max(0, amount || 0) * this.getLinyinMultiplier();
             if (dmg <= 0) return;
             const machineStone = this.machineStoneMap ? this.machineStoneMap.get(cardId) : null;
             if (machineStone) machineStone.activated = true;
@@ -970,6 +982,15 @@
             this.breakdown.byCard[cardId] = (this.breakdown.byCard[cardId] || 0) + dmg;
             this.breakdown.byMechanic[mechanic] = (this.breakdown.byMechanic[mechanic] || 0) + dmg;
             this.breakdown.byMechanicCount[mechanic] = (this.breakdown.byMechanicCount[mechanic] || 0) + 1;
+        }
+
+        getLinyinMultiplier() {
+            let multiplier = 1;
+            const blazingLand = this.machineStoneMap ? this.machineStoneMap.get("blazing-land") : null;
+            if (blazingLand && blazingLand.linyinExpiresAt && this.time <= blazingLand.linyinExpiresAt) {
+                multiplier *= 1 + (blazingLand.params.linyinBonus || 0);
+            }
+            return multiplier;
         }
 
         // 累加元素计量；达到阈值时把激化效果排到下一拍执行。
@@ -1061,11 +1082,13 @@
                     const interval = stone.params.attackInterval || 2.5;
                     this.scheduleEvent(this.time + interval, () => {
                         this.addDamage(stone.params.damage * this.targetCount, stone.id, "craft_stone");
+                        this.applyEarthRiftFollowup();
                         this.notifyCraftStoneCastEnd({ stoneId: stone.id });
                     });
                     for (let i = 1; i <= (stone.params.attacks || 6); i += 1) {
                         this.scheduleEvent(this.time + interval * (i + 1), () => {
                             this.addDamage((stone.params.attackDamage || 0) * this.targetCount, stone.id, "craft_stone_attack");
+                            this.applyEarthRiftFollowup();
                         });
                     }
                 } else {
@@ -1210,6 +1233,12 @@
             }
         }
 
+        applyEarthRiftFollowup() {
+            const earthRift = this.machineStoneMap.get("earth-rift");
+            if (!earthRift || earthRift.rank < 5) return;
+            this.addDamage((earthRift.params.echoDamage || 0) * this.targetCount, earthRift.id, "machine_earth_rift_echo_followup");
+        }
+
         handleWoodDice() {
             const stone = this.machineStoneMap.get("wood-dice");
             if (!stone) return;
@@ -1218,7 +1247,8 @@
             if (stone.counter < threshold) return;
             stone.counter = 0;
             const maxStacks = stone.rank >= 3 ? 6 : 3;
-            this.effects.wood.luckStacks = maxStacks;
+            const rolled = 1 + Math.floor(this.random() * maxStacks);
+            this.effects.wood.luckStacks += rolled;
             if (stone.rank >= 5) {
                 this.addDamage((stone.params.burstDamage || 0) * this.targetCount, stone.id, "machine_wood_dice_burst");
             }
@@ -1250,10 +1280,12 @@
 
         triggerThunderSpearDot(stone, hits) {
             if (stone.rank < 3) return;
-            for (let second = 1; second <= 8; second += 1) {
-                this.scheduleEvent(this.time + second, () => {
-                    this.addDamage(95 * hits, stone.id, "machine_thunder_spear_dot");
-                });
+            for (let hit = 0; hit < hits; hit += 1) {
+                for (let second = 1; second <= 8; second += 1) {
+                    this.scheduleEvent(this.time + second, () => {
+                        this.addDamage(95, stone.id, "machine_thunder_spear_dot");
+                    });
+                }
             }
         }
 
@@ -1389,10 +1421,47 @@
                 }
                 if (eventType === EVENTS.ICE_AMPLIFY_FREEZE && stone.id === "frost-rain") {
                     this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_frost_rain");
+                    if (stone.rank >= 5 && params.freezeMeterAtRank5) {
+                        this.addMeter("ice", this.effects.ice.freezeMeterBonus || params.freezeMeterAtRank5);
+                    }
                     return;
                 }
-                if (eventType === EVENTS.ICE_ELEMENTAL_SUMMONED && stone.id === "frost-crystal-spike" && stone.rank >= 5) {
-                    this.grantFrostCrystalSpikeCharges(2);
+                if (eventType === EVENTS.ICE_ELEMENTAL_SUMMONED && stone.id === "frost-crystal-spike") {
+                    if (stone.rank >= 5) this.grantFrostCrystalSpikeCharges(2);
+                    return;
+                }
+                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "cold-tide") {
+                    if (stone.rank >= 5) this.triggerColdTideCraftWaves(stone);
+                    return;
+                }
+                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "frost-rain") {
+                    if (stone.rank >= 3 && this.craftStone?.id === "frost-glory") {
+                        this.scheduleEvent(this.time + 0.001, () => {
+                            this.addDamage(this.craftStone.params.damage * 0.30 * this.targetCount, stone.id, "machine_frost_rain_craft_bonus");
+                        });
+                    }
+                    return;
+                }
+                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "frost-shatter") {
+                    if (stone.rank >= 5) this.notifyIceElementalSummoned({ sourceCardId: stone.id });
+                    return;
+                }
+                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "rotten-gale") {
+                    if (stone.rank >= 5) this.addMeter("wood", 10000 * Math.min(5, this.targetCount));
+                    return;
+                }
+                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "wood-spirit") {
+                    if (stone.rank >= 5) this.triggerWoodSpirit(stone, 2);
+                    return;
+                }
+                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "flame-body") {
+                    if (event.stoneId === "blazing-skyfire" && stone.rank >= 5) {
+                        this.triggerFlameBody(stone, 12, "machine_flame_body_craft");
+                    }
+                    return;
+                }
+                if (eventType === EVENTS.COMBUST && stone.id === "flame-body") {
+                    if (stone.rank >= 3) this.triggerFlameBody(stone, 2, "machine_flame_body_combust");
                     return;
                 }
                 if (eventType === EVENTS.ELEMENT_AMPLIFY && event.element === "ice" && stone.id === "frost-surge") {
@@ -1400,13 +1469,21 @@
                     return;
                 }
                 if (eventType === EVENTS.ELEMENT_AMPLIFY && event.element === "wood" && stone.id === "wood-spirit") {
-                    this.triggerWoodSpirit(stone, stone.rank >= 5 ? 3 : 1);
+                    this.triggerWoodSpirit(stone, 1);
                     return;
                 }
                 if (eventType === EVENTS.ELEMENT_AMPLIFY && event.element === "thunder") {
                     return;
                 }
+                if (eventType === EVENTS.WOOD_BLOOM && stone.id === "rotten-gale") {
+                    const bonus = 1 + this.effects.wood.amplifyDamageBonus;
+                    this.addDamage((params.damage || 0) * this.targetCount * bonus, stone.id, "machine_rotten_gale");
+                    return;
+                }
                 if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "blazing-land") {
+                    if (stone.rank >= 5) {
+                        stone.linyinExpiresAt = this.time + (params.linyinDuration || 15);
+                    }
                     for (let delay = 1; delay <= (params.duration || 8); delay += (params.interval || 1)) {
                         this.scheduleEvent(this.time + delay, () => {
                             this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_blazing_land");
@@ -1415,30 +1492,8 @@
                     }
                     return;
                 }
-                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "cold-tide" && stone.rank >= 5) {
-                    this.triggerColdTideCraftWaves(stone);
-                    return;
-                }
-                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "frost-rain" && stone.rank >= 3 && this.craftStone?.id === "frost-glory") {
-                    this.scheduleEvent(this.time + 0.001, () => {
-                        this.addDamage(this.craftStone.params.damage * 0.30 * this.targetCount, stone.id, "machine_frost_rain_craft_bonus");
-                    });
-                    return;
-                }
-                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "frost-shatter" && stone.rank >= 5) {
-                    this.notifyIceElementalSummoned({ sourceCardId: stone.id });
-                    return;
-                }
-                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "rotten-gale" && stone.rank >= 5) {
-                    this.addMeter("wood", 10000 * Math.min(5, this.targetCount));
-                    return;
-                }
                 if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "earth-rift") {
                     this.triggerEarthRift(stone);
-                    return;
-                }
-                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "wood-spirit" && stone.rank >= 5) {
-                    this.triggerWoodSpirit(stone, 2);
                     return;
                 }
                 if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "thunder-guard") {
@@ -1450,14 +1505,6 @@
                     }
                     return;
                 }
-                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "flame-body" && event.stoneId === "blazing-skyfire" && stone.rank >= 5) {
-                    this.triggerFlameBody(stone, 12, "machine_flame_body_craft");
-                    return;
-                }
-                if (eventType === EVENTS.COMBUST && stone.id === "flame-body" && stone.rank >= 3) {
-                    this.triggerFlameBody(stone, 2, "machine_flame_body_combust");
-                    return;
-                }
                 if (eventType === EVENTS.CHAIN_LIGHTNING_HIT) {
                     amount *= event.targetsHit || 1;
                     const hits = stone.rank >= 5 ? 1 + (params.extraAtRank5 || 0) : 1;
@@ -1465,13 +1512,10 @@
                         this.addDamage(amount, stone.id, "machine_chain");
                     }
                     this.triggerThunderSpearDot(stone, hits);
-                } else {
-                    const count = eventType === EVENTS.ELEMENT_AMPLIFY && event.element === "fire" && stone.id === "fireburst" && stone.rank >= 5 ? 2 : 1;
-                    this.addDamage(amount * this.targetCount * count, stone.id, "machine_link");
+                    return;
                 }
-                if (eventType === EVENTS.ICE_AMPLIFY_FREEZE && stone.rank >= 5 && params.freezeMeterAtRank5) {
-                    this.addMeter("ice", this.effects.ice.freezeMeterBonus || params.freezeMeterAtRank5);
-                }
+                const count = eventType === EVENTS.ELEMENT_AMPLIFY && event.element === "fire" && stone.id === "fireburst" && stone.rank >= 5 ? 2 : 1;
+                this.addDamage(amount * this.targetCount * count, stone.id, "machine_link");
             });
         }
 
@@ -1696,7 +1740,8 @@
         applyThunderGuardLinyinBonus() {
             const thunderGuard = this.machineStoneMap.get("thunder-guard");
             if (!thunderGuard || thunderGuard.rank < 5) return;
-            if (!thunderGuard.guardExpiresAt || this.time > thunderGuard.guardExpiresAt) return;
+            if (!thunderGuard.guardExpiresAt) return;
+            if (this.time > thunderGuard.guardExpiresAt + 1e-9) return;
             const total = 93805 * this.targetCount * (thunderGuard.params.allLinyinBonus || 0);
             this.addDamage(total, thunderGuard.id, "machine_thunder_guard_linyin");
         }

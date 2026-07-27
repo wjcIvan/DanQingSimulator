@@ -370,7 +370,7 @@
             baseEffectText: "灼灼天炎结束时生成烈焰之地，持续 8 秒，每秒造成 29308 天火伤害。",
             upgradeText: "伤害每提升一档 +37.5%；3/5：命中累加天火值；5/5：灼灼天炎后自身灵蕴伤害提高。",
             mechanics: ["on_craft_fire_end"],
-            params: { damage: stat(29308, 29308 * 0.375), duration: 8, interval: 1 }
+            params: { damage: stat(29308, 29308 * 0.375), duration: 8, interval: 1, linyinBonus: 0.33, linyinDuration: 15 }
         },
         {
             id: "flame-body",
@@ -390,7 +390,7 @@
             baseEffectText: "受到天火激化影响的目标喷发陨星，造成 65290 天火伤害。",
             upgradeText: "伤害每提升一档 +37.5%；3/5：天火激化伤害提高 20%；5/5：额外造成一次伤害。",
             mechanics: ["on_fire_amplify"],
-            params: { damage: stat(65290, 65290 * 0.375), extraAtRank5: 1 }
+            params: { damage: stat(65290, 65290 * 0.375), extraAtRank5: 1, amplifyBonusAtRank3: 0.20 }
         },
         {
             id: "rotten-gale",
@@ -400,7 +400,7 @@
             baseEffectText: "苍木激化·绽放时额外触发腐木瘴风，造成 25042 苍木伤害。",
             upgradeText: "伤害每提升一档 +37.5%；3/5：苍木激化伤害提高 40%；5/5：青芜浮生后添加苍木值。",
             mechanics: ["on_wood_bloom"],
-            params: { damage: stat(25042, 25042 * 0.375) }
+            params: { damage: stat(25042, 25042 * 0.375), amplifyBonusAtRank3: 0.40 }
         },
         {
             id: "paper-forest",
@@ -420,7 +420,7 @@
             baseEffectText: "累积触发 6 次脉冲后获得六六大顺，脉冲伤害提高 40%。",
             upgradeText: "增幅每提升一档 +37.5%；3/5：根据点数获得 1~6 层；5/5：触发时造成 114514 苍木伤害。",
             mechanics: ["pulse_counter"],
-            params: { pulseThreshold: 6, damageBonus: stat(0.40, 0.375), burstDamage: 114514 }
+            params: { pulseThreshold: 6, damageBonus: stat(0.40, 0.40 * 0.375), burstDamage: 114514 }
         },
         {
             id: "wood-spirit",
