@@ -1080,13 +1080,19 @@
                     });
                 } else if (stone.id === "verdant-life") {
                     const interval = stone.params.attackInterval || 2.5;
+                    const hasEarthRift = this.machineStoneMap.has("earth-rift");
+                    // 带裂地崩时，树人第二个读条用于释放裂地崩，本体普攻因此少一次。
+                    const attackCount = hasEarthRift
+                        ? Math.max(0, (stone.params.attacks || 6) - 1)
+                        : (stone.params.attacks || 6);
+                    const attackStartIndex = hasEarthRift ? 2 : 1;
                     this.scheduleEvent(this.time + interval, () => {
                         this.addDamage(stone.params.damage * this.targetCount, stone.id, "craft_stone");
                         this.applyEarthRiftFollowup();
                         this.notifyCraftStoneCastEnd({ stoneId: stone.id });
                     });
-                    for (let i = 1; i <= (stone.params.attacks || 6); i += 1) {
-                        this.scheduleEvent(this.time + interval * (i + 1), () => {
+                    for (let i = 0; i < attackCount; i += 1) {
+                        this.scheduleEvent(this.time + interval * (attackStartIndex + i + 1), () => {
                             this.addDamage((stone.params.attackDamage || 0) * this.targetCount, stone.id, "craft_stone_attack");
                             this.applyEarthRiftFollowup();
                         });
@@ -1493,7 +1499,9 @@
                     return;
                 }
                 if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "earth-rift") {
-                    this.triggerEarthRift(stone);
+                    // 树人在冲击波后再读条 2.5 秒才放出裂地崩。
+                    const delay = this.craftStone?.params?.attackInterval || 2.5;
+                    this.scheduleEvent(this.time + delay, () => this.triggerEarthRift(stone));
                     return;
                 }
                 if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "thunder-guard") {

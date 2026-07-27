@@ -225,7 +225,7 @@
                 <div class="card-hover-panel">
                     <div class="card-copy">
                         <p>${stone.baseEffectText}</p>
-                        <p class="upgrade-line">${stone.upgradeText}</p>
+                        <p class="upgrade-line whitespace-pre-line">${stone.upgradeText}</p>
                     </div>
                 </div>
                 <div class="star-ui ${picked ? "" : "hidden"}" onclick="event.stopPropagation()">
