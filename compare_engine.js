@@ -1,21 +1,20 @@
-const cp = require("child_process");
-const Module = require("module");
+const fs = require("fs");
 const path = require("path");
 
 const Data = require("./data.js");
 global.Data = Data;
 
-function loadHeadEngine() {
-    const oldCode = cp.execSync("git show HEAD:engine.js", {
-        cwd: __dirname,
-        encoding: "utf8"
-    });
-    const filename = path.resolve(__dirname, "engine_head_snapshot.js");
-    const m = new Module(filename, module);
-    m.filename = filename;
-    m.paths = Module._nodeModulePaths(__dirname);
-    m._compile(oldCode, filename);
-    return m.exports;
+// 金标准基线：记录各场景的期望结算结果。
+// 引擎逻辑有意变更时，用 `node compare_engine.js --update` 重新生成。
+const BASELINE_PATH = path.resolve(__dirname, "engine_baseline.json");
+
+function loadBaseline() {
+    if (!fs.existsSync(BASELINE_PATH)) return null;
+    return JSON.parse(fs.readFileSync(BASELINE_PATH, "utf8"));
+}
+
+function saveBaseline(baseline) {
+    fs.writeFileSync(BASELINE_PATH, `${JSON.stringify(baseline, null, 2)}\n`, "utf8");
 }
 
 function cloneDeck(deck) {
@@ -150,34 +149,62 @@ const scenarios = [
 ];
 
 function main() {
-    const HeadEngine = loadHeadEngine();
-    const CurrentEngine = require("./engine.js");
+    const Engine = require("./engine.js");
+    const shouldUpdate = process.argv.includes("--update");
+    const baseline = loadBaseline();
+
+    if (!baseline && !shouldUpdate) {
+        console.error(`Baseline not found: ${path.basename(BASELINE_PATH)}`);
+        console.error("Run `node compare_engine.js --update` to create it.");
+        process.exit(1);
+    }
+
+    const results = {};
     const failures = [];
 
     scenarios.forEach((scenario, index) => {
-        const oldResult = new HeadEngine.CombatEngine(
+        const result = new Engine.CombatEngine(
             cloneDeck(scenario.deck),
             scenario.options
         ).simulate();
-        const newResult = new CurrentEngine.CombatEngine(
-            cloneDeck(scenario.deck),
-            scenario.options
-        ).simulate();
+        const normalized = normalizeResult(result);
+        results[scenario.name] = normalized;
 
-        const oldNormalized = normalizeResult(oldResult);
-        const newNormalized = normalizeResult(newResult);
-        const diffs = diffValue(oldNormalized, newNormalized);
+        if (shouldUpdate) return;
 
-        console.log(`[${index + 1}/${scenarios.length}] ${scenario.name}: ${diffs.length === 0 ? "PASS" : "FAIL"}`);
-        if (diffs.length > 0) {
+        const expected = baseline[scenario.name];
+        if (!expected) {
+            console.log(`[${index + 1}/${scenarios.length}] ${scenario.name}: NEW (no baseline entry)`);
             failures.push({
                 name: scenario.name,
-                diffs,
-                oldNormalized,
-                newNormalized
+                diffs: ["scenario missing from baseline"]
             });
+            return;
+        }
+
+        const diffs = diffValue(expected, normalized);
+        console.log(`[${index + 1}/${scenarios.length}] ${scenario.name}: ${diffs.length === 0 ? "PASS" : "FAIL"}`);
+        if (diffs.length > 0) {
+            failures.push({ name: scenario.name, diffs });
         }
     });
+
+    if (shouldUpdate) {
+        saveBaseline(results);
+        console.log("");
+        console.log(`Baseline written: ${path.basename(BASELINE_PATH)} (${scenarios.length} scenarios).`);
+        return;
+    }
+
+    const staleNames = Object.keys(baseline).filter(name => !(name in results));
+    if (staleNames.length > 0) {
+        console.error("");
+        console.error(`Baseline has ${staleNames.length} stale scenario(s): ${staleNames.join(", ")}`);
+        failures.push({
+            name: "baseline",
+            diffs: staleNames.map(name => `stale scenario: ${name}`)
+        });
+    }
 
     if (failures.length > 0) {
         console.error("");
@@ -192,11 +219,14 @@ function main() {
                 console.error(`  - ... ${failure.diffs.length - 50} more diff(s)`);
             }
         });
+        console.error("");
+        console.error("If these changes are intentional, refresh the baseline with:");
+        console.error("  node compare_engine.js --update");
         process.exit(1);
     }
 
     console.log("");
-    console.log(`All ${scenarios.length} scenarios matched HEAD engine.js exactly.`);
+    console.log(`All ${scenarios.length} scenarios matched the recorded baseline exactly.`);
 }
 
 main();

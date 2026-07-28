@@ -99,10 +99,109 @@
     };
     const ICE_AMPLIFY_FINAL_DELAY = 2;
     const WOOD_AMPLIFY_DELAYS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-    const WOOD_ECHO_DELAYS = [2, 4, 6, 8, 10];
     const OPENING_PULSE_SCHEDULE = [0, 2, 4];
     const STATIC_OVERLOAD_TICKS = 4;
+    // 静电过载：可无限叠层，持续时间来自雷魄晶，同一目标共用一条结算节奏。
+    const STATIC_OVERLOAD_MAX_STACKS = 0;
+    const STATIC_OVERLOAD_DEFAULT_DURATION = 8;
     const ELEMENT_TRIGGER_THRESHOLD = 10000;
+    // 天火陨星持续效果：最多 2 层，每层 10 秒，每 2 秒结算一次。
+    const FIRE_METEOR_MAX_STACKS = 2;
+    const FIRE_METEOR_TICK_INTERVAL = 2;
+    const FIRE_METEOR_DURATION = 10;
+    // 震荡：可无限叠层，每层 10 秒，同一目标共用每 2 秒一次的结算节奏。
+    const WOOD_ECHO_MAX_STACKS = 0;
+    const WOOD_ECHO_TICK_INTERVAL = 2;
+    const WOOD_ECHO_DURATION = 10;
+
+    // 通用目标 buff 层数机制：每层独立计时，可叠层；达到上限后移除最早一层，再叠上新的一层。
+    // maxStacks 传 0 表示没有层数上限；每层按 duration / tickInterval 结算固定次数，避免浮点边界漏跳或多跳。
+    class StackBuff {
+        constructor(maxStacks, duration, tickInterval = 0) {
+            this.maxStacks = maxStacks > 0 ? maxStacks : Infinity;
+            this.duration = duration;
+            this.tickInterval = tickInterval;
+            this.tickAt = 0;
+            // layers 保存每层的 { expireAt, weight, ticksLeft }，始终按到期时间升序排列。
+            this.layers = [];
+        }
+
+        // 清掉已到期的层，返回当前存活层数。
+        prune(now) {
+            if (this.layers.length > 0) {
+                this.layers = this.layers.filter(layer => now <= layer.expireAt + 1e-9 && layer.ticksLeft !== 0);
+            }
+            if (this.layers.length === 0) this.tickAt = 0;
+            return this.layers.length;
+        }
+
+        // 叠加一层；已达上限时先移除最早一层，再叠上新的一层。
+        apply(now, duration, weight = 1, meta = null) {
+            const life = Number.isFinite(duration) ? duration : this.duration;
+            const hadLayers = this.prune(now) > 0;
+            if (this.layers.length >= this.maxStacks) {
+                this.layers.shift();
+            }
+            this.layers.push({
+                expireAt: now + life,
+                weight,
+                meta,
+                // tickInterval 为 0 表示纯状态层，不做周期结算，用 -1 表示不受次数约束。
+                ticksLeft: this.tickInterval > 0 ? Math.max(1, Math.round(life / this.tickInterval)) : -1
+            });
+            this.layers.sort((a, b) => a.expireAt - b.expireAt);
+            // 结算节奏在效果第一次出现时起表，之后只要还有层就一直走，不被新层打断。
+            if (this.tickInterval > 0 && !hadLayers) {
+                this.tickAt = now + this.tickInterval;
+            }
+            return this.layers.length;
+        }
+
+        get stacks() {
+            return this.layers.length;
+        }
+
+        // 所有存活层的效能之和，用于按层数倍乘伤害。
+        get weight() {
+            return this.layers.reduce((sum, layer) => sum + layer.weight, 0);
+        }
+
+        // 消费一次结算：返回参与本次结算的效能总和，并扣掉各层剩余次数。
+        consumeTick(now) {
+            const total = this.prune(now) > 0 ? this.weight : 0;
+            this.layers.forEach(layer => {
+                if (layer.ticksLeft > 0) layer.ticksLeft -= 1;
+            });
+            this.prune(now);
+            return total;
+        }
+
+        // 消费一次结算并按 meta 分组返回效能，用于需要区分伤害归属的持续效果。
+        consumeTickByMeta(now) {
+            const grouped = new Map();
+            if (this.prune(now) > 0) {
+                this.layers.forEach(layer => {
+                    const key = layer.meta;
+                    grouped.set(key, (grouped.get(key) || 0) + layer.weight);
+                });
+            }
+            this.layers.forEach(layer => {
+                if (layer.ticksLeft > 0) layer.ticksLeft -= 1;
+            });
+            this.prune(now);
+            return grouped;
+        }
+
+        // 最后一层的到期时间，用于判断持续伤害是否还该继续。
+        get lastExpireAt() {
+            return this.layers.length > 0 ? this.layers[this.layers.length - 1].expireAt : 0;
+        }
+
+        clear() {
+            this.layers = [];
+            this.tickAt = 0;
+        }
+    }
 
     // Shared helpers
     function clampLevel(level) {
@@ -191,8 +290,18 @@
             this.burnTickAt = 0;
             this.combustAt = null;
 
-            // 神雷持续伤害队列
-            this.staticOverloadEvents = [];
+            // 天火陨星持续状态
+            this.fireMeteor = new StackBuff(FIRE_METEOR_MAX_STACKS, FIRE_METEOR_DURATION, FIRE_METEOR_TICK_INTERVAL);
+
+            // 震荡持续状态：无层数上限
+            this.woodEcho = new StackBuff(WOOD_ECHO_MAX_STACKS, WOOD_ECHO_DURATION, WOOD_ECHO_TICK_INTERVAL);
+
+            // 静电过载持续状态：无层数上限，结算间隔按持续时间均分
+            this.staticOverload = new StackBuff(
+                STATIC_OVERLOAD_MAX_STACKS,
+                STATIC_OVERLOAD_DEFAULT_DURATION,
+                STATIC_OVERLOAD_DEFAULT_DURATION / STATIC_OVERLOAD_TICKS
+            );
         }
 
         clearBurn() {
@@ -607,12 +716,8 @@
         }
 
         onPulseTriggered(engine, event) {
-            const echoTickDamage = (this.params.echoDamage * engine.targetCount * event.efficiency) / 5;
-            WOOD_ECHO_DELAYS.forEach(delay => {
-                engine.scheduleEvent(engine.time + delay, () => {
-                    engine.addDamage(echoTickDamage, this.id, "pulse_echo");
-                });
-            });
+            // 震荡是可无限叠层的目标状态：每次脉冲叠一层，层间共用 2 秒结算节奏。
+            engine.applyWoodEcho(event.efficiency);
         }
     }
 
@@ -973,7 +1078,8 @@
         }
 
         // 统一累计总伤、分卡伤害和机制伤害。
-        addDamage(amount, cardId, mechanic) {
+        // countAsTrigger 传 false 时只累加伤害不计次，用于一次触发拆成多笔归属的场景。
+        addDamage(amount, cardId, mechanic, countAsTrigger = true) {
             const dmg = Math.max(0, amount || 0) * this.getLinyinMultiplier();
             if (dmg <= 0) return;
             const machineStone = this.machineStoneMap ? this.machineStoneMap.get(cardId) : null;
@@ -981,7 +1087,14 @@
             this.totalDamage += dmg;
             this.breakdown.byCard[cardId] = (this.breakdown.byCard[cardId] || 0) + dmg;
             this.breakdown.byMechanic[mechanic] = (this.breakdown.byMechanic[mechanic] || 0) + dmg;
-            this.breakdown.byMechanicCount[mechanic] = (this.breakdown.byMechanicCount[mechanic] || 0) + 1;
+            if (countAsTrigger) {
+                this.breakdown.byMechanicCount[mechanic] = (this.breakdown.byMechanicCount[mechanic] || 0) + 1;
+            }
+        }
+
+        // 仅记录触发次数，不计入伤害，用于展示层数/刷新等状态统计。
+        countMechanic(mechanic, amount = 1) {
+            this.breakdown.byMechanicCount[mechanic] = (this.breakdown.byMechanicCount[mechanic] || 0) + amount;
         }
 
         getLinyinMultiplier() {
@@ -1129,12 +1242,20 @@
             this.addDamage((params.damage || 0) * this.targetCount, stone.id, mechanic);
             this.addMeter("fire", params.meter || 0);
             if (stone.rank >= 3 && params.burnDamage) {
-                for (let delay = 2; delay <= params.burnDuration; delay += 2) {
-                    this.scheduleEvent(this.time + delay, () => {
-                        this.addDamage(params.burnDamage * this.targetCount, stone.id, "machine_fire_meteor_burn");
-                        this.addMeter("fire", 200 * this.targetCount);
-                    });
-                }
+                this.targets.forEach((target, targetIndex) => {
+                    const beforeStacks = target.fireMeteor.prune(this.time);
+                    const afterStacks = target.fireMeteor.apply(this.time, params.burnDuration || FIRE_METEOR_DURATION);
+                    if (beforeStacks === 0) {
+                        this.countMechanic("machine_fire_meteor_apply");
+                    } else if (afterStacks > beforeStacks) {
+                        this.countMechanic("machine_fire_meteor_stack");
+                    } else {
+                        this.countMechanic("machine_fire_meteor_refresh");
+                    }
+                    if (targetIndex === 0) {
+                        this.countMechanic("machine_fire_meteor_stacks", afterStacks);
+                    }
+                });
             }
         }
 
@@ -1530,6 +1651,24 @@
         // 处理目标身上的持续状态，如燃烧、爆燃和静电过载。
         updateTargets() {
             this.targets.forEach((target, index) => {
+                const meteorStacks = target.fireMeteor.prune(this.time);
+                if (meteorStacks > 0
+                    && this.time < this.duration
+                    && target.fireMeteor.tickAt
+                    && this.time >= target.fireMeteor.tickAt
+                    && target.fireMeteor.tickAt <= target.fireMeteor.lastExpireAt + 1e-9) {
+                    this.queueEvent({ type: "FIRE_METEOR_TICK", targetIndex: index });
+                    target.fireMeteor.tickAt += target.fireMeteor.tickInterval;
+                }
+                const echoStacks = target.woodEcho.prune(this.time);
+                if (echoStacks > 0
+                    && this.time < this.duration
+                    && target.woodEcho.tickAt
+                    && this.time >= target.woodEcho.tickAt
+                    && target.woodEcho.tickAt <= target.woodEcho.lastExpireAt + 1e-9) {
+                    this.queueEvent({ type: "WOOD_ECHO_TICK", targetIndex: index });
+                    target.woodEcho.tickAt += target.woodEcho.tickInterval;
+                }
                 if (target.burnStacks > 0 && this.time >= target.burnExpireAt) {
                     target.clearBurn();
                 }
@@ -1541,15 +1680,13 @@
                     this.queueEvent({ type: "COMBUST", targetIndex: index });
                     target.combustAt = null;
                 }
-                if (target.staticOverloadEvents.length > 0) {
-                    // 这里直接按时间消费静电过载，不再额外入主队列。
-                    target.staticOverloadEvents = target.staticOverloadEvents.filter(event => {
-                        if (this.time >= event.triggerAt) {
-                            this.addDamage(event.damagePerTick, event.cardId, "static_overload");
-                            return false;
-                        }
-                        return true;
-                    });
+                const overloadStacks = target.staticOverload.prune(this.time);
+                if (overloadStacks > 0
+                    && target.staticOverload.tickAt
+                    && this.time >= target.staticOverload.tickAt
+                    && target.staticOverload.tickAt <= target.staticOverload.lastExpireAt + 1e-9) {
+                    this.queueEvent({ type: "STATIC_OVERLOAD_TICK", targetIndex: index });
+                    target.staticOverload.tickAt += target.staticOverload.tickInterval;
                 }
             });
             this.flushDelayedEvents();
@@ -1565,6 +1702,15 @@
             switch (event.type) {
                 case "BURN_TICK":
                     this.handleBurnTick(event.targetIndex);
+                    break;
+                case "FIRE_METEOR_TICK":
+                    this.handleFireMeteorTick(event.targetIndex);
+                    break;
+                case "WOOD_ECHO_TICK":
+                    this.handleWoodEchoTick(event.targetIndex);
+                    break;
+                case "STATIC_OVERLOAD_TICK":
+                    this.handleStaticOverloadTick(event.targetIndex);
                     break;
                 case "COMBUST":
                     this.handleCombust(event.targetIndex);
@@ -1662,6 +1808,41 @@
             this.notifyBurnTick({ targetIndex, damage });
         }
 
+        handleFireMeteorTick(targetIndex) {
+            const target = this.targets[targetIndex];
+            const stone = this.machineStoneMap.get("fire-meteor");
+            if (!target || !stone) return;
+            const stacks = target.fireMeteor.consumeTick(this.time);
+            if (stacks <= 0) return;
+            this.addDamage(stone.params.burnDamage * stacks, stone.id, "machine_fire_meteor_burn");
+            this.addMeter("fire", 200 * stacks);
+        }
+
+        // 给所有目标叠一层震荡；层数无上限，伤害按层数效能倍乘。
+        applyWoodEcho(efficiency = 1) {
+            const dice = this.getCard(CARD_IDS.SACRED_WOOD_DICE);
+            if (!dice) return;
+            this.targets.forEach((target, targetIndex) => {
+                const beforeStacks = target.woodEcho.prune(this.time);
+                const afterStacks = target.woodEcho.apply(this.time, dice.params.echoDuration || WOOD_ECHO_DURATION, efficiency);
+                if (targetIndex !== 0) return;
+                this.countMechanic(beforeStacks === 0 ? "pulse_echo_apply" : "pulse_echo_stack");
+                this.countMechanic("pulse_echo_stacks", afterStacks);
+            });
+        }
+
+        // 结算一次震荡：单次伤害按当前存活层的效能之和倍乘。
+        handleWoodEchoTick(targetIndex) {
+            const target = this.targets[targetIndex];
+            const dice = this.getCard(CARD_IDS.SACRED_WOOD_DICE);
+            if (!target || !dice) return;
+            const ticks = (dice.params.echoDuration || WOOD_ECHO_DURATION) / WOOD_ECHO_TICK_INTERVAL;
+            const perTick = dice.params.echoDamage / ticks;
+            const weight = target.woodEcho.consumeTick(this.time);
+            if (weight <= 0) return;
+            this.addDamage(perTick * weight, dice.id, "pulse_echo");
+        }
+
         // 结算一次爆燃事件。
         handleCombust(targetIndex) {
             this.notifyCombust({ targetIndex });
@@ -1754,20 +1935,33 @@
             this.addDamage(total, thunderGuard.id, "machine_thunder_guard_linyin");
         }
 
-        // 给目标挂上静电过载的未来伤害 tick。
+        // 给目标叠一层静电过载；层数无上限，单次结算按层数效能倍乘。
         applyStaticOverload(cardId, targetsHit, efficiency) {
-            const totalDamage = this.effects.thunder.staticOverloadDamage * efficiency;
-            const perTick = totalDamage / STATIC_OVERLOAD_TICKS;
+            const duration = this.effects.thunder.staticOverloadDuration || STATIC_OVERLOAD_DEFAULT_DURATION;
+            // 引雷幡触发的静电过载归因到雷魄晶，其余额外雷链则保留来源卡。
+            const ownerId = cardId === CARD_IDS.THUNDER_BANNER ? CARD_IDS.THUNDER_CRYSTAL : cardId;
             for (let targetIndex = 0; targetIndex < targetsHit; targetIndex++) {
-                for (let i = 1; i <= STATIC_OVERLOAD_TICKS; i++) {
-                    // 引雷幡触发的静电过载归因到雷魄晶，其余额外雷链则保留来源卡。
-                    this.targets[targetIndex].staticOverloadEvents.push({
-                        triggerAt: this.time + (this.effects.thunder.staticOverloadDuration / STATIC_OVERLOAD_TICKS) * i,
-                        damagePerTick: perTick,
-                        cardId: cardId === CARD_IDS.THUNDER_BANNER ? CARD_IDS.THUNDER_CRYSTAL : cardId
-                    });
-                }
+                const target = this.targets[targetIndex];
+                if (!target) continue;
+                target.staticOverload.tickInterval = duration / STATIC_OVERLOAD_TICKS;
+                target.staticOverload.apply(this.time, duration, efficiency, ownerId);
             }
+        }
+
+        // 结算一次静电过载：按来源分摊，单次伤害随存活层数倍乘。
+        handleStaticOverloadTick(targetIndex) {
+            const target = this.targets[targetIndex];
+            if (!target) return;
+            const perTick = this.effects.thunder.staticOverloadDamage / STATIC_OVERLOAD_TICKS;
+            if (perTick <= 0) return;
+            let settled = false;
+            // 一次结算可能拆成多笔来源归属，次数只按结算本身记一次。
+            target.staticOverload.consumeTickByMeta(this.time).forEach((weight, ownerId) => {
+                if (weight <= 0) return;
+                this.addDamage(perTick * weight, ownerId, "static_overload", false);
+                settled = true;
+            });
+            if (settled) this.countMechanic("static_overload");
         }
 
         // 判断当前拍是否轮到紫电螭吻的雷暴阶段。
