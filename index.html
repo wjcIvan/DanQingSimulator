@@ -494,6 +494,73 @@
             color: #6366f1;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
         }
+        .log-filter {
+            font-size: 10px;
+            font-weight: 900;
+            padding: 3px 9px;
+            border-radius: 8px;
+            background: #f1f5f9;
+            color: #64748b;
+            border: 1px solid transparent;
+            transition: all .15s;
+        }
+        .log-filter:hover { background: #e2e8f0; }
+        .log-filter.active {
+            background: #1e293b;
+            color: #fff;
+        }
+        .log-row {
+            display: grid;
+            grid-template-columns: 46px 52px 1fr;
+            gap: 8px;
+            align-items: baseline;
+            padding: 3px 0;
+            border-bottom: 1px solid #f8fafc;
+            font-size: 11px;
+            line-height: 1.5;
+        }
+        .log-row:last-child { border-bottom: none; }
+        .log-time {
+            font-variant-numeric: tabular-nums;
+            text-align: right;
+            font-weight: 900;
+            color: #94a3b8;
+        }
+        .log-kind {
+            font-size: 9px;
+            font-weight: 900;
+            text-align: center;
+            padding: 1px 0;
+            border-radius: 5px;
+        }
+        .log-kind-damage { background: #fef2f2; color: #dc2626; }
+        .log-kind-buff { background: #eff6ff; color: #2563eb; }
+        .log-kind-meter { background: #f8fafc; color: #64748b; }
+        .log-kind-amplify { background: #fefce8; color: #ca8a04; }
+        .log-kind-craft { background: #f5f3ff; color: #7c3aed; }
+        .log-kind-event { background: #ecfdf5; color: #059669; }
+        .log-name { font-weight: 800; color: #475569; }
+        .log-text { color: #64748b; }
+        /* 放大模式：日志卡片提升为居中浮层，日志区占满可用高度 */
+        .log-expanded {
+            position: fixed;
+            inset: 4vh 6vw;
+            z-index: 60;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 24px 64px rgba(15, 23, 42, .28);
+        }
+        .log-expanded #logBody {
+            flex: 1 1 auto;
+            max-height: none;
+        }
+        .log-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            background: rgba(15, 23, 42, .45);
+            backdrop-filter: blur(2px);
+        }
         .progress-shimmer {
             position: relative;
             overflow: hidden;
@@ -741,14 +808,29 @@
                                         <h3>按卡牌贡献</h3>
                                         <ul id="cardBreakdown"></ul>
                                     </div>
-<!--                                    <div class="detail-card">-->
-<!--                                        <h3>按机制贡献</h3>-->
-<!--                                        <ul id="mechanicBreakdown"></ul>-->
-<!--                                    </div>-->
-                                    <div class="detail-card">
-                                        <h3>激化触发次数</h3>
-                                        <ul id="amplifyList"></ul>
+                                </div>
+                            </div>
+
+                            <div id="logCard" class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                                <div class="px-4 py-3 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+                                    <h3 class="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">🗒 模拟日志</h3>
+                                    <div class="flex items-center gap-2">
+                                        <span id="logMeta" class="text-[10px] font-bold text-slate-400"></span>
+                                        <button id="btnExpandLog" class="text-[10px] font-black px-2 py-1 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-all" title="放大查看（Esc 退出）">放大</button>
+                                        <button id="btnCopyLog" class="text-[10px] font-black px-2 py-1 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-all">复制</button>
                                     </div>
+                                </div>
+                                <div class="px-4 pt-3 pb-2 flex flex-wrap gap-1.5" id="logFilters">
+                                    <button class="log-filter active" data-kind="all">全部</button>
+                                    <button class="log-filter" data-kind="damage">伤害</button>
+                                    <button class="log-filter" data-kind="buff">状态</button>
+                                    <button class="log-filter" data-kind="meter">计量</button>
+                                    <button class="log-filter" data-kind="amplify">激化</button>
+                                    <button class="log-filter" data-kind="craft">匠心石</button>
+                                    <button class="log-filter" data-kind="event">事件</button>
+                                </div>
+                                <div id="logBody" class="max-h-[320px] overflow-y-auto px-4 pb-4">
+                                    <p class="text-[11px] text-slate-400 py-6 text-center font-bold">运行基础模拟后显示第 1 轮日志</p>
                                 </div>
                             </div>
                         </section>

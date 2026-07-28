@@ -408,7 +408,7 @@
             element: "wood",
             fee: 2,
             baseEffectText: "战斗状态下每 20 秒召唤小纸人：存在 10 秒，每 2 秒攻击一次共 6 次，每次造成 10022 苍木伤害。",
-            upgradeText: "伤害每提升一档+12.5%；\n\n3/5：召唤后使用一次纸人风暴，4 秒内对周围敌人造成 11 次 4513 苍木伤害（本体攻击减为3次）；\n\n5/5：苍林箭和纸人风暴每次命中增加目标 80 苍木值。",
+            upgradeText: "伤害每提升一档+12.5%；\n\n3/5：召唤后前 4 秒释放纸人风暴，对周围敌人造成 11 次 4513 苍木伤害，后 6 秒进行 3 次本体普攻；\n\n5/5：苍林箭和纸人风暴每次命中增加目标 80 苍木值。",
             mechanics: ["periodic_summon"],
             params: { damage: stat(10022, 10022 * 0.125), interval: 20, attacks: 6, attackInterval: 2, upgradedAttacks: 3, stormDamage: stat(4513, 4513 * 0.125), stormHits: 11, stormDuration: 4 }
         },

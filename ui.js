@@ -1,6 +1,6 @@
 (function () {
     const { CARD_DEFS, MACHINE_STONE_DEFS, CRAFT_STONE_DEFS } = window.Data;
-    const { CombatEngine, ELEMENT_LABELS } = window.Engine;
+    const { CombatEngine } = window.Engine;
 
     const ELEMENT_META = {
         fire: { title: "火", chip: "天火", border: "race-fire", tag: "tag-fire", text: "text-red-500" },
@@ -17,6 +17,20 @@
     let currentTab = "basic";
     let bfWorkers = [];
     let bfStopped = false;
+    // 模拟日志只保留第 1 轮，避免多轮迭代把内存和 DOM 撑爆。
+    let simulationLog = [];
+    let simulationLogTruncated = false;
+    let logFilter = "all";
+    let logExpanded = false;
+
+    const LOG_KIND_LABELS = {
+        damage: "伤害",
+        buff: "状态",
+        meter: "计量",
+        amplify: "激化",
+        craft: "匠心",
+        event: "事件"
+    };
 
     function initDefaults() {
         selected.clear();
@@ -704,9 +718,6 @@
         const totals = [];
         const histories = [];
         const cardMap = new Map();
-        const mechanicMap = new Map();
-        const amplify = { fire: 0, ice: 0, wood: 0, thunder: 0 };
-        const amplifyTimes = { fire: [], ice: [], wood: [], thunder: [] };
         const warningSet = new Set();
 
         for (let i = 0; i < iterations; i++) {
@@ -714,23 +725,24 @@
                 deck,
                 machineStones,
                 craftStone: selectedCraftStone ? { id: selectedCraftStone } : null
-            }, { duration, targetCount, seed: 1000 + i, externalSkillDps });
+            }, {
+                duration,
+                targetCount,
+                seed: 1000 + i,
+                externalSkillDps,
+                // 只让第 1 轮记录日志，其余轮次保持原有性能。
+                collectLog: i === 0
+            });
             const result = engine.simulate();
+            if (i === 0) {
+                simulationLog = result.log || [];
+                simulationLogTruncated = Boolean(result.logTruncated);
+            }
             totals.push(result.totalDps);
             histories.push(result.dpsHistory);
             result.breakdown.byCard.forEach(item => {
                 const current = cardMap.get(item.name) || 0;
                 cardMap.set(item.name, current + item.damage);
-            });
-            result.breakdown.byMechanic.forEach(item => {
-                const current = mechanicMap.get(item.mechanic) || 0;
-                mechanicMap.set(item.mechanic, current + item.damage);
-            });
-            Object.keys(amplify).forEach(key => {
-                amplify[key] += result.amplifyTriggers[key] || 0;
-                if (i === 0 && result.amplifyTimeline) {
-                    amplifyTimes[key] = (result.amplifyTimeline[key] || []).slice();
-                }
             });
             result.warnings.forEach(text => warningSet.add(text));
             lastResult = result;
@@ -757,10 +769,119 @@
         }
 
         renderOverview({ avgDps, minDps, maxDps, ci95, iterations, targetCount, duration });
-        renderBreakdown(cardMap, mechanicMap, iterations, duration);
-        renderAmplify(amplify, iterations, amplifyTimes);
+        renderBreakdown(cardMap, iterations, duration);
         renderWarnings(warningSet);
         renderChart(averageCurve);
+        renderLog();
+    }
+
+    function matchesLogFilter(entry) {
+        if (logFilter === "all") return true;
+        if (entry.kind === logFilter) return true;
+        // tags 让一条日志同时归入多个筛选，例如激化产出的伤害。
+        return Array.isArray(entry.tags) && entry.tags.includes(logFilter);
+    }
+
+    function renderLog() {
+        const body = document.getElementById("logBody");
+        const meta = document.getElementById("logMeta");
+        if (!body) return;
+
+        const rows = logFilter === "all"
+            ? simulationLog
+            : simulationLog.filter(matchesLogFilter);
+
+        if (meta) {
+            const total = simulationLog.length;
+            const shown = rows.length;
+            const parts = [];
+            if (total > 0) {
+                parts.push(logFilter === "all" ? `${total} 条` : `${shown} / ${total} 条`);
+                if (simulationLogTruncated) parts.push("已截断");
+            }
+            meta.innerText = parts.join(" · ");
+        }
+
+        if (rows.length === 0) {
+            const hint = simulationLog.length === 0
+                ? "运行基础模拟后显示第 1 轮日志"
+                : "当前筛选下没有日志";
+            body.innerHTML = `<p class="text-[11px] text-slate-400 py-6 text-center font-bold">${hint}</p>`;
+            return;
+        }
+
+        body.innerHTML = rows.map(entry => {
+            const kindLabel = LOG_KIND_LABELS[entry.kind] || entry.kind;
+            const name = entry.name
+                ? `<span class="log-name">${escapeHtml(entry.name)}</span> `
+                : "";
+            return `<div class="log-row">
+                <span class="log-time">${entry.time.toFixed(1)}s</span>
+                <span class="log-kind log-kind-${entry.kind}">${kindLabel}</span>
+                <span class="log-text">${name}${escapeHtml(entry.message)}</span>
+            </div>`;
+        }).join("");
+        body.scrollTop = 0;
+    }
+
+    function escapeHtml(text) {
+        return String(text).replace(/[&<>"']/g, ch => ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#39;"
+        })[ch]);
+    }
+
+    function setLogExpanded(expanded) {
+        const card = document.getElementById("logCard");
+        if (!card) return;
+        logExpanded = expanded;
+        card.classList.toggle("log-expanded", expanded);
+
+        let backdrop = document.getElementById("logBackdrop");
+        if (expanded && !backdrop) {
+            backdrop = document.createElement("div");
+            backdrop.id = "logBackdrop";
+            backdrop.className = "log-backdrop";
+            // 点击遮罩收起，和 Esc 行为一致。
+            backdrop.addEventListener("click", () => setLogExpanded(false));
+            document.body.appendChild(backdrop);
+        } else if (!expanded && backdrop) {
+            backdrop.remove();
+        }
+
+        const button = document.getElementById("btnExpandLog");
+        if (button) {
+            button.innerText = expanded ? "收起" : "放大";
+            button.title = expanded ? "收起（Esc）" : "放大查看（Esc 退出）";
+        }
+    }
+
+    function toggleLogExpanded() {
+        setLogExpanded(!logExpanded);
+    }
+
+    function copyLog() {
+        const rows = logFilter === "all"
+            ? simulationLog
+            : simulationLog.filter(matchesLogFilter);
+        if (rows.length === 0) return;
+        const text = rows
+            .map(entry => `${entry.time.toFixed(1)}s\t[${LOG_KIND_LABELS[entry.kind] || entry.kind}]\t${entry.name ? entry.name + " — " : ""}${entry.message}`)
+            .join("\n");
+        const button = document.getElementById("btnCopyLog");
+        const restore = () => {
+            if (button) setTimeout(() => { button.innerText = "复制"; }, 1200);
+        };
+        navigator.clipboard?.writeText(text).then(() => {
+            if (button) button.innerText = "已复制";
+            restore();
+        }).catch(() => {
+            if (button) button.innerText = "复制失败";
+            restore();
+        });
     }
 
     function renderOverview(summary) {
@@ -783,32 +904,14 @@
         rangeBar.style.width = `${Math.min(100, rangePercent)}%`;
     }
 
-    function renderBreakdown(cardMap, mechanicMap, iterations, duration) {
+    function renderBreakdown(cardMap, iterations, duration) {
         const cardRows = Array.from(cardMap.entries())
-            .map(([name, damage]) => ({ name, dps: damage / iterations / duration }))
-            .sort((a, b) => b.dps - a.dps)
-            .map(item => `<li><span>${item.name}</span><strong>${item.dps.toFixed(2)}</strong></li>`)
-            .join("");
-        const mechanicRows = Array.from(mechanicMap.entries())
             .map(([name, damage]) => ({ name, dps: damage / iterations / duration }))
             .sort((a, b) => b.dps - a.dps)
             .map(item => `<li><span>${item.name}</span><strong>${item.dps.toFixed(2)}</strong></li>`)
             .join("");
 
         document.getElementById("cardBreakdown").innerHTML = cardRows || "<li><span>暂无</span><strong>0</strong></li>";
-//        document.getElementById("mechanicBreakdown").innerHTML = mechanicRows || "<li><span>暂无</span><strong>0</strong></li>";
-    }
-
-    function renderAmplify(amplify, iterations, amplifyTimes = {}) {
-        const rows = Object.keys(amplify).map(key => {
-            const avg = amplify[key] / iterations;
-            const times = amplifyTimes[key] || [];
-            const timeText = times.length
-                ? times.map(t => `${t}s`).join("、")
-                : "无";
-            return `<li><span class="whitespace-nowrap">${ELEMENT_LABELS[key]}</span><strong class="text-right">${avg.toFixed(2)} 次/局<br><span class="text-[11px] font-bold text-slate-400">${timeText}</span></strong></li>`;
-        }).join("");
-        document.getElementById("amplifyList").innerHTML = rows;
     }
 
     function renderWarnings(warningSet) {
@@ -900,6 +1003,20 @@
         document.getElementById("btn-tab-advanced").addEventListener("click", () => switchTab("advanced"));
         document.getElementById("btnStartBF").addEventListener("click", startSeason2BruteForce);
         document.getElementById("btnStopBF").addEventListener("click", stopSeason2BruteForce);
+        document.getElementById("btnCopyLog")?.addEventListener("click", copyLog);
+        document.getElementById("btnExpandLog")?.addEventListener("click", toggleLogExpanded);
+        document.addEventListener("keydown", event => {
+            if (event.key === "Escape" && logExpanded) setLogExpanded(false);
+        });
+        document.querySelectorAll("#logFilters .log-filter").forEach(btn => {
+            btn.addEventListener("click", () => {
+                logFilter = btn.dataset.kind;
+                document.querySelectorAll("#logFilters .log-filter").forEach(other => {
+                    other.classList.toggle("active", other === btn);
+                });
+                renderLog();
+            });
+        });
 
         const externalSkillDpsInput = document.getElementById("externalSkillDps");
         const externalDpsVal = document.getElementById("externalDpsVal");
@@ -970,7 +1087,8 @@
         toggleCard,
         updateLevel,
         runSimulation,
-        getLastResult: () => lastResult
+        getLastResult: () => lastResult,
+        getSimulationLog: () => simulationLog
     };
 
     window.addEventListener("DOMContentLoaded", boot);

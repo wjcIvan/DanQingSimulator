@@ -105,6 +105,116 @@
     const STATIC_OVERLOAD_MAX_STACKS = 0;
     const STATIC_OVERLOAD_DEFAULT_DURATION = 8;
     const ELEMENT_TRIGGER_THRESHOLD = 10000;
+    // 归属激化的伤害机制：这些机制虽走普通伤害路径，但语义上属于激化产出，
+    // 日志里额外打上 amplify 标签，便于按激化筛选时一并看到伤害。
+    const AMPLIFY_DAMAGE_MECHANICS = new Set([
+        "fire_amplify",
+        "ice_amplify",
+        "wood_amplify",
+        "wood_bloom",
+        "thunder_amplify",
+        "machine_fire_meteor_amplify",
+        "machine_ice_amplify"
+    ]);
+
+    // 四系激化的伤害参数。激化是内置逻辑，不依赖具体丹青是否在编，
+    // 因此伤害统一归到内置来源，不再计入任何丹青的贡献。
+    const AMPLIFY_DAMAGE = {
+        fire: { sourceId: "fire-amplify", tickDamage: 39181, interval: 2, duration: 10 },
+        ice: { sourceId: "ice-amplify", initialDamage: 43534, finalDamage: 85327 },
+        wood: { sourceId: "wood-amplify", tickDamage: 24916, bloomDamage: 72108, bloomEvery: 3 },
+        thunder: { sourceId: "thunder-amplify", damage: 93805 }
+    };
+
+    // 内置激化来源的展示名。
+    const AMPLIFY_SOURCE_LABELS = {
+        "fire-amplify": "天火激化",
+        "ice-amplify": "玄冰激化",
+        "wood-amplify": "苍木激化",
+        "thunder-amplify": "神雷激化"
+    };
+
+    // 机制名的中文展示。日志和拆解列表都用它，避免界面里混入内部 id。
+    const MECHANIC_LABELS = {
+        // 天火
+        burn_tick: "燃烧",
+        ignite: "引燃",
+        combust: "爆燃",
+        fire_amplify: "天火激化",
+        // 玄冰
+        ice_arrow: "冰箭",
+        ice_arrow_volley: "冰箭齐射",
+        ice_storm: "玄冰风暴",
+        ice_storm_frenzy: "玄冰风暴·疾风",
+        shatter: "碎裂",
+        ice_amplify: "玄冰激化",
+        // 苍木
+        pulse: "脉冲",
+        opening_pulse: "开局脉冲",
+        pulse_followup: "追加脉冲",
+        pulse_echo: "震荡",
+        wood_amplify: "苍木激化",
+        wood_bloom: "绽放",
+        // 神雷
+        chain_lightning: "连锁闪电",
+        chain_lightning_extra: "连锁闪电·额外",
+        chain_lightning_frenzy: "连锁闪电·雷暴",
+        static_overload: "静电过载",
+        thunder_amplify: "神雷激化",
+        // 匠心石
+        craft_stone: "匠心石",
+        craft_stone_attack: "匠心石·普攻",
+        // 机巧石·天火
+        machine_periodic: "周期触发",
+        machine_fire_meteor_burn: "陨星灼烧",
+        machine_fire_meteor_amplify: "激化陨星",
+        machine_fire_tick: "赤焰天环",
+        machine_blazing_land: "烈焰之地",
+        machine_flame_body: "烈焰焚身",
+        machine_flame_body_combust: "烈焰焚身·爆燃",
+        machine_flame_body_craft: "烈焰焚身·天炎",
+        machine_link: "机巧联动",
+        // 机巧石·玄冰
+        machine_ice_amplify: "凛霜寒涌",
+        machine_frost_shatter: "霜寒破裂",
+        machine_frost_shatter_dot: "霜寒破裂·持续",
+        machine_frost_rain: "霜刺寒雨",
+        machine_frost_rain_craft_bonus: "霜刺寒雨·霜华加成",
+        machine_frost_crystal_spike: "寒晶刺",
+        machine_cold_tide: "寒潮冰涌",
+        // 机巧石·苍木
+        machine_rotten_gale: "腐木瘴风",
+        machine_paper_forest: "小纸人",
+        machine_paper_storm: "纸人风暴",
+        machine_wood_spirit: "木引青灵",
+        machine_wood_dice_burst: "神木骰·爆发",
+        machine_earth_rift: "裂地崩",
+        machine_earth_rift_echo: "裂地崩·回响",
+        machine_earth_rift_echo_followup: "裂地崩·回响追击",
+        // 机巧石·神雷
+        machine_chain: "惊雷戟",
+        machine_thunder_spear_dot: "惊雷戟·持续",
+        machine_thunder_shock: "雷霆震击",
+        machine_thunder_shock_burst: "雷霆震击·爆发",
+        machine_nine_sky_thunder: "九霄雷动",
+        machine_nine_sky_thunder_copy: "九霄雷动·复制",
+        machine_thunder_orb: "五雷珠",
+        machine_thunder_orb_burst: "五雷珠·爆发",
+        machine_thunder_guard_external: "天雷护佑·职业法宝",
+        machine_thunder_guard_linyin: "天雷护佑·灵蕴",
+        // 状态计数（只计次不计伤害）
+        machine_fire_meteor_apply: "陨星·首次附加",
+        machine_fire_meteor_stack: "陨星·叠层",
+        machine_fire_meteor_refresh: "陨星·刷新",
+        machine_fire_meteor_stacks: "陨星·层数累计",
+        pulse_echo_apply: "震荡·首次附加",
+        pulse_echo_stack: "震荡·叠层",
+        pulse_echo_stacks: "震荡·层数累计"
+    };
+
+    function getMechanicLabel(mechanic) {
+        return MECHANIC_LABELS[mechanic] || mechanic;
+    }
     // 天火陨星持续效果：最多 2 层，每层 10 秒，每 2 秒结算一次。
     const FIRE_METEOR_MAX_STACKS = 2;
     const FIRE_METEOR_TICK_INTERVAL = 2;
@@ -379,8 +489,7 @@
     class FierceTiger extends Card {
         static handlers = {
             [EVENTS.BURN_TICK]: "onBurnTick",
-            [EVENTS.COMBUST]: "onCombust",
-            [EVENTS.ELEMENT_AMPLIFY]: "onElementAmplify"
+            [EVENTS.COMBUST]: "onCombust"
         };
 
         static cardId = CARD_IDS.FIERCE_TIGER;
@@ -397,18 +506,6 @@
 
         onCombust(engine) {
             engine.addMeter("fire", this.params.combustMeterGain);
-        }
-
-        onElementAmplify(engine) {
-            const ring = engine.machineStoneMap.get("scarlet-ring");
-            const speedUp = Boolean(ring && ring.rank >= 5);
-            const interval = speedUp ? 1.5 : 2;
-            const duration = speedUp ? 12 : 10;
-            for (let delay = interval; delay <= duration + 1e-9; delay += interval) {
-                engine.scheduleEvent(engine.time + delay, () => {
-                    engine.addDamage(39181 * (1 + engine.effects.fire.amplifyDamageBonus), this.id, "fire_amplify");
-                });
-            }
         }
     }
 
@@ -477,6 +574,10 @@
         onCombust(engine, event) {
             const target = engine.targets[event.targetIndex];
             if (!target || target.burnStacks < this.params.threshold) return;
+            engine.addLog("event", this.id, `目标 ${event.targetIndex + 1} 爆燃：引爆 ${target.burnStacks} 层燃烧`, {
+                targetIndex: event.targetIndex,
+                stacks: target.burnStacks
+            });
             engine.addDamage(target.burnStacks * this.params.damagePerExtraLayer, this.id, "combust");
             const preservedTickAt = target.burnTickAt;
             target.burnStacks = 0;
@@ -513,8 +614,7 @@
         static handlers = {
             [EVENTS.ICE_ARROW_HIT]: "onIceArrowHit",
             [EVENTS.SHATTER]: "onShatter",
-            [EVENTS.ICE_STORM_HIT]: "onIceStormHit",
-            [EVENTS.ELEMENT_AMPLIFY]: "onElementAmplify"
+            [EVENTS.ICE_STORM_HIT]: "onIceStormHit"
         };
 
         static cardId = CARD_IDS.SHANGGUAN_CE;
@@ -535,14 +635,6 @@
             if (event.shouldAddStormMeter) {
                 engine.addMeter("ice", this.params.stormMeterGain);
             }
-        }
-
-        onElementAmplify(engine) {
-            engine.addDamage(43534 * (1 + engine.effects.ice.amplifyDamageBonus), this.id, "ice_amplify");
-            engine.scheduleEvent(engine.time + ICE_AMPLIFY_FINAL_DELAY, () => {
-                engine.addDamage(85327 * (1 + engine.effects.ice.amplifyDamageBonus), this.id, "ice_amplify");
-                engine.notifyIceAmplifyFreeze({ element: "ice" });
-            });
         }
     }
 
@@ -666,8 +758,7 @@
 
     class CoolPearl extends Card {
         static handlers = {
-            [EVENTS.PULSE_TRIGGERED]: "onPulseTriggered",
-            [EVENTS.ELEMENT_AMPLIFY]: "onElementAmplify"
+            [EVENTS.PULSE_TRIGGERED]: "onPulseTriggered"
         };
 
         static cardId = CARD_IDS.COOL_PEARL;
@@ -678,21 +769,6 @@
 
         onPulseTriggered(engine) {
             engine.addMeter("wood", this.params.meterGain * engine.targetCount);
-        }
-
-        onElementAmplify(engine) {
-            let tickCount = 0;
-            const bonus = 1 + engine.effects.wood.amplifyDamageBonus;
-            WOOD_AMPLIFY_DELAYS.forEach(delay => {
-                engine.scheduleEvent(engine.time + delay, () => {
-                    engine.addDamage(24916 * bonus, this.id, "wood_amplify");
-                    tickCount += 1;
-                    if (tickCount % 3 === 0) {
-                        engine.addDamage(72108 * bonus, this.id, "wood_bloom");
-                        engine.notifyWoodBloom({ element: "wood" });
-                    }
-                });
-            });
         }
     }
 
@@ -786,8 +862,7 @@
 
     class ZiXiaoGourd extends Card {
         static handlers = {
-            [EVENTS.CHAIN_LIGHTNING_HIT]: "onChainLightningHit",
-            [EVENTS.ELEMENT_AMPLIFY]: "onElementAmplify"
+            [EVENTS.CHAIN_LIGHTNING_HIT]: "onChainLightningHit"
         };
 
         static cardId = CARD_IDS.ZI_XIAO_GOURD;
@@ -798,10 +873,6 @@
 
         onChainLightningHit(engine, event) {
             engine.addMeter("thunder", this.params.meterGain * event.targetsHit);
-        }
-
-        onElementAmplify(engine) {
-            engine.addDamage(93805 * engine.targetCount, this.id, "thunder_amplify");
         }
     }
 
@@ -887,12 +958,8 @@
         [EVENTS.PULSE_TRIGGERED]: [CARD_IDS.COOL_PEARL, CARD_IDS.SACRED_WOOD_DICE, CARD_IDS.LIU_HE_MIRROR],
         [EVENTS.CHAIN_LIGHTNING_HIT]: [CARD_IDS.ZI_XIAO_GOURD, CARD_IDS.THUNDER_CRYSTAL, CARD_IDS.PURPLE_DRAGON],
         [EVENTS.THUNDER_FRENZY]: [CARD_IDS.PURPLE_DRAGON],
-        [EVENTS.ELEMENT_AMPLIFY]: [
-            CARD_IDS.FIERCE_TIGER,
-            CARD_IDS.SHANGGUAN_CE,
-            CARD_IDS.COOL_PEARL,
-            CARD_IDS.ZI_XIAO_GOURD
-        ]
+        // 激化伤害已内置到引擎，丹青不再监听该事件；保留空表以便后续有卡需要响应。
+        [EVENTS.ELEMENT_AMPLIFY]: []
     };
 
     const CARD_REGISTRY = {
@@ -940,6 +1007,11 @@
             this.totalDamage = 0;
             this.lastSecondSample = 0;
             this.nextThunderFrenzyAt = Infinity;
+            // 模拟日志：仅在显式开启时记录，避免高级推演的批量模拟产生额外开销。
+            this.logEnabled = Boolean(options.collectLog);
+            this.logLimit = Math.max(1, Number(options.logLimit) || 5000);
+            this.log = [];
+            this.logTruncated = false;
             this.effects = createEffects();
             this.deck = this.buildDeck(config.deck);
             this.cardMap = new Map(this.deck.map(card => [card.id, card]));
@@ -1077,6 +1149,37 @@
             return readyEvents;
         }
 
+        // 记录一条模拟日志。kind 用于前端分类过滤，tags 支持一条日志归入多个筛选，
+        // detail 保留结构化字段。
+        addLog(kind, sourceId, message, detail = null, tags = null) {
+            if (!this.logEnabled) return;
+            if (this.log.length >= this.logLimit) {
+                this.logTruncated = true;
+                return;
+            }
+            this.log.push({
+                time: Number(this.time.toFixed(1)),
+                kind,
+                tags: tags && tags.length ? tags.slice() : null,
+                sourceId: sourceId || null,
+                name: this.resolveSourceName(sourceId),
+                message,
+                detail
+            });
+        }
+
+        // 把卡牌/机巧石/匠心石 id 解析成展示名。
+        resolveSourceName(sourceId) {
+            if (!sourceId) return "";
+            const card = this.getCard(sourceId);
+            if (card) return card.name;
+            const def = Data.getCardDefById(sourceId)
+                || Data.getMachineStoneDefById(sourceId)
+                || Data.getCraftStoneDefById(sourceId);
+            if (def) return def.name;
+            return AMPLIFY_SOURCE_LABELS[sourceId] || sourceId;
+        }
+
         // 统一累计总伤、分卡伤害和机制伤害。
         // countAsTrigger 传 false 时只累加伤害不计次，用于一次触发拆成多笔归属的场景。
         addDamage(amount, cardId, mechanic, countAsTrigger = true) {
@@ -1090,6 +1193,17 @@
             if (countAsTrigger) {
                 this.breakdown.byMechanicCount[mechanic] = (this.breakdown.byMechanicCount[mechanic] || 0) + 1;
             }
+            const mechanicLabel = getMechanicLabel(mechanic);
+            const sourceName = this.resolveSourceName(cardId);
+            // 来源名与机制名相同时（例如内置激化）不重复输出。
+            const message = sourceName === mechanicLabel
+                ? `造成 ${Math.round(dmg)} 伤害`
+                : `${mechanicLabel} 造成 ${Math.round(dmg)} 伤害`;
+            this.addLog("damage", cardId, message, {
+                mechanic,
+                mechanicLabel,
+                damage: Math.round(dmg)
+            }, AMPLIFY_DAMAGE_MECHANICS.has(mechanic) ? ["amplify"] : null);
         }
 
         // 仅记录触发次数，不计入伤害，用于展示层数/刷新等状态统计。
@@ -1110,6 +1224,11 @@
         addMeter(element, amount) {
             if (!amount) return;
             this.meters[element] += amount;
+            this.addLog("meter", null, `${ELEMENT_LABELS[element]}值 +${Math.round(amount)}（当前 ${Math.round(this.meters[element])}）`, {
+                element,
+                amount: Math.round(amount),
+                total: Math.round(this.meters[element])
+            });
             const threshold = this.getElementThreshold(element);
             if (!threshold) return;
             while (this.meters[element] >= threshold) {
@@ -1118,6 +1237,10 @@
                 this.scheduleEvent(this.time + TICK_SECONDS, () => {
                     this.amplifyTriggers[element] += 1;
                     this.amplifyTimeline[element].push(Number(this.time.toFixed(1)));
+                    this.addLog("amplify", null, `${ELEMENT_LABELS[element]}激化触发（第 ${this.amplifyTriggers[element]} 次）`, {
+                        element,
+                        index: this.amplifyTriggers[element]
+                    });
                     this.triggerAmplify(element);
                 });
             }
@@ -1176,6 +1299,10 @@
         tickCraftStone() {
             if (!this.craftStone || this.time < this.craftStone.nextCastAt) return;
             const stone = this.craftStone;
+            this.addLog("craft", stone.id, `${stone.name} 开始施法（${stone.castTime}s）`, {
+                stoneId: stone.id,
+                castTime: stone.castTime
+            });
             this.emit(EVENTS.CRAFT_STONE_CAST_START, { stoneId: stone.id });
             const impactAt = this.time + stone.castTime;
             if (impactAt <= this.duration) {
@@ -1254,6 +1381,12 @@
                     }
                     if (targetIndex === 0) {
                         this.countMechanic("machine_fire_meteor_stacks", afterStacks);
+                        this.addLog("buff", stone.id, `目标 1 天火陨星持续效果 ${beforeStacks} → ${afterStacks} 层`, {
+                            buff: "fire_meteor",
+                            targetIndex,
+                            beforeStacks,
+                            afterStacks
+                        });
                     }
                 });
             }
@@ -1273,20 +1406,27 @@
 
         triggerPaperForest(stone) {
             const params = stone.params;
-            const attackCount = stone.rank >= 3 ? (params.upgradedAttacks || 3) : (params.attacks || 6);
+            const hasStorm = stone.rank >= 3;
+            const attackCount = hasStorm ? (params.upgradedAttacks || 3) : (params.attacks || 6);
             const attackInterval = params.attackInterval || 2;
+            const stormDuration = params.stormDuration || 4;
+            // 3/5 起：前 4 秒被纸人风暴占满，本体普攻改在剩余 6 秒里进行。
+            const attackStartAt = hasStorm ? stormDuration : 0;
+            const attackDelay = index => (hasStorm
+                ? attackStartAt + attackInterval * (index + 1)
+                : attackInterval * index);
             for (let i = 0; i < attackCount; i += 1) {
-                this.scheduleEvent(this.time + i * attackInterval, () => {
+                this.scheduleEvent(this.time + attackDelay(i), () => {
                     this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_paper_forest");
-                    if (stone.rank >= 5) this.addMeter("wood", 80 * this.targetCount);
+                    // 5/5 的苍木值只由苍林箭和纸人风暴提供，本体普攻不加。
                     const earthRift = this.machineStoneMap.get("earth-rift");
                     if (earthRift && earthRift.rank >= 5) {
                         this.addDamage((earthRift.params.echoDamage || 0) * this.targetCount, earthRift.id, "machine_earth_rift_echo_followup");
                     }
                 });
             }
-            if (stone.rank >= 3) {
-                const stormInterval = (params.stormDuration || 4) / ((params.stormHits || 11) - 1);
+            if (hasStorm) {
+                const stormInterval = stormDuration / ((params.stormHits || 11) - 1);
                 for (let i = 0; i < (params.stormHits || 11); i += 1) {
                     this.scheduleEvent(this.time + i * stormInterval, () => {
                         this.addDamage((params.stormDamage || 4513) * this.targetCount, stone.id, "machine_paper_storm");
@@ -1771,6 +1911,13 @@
             if (refreshDuration) {
                 target.burnExpireAt = this.time + sourceCard.params.burnDuration;
             }
+            this.addLog("buff", sourceCard.id, `目标 ${targetIndex + 1} 燃烧 ${beforeStacks} → ${target.burnStacks} 层${refreshDuration ? "（刷新持续时间）" : "（不刷新持续时间）"}`, {
+                buff: "burn",
+                targetIndex,
+                beforeStacks,
+                afterStacks: target.burnStacks,
+                refreshDuration: Boolean(refreshDuration)
+            });
             if (preserveTick && existingTickAt > this.time) {
                 target.burnTickAt = existingTickAt;
             } else if (!target.burnTickAt || target.burnTickAt <= this.time) {
@@ -1828,6 +1975,13 @@
                 if (targetIndex !== 0) return;
                 this.countMechanic(beforeStacks === 0 ? "pulse_echo_apply" : "pulse_echo_stack");
                 this.countMechanic("pulse_echo_stacks", afterStacks);
+                this.addLog("buff", dice.id, `目标 1 震荡 ${beforeStacks} → ${afterStacks} 层（本层效能 ${Math.round(efficiency * 100)}%）`, {
+                    buff: "wood_echo",
+                    targetIndex,
+                    beforeStacks,
+                    afterStacks,
+                    efficiency
+                });
             });
         }
 
@@ -1944,7 +2098,17 @@
                 const target = this.targets[targetIndex];
                 if (!target) continue;
                 target.staticOverload.tickInterval = duration / STATIC_OVERLOAD_TICKS;
-                target.staticOverload.apply(this.time, duration, efficiency, ownerId);
+                const beforeStacks = target.staticOverload.stacks;
+                const afterStacks = target.staticOverload.apply(this.time, duration, efficiency, ownerId);
+                if (targetIndex === 0) {
+                    this.addLog("buff", ownerId, `目标 1 静电过载 ${beforeStacks} → ${afterStacks} 层`, {
+                        buff: "static_overload",
+                        targetIndex,
+                        beforeStacks,
+                        afterStacks,
+                        efficiency
+                    });
+                }
             }
         }
 
@@ -1969,10 +2133,11 @@
             return this.time >= this.nextThunderFrenzyAt;
         }
 
-        // 触发对应元素的激化效果。
+        // 触发对应元素的激化效果。激化伤害为内置逻辑，与丹青是否在编无关。
         triggerAmplify(element) {
             this.emit(EVENTS.ELEMENT_AMPLIFY, { element });
             this.dispatchMachineStones(EVENTS.ELEMENT_AMPLIFY, { element });
+            this.applyAmplifyDamage(element);
             if (element === "fire") {
                 this.scheduleScarletRingTicks();
             }
@@ -1980,6 +2145,57 @@
                 this.scheduleThunderAmplifyTicks();
             }
             this.applyThunderGuardLinyinBonus();
+        }
+
+        // 结算内置激化伤害。伤害统一归到内置激化来源，与丹青编成无关。
+        applyAmplifyDamage(element) {
+            const config = AMPLIFY_DAMAGE[element];
+            if (!config) return;
+            const hostId = config.sourceId;
+            const bonus = 1 + this.effects[element].amplifyDamageBonus;
+
+            if (element === "fire") {
+                // 赤焰天环 5/5 会同时缩短天火激化本身的生效间隔并延长持续时间。
+                const ring = this.machineStoneMap.get("scarlet-ring");
+                const speedUp = Boolean(ring && ring.rank >= 5);
+                const interval = speedUp ? 1.5 : config.interval;
+                const duration = speedUp ? config.duration * 1.2 : config.duration;
+                for (let delay = interval; delay <= duration + 1e-9; delay += interval) {
+                    this.scheduleEvent(this.time + delay, () => {
+                        this.addDamage(config.tickDamage * bonus, hostId, "fire_amplify");
+                    });
+                }
+                return;
+            }
+
+            if (element === "ice") {
+                this.addDamage(config.initialDamage * bonus, hostId, "ice_amplify");
+                this.scheduleEvent(this.time + ICE_AMPLIFY_FINAL_DELAY, () => {
+                    this.addDamage(config.finalDamage * bonus, hostId, "ice_amplify");
+                    this.notifyIceAmplifyFreeze({ element: "ice" });
+                });
+                return;
+            }
+
+            if (element === "wood") {
+                let tickCount = 0;
+                WOOD_AMPLIFY_DELAYS.forEach(delay => {
+                    this.scheduleEvent(this.time + delay, () => {
+                        this.addDamage(config.tickDamage * bonus, hostId, "wood_amplify");
+                        tickCount += 1;
+                        // 每第 3 次激化伤害额外触发一次绽放。
+                        if (tickCount % config.bloomEvery === 0) {
+                            this.addDamage(config.bloomDamage * bonus, hostId, "wood_bloom");
+                            this.notifyWoodBloom({ element: "wood" });
+                        }
+                    });
+                });
+                return;
+            }
+
+            if (element === "thunder") {
+                this.addDamage(config.damage * this.targetCount, hostId, "thunder_amplify");
+            }
         }
 
         // 以下 notifyXxx 方法都是语义化事件入口，便于阅读调用链。
@@ -2023,6 +2239,8 @@
         }
 
         notifyCraftStoneCastEnd(event = {}) {
+            const name = this.resolveSourceName(event.stoneId);
+            this.addLog("craft", event.stoneId, `${name} 施法结束，联动生效`, { stoneId: event.stoneId });
             this.emit(EVENTS.CRAFT_STONE_CAST_END, event);
             this.dispatchMachineStones(EVENTS.CRAFT_STONE_CAST_END, event);
         }
@@ -2077,20 +2295,18 @@
             this.warnings.push(...inactiveMachineStones);
             const duration = Math.max(1, this.duration);
             const byCard = Object.entries(this.breakdown.byCard)
-                .map(([cardId, damage]) => {
-                    const card = this.getCard(cardId) || Data.getCardDefById(cardId) || Data.getMachineStoneDefById(cardId) || Data.getCraftStoneDefById(cardId) || { name: cardId };
-                    return {
-                        id: cardId,
-                        name: card.name,
-                        damage: Math.round(damage),
-                        dps: Number((damage / duration).toFixed(2))
-                    };
-                })
+                .map(([cardId, damage]) => ({
+                    id: cardId,
+                    name: this.resolveSourceName(cardId) || cardId,
+                    damage: Math.round(damage),
+                    dps: Number((damage / duration).toFixed(2))
+                }))
                 .sort((a, b) => b.damage - a.damage);
 
             const byMechanic = Object.entries(this.breakdown.byMechanic)
                 .map(([mechanic, damage]) => ({
                     mechanic,
+                    name: getMechanicLabel(mechanic),
                     damage: Math.round(damage),
                     dps: Number((damage / duration).toFixed(2)),
                     count: this.breakdown.byMechanicCount[mechanic] || 0
@@ -2121,6 +2337,8 @@
                     thunder: this.amplifyTimeline.thunder.slice()
                 },
                 warnings: this.warnings.slice(),
+                log: this.log.slice(),
+                logTruncated: this.logTruncated,
                 seed: this.seed
             };
         }
@@ -2128,7 +2346,9 @@
 
     const api = {
         CombatEngine,
-        ELEMENT_LABELS
+        ELEMENT_LABELS,
+        MECHANIC_LABELS,
+        getMechanicLabel
     };
 
     global.Engine = api;
