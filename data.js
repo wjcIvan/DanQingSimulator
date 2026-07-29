@@ -320,7 +320,7 @@
             baseEffectText: "玄冰激化的冻结效果触发时释放霜刺寒雨：对目标和目标周围的敌人造成 81740 玄冰伤害。",
             upgradeText: "伤害每提升一档+37.5%；\n\n3/5：凝冰霜华基础伤害提高 30%；\n\n5/5：触发时获得 3 层洞察，下一次灵蕴技消耗所有洞察，每层使该次伤害提高 3%。",
             mechanics: ["on_ice_freeze"],
-            params: { damage: stat(81740, 81740 * 0.375) }
+            params: { damage: stat(81740, 81740 * 0.375), craftBonusAtRank3: 0.30, insightStacks: 3, insightBonusPerStack: 0.03 }
         },
         {
             id: "frost-crystal-spike",
@@ -368,7 +368,7 @@
             element: "fire",
             fee: 3,
             baseEffectText: "灼灼天炎效果结束时生成持续 8 秒的烈焰之地：每 1 秒造成 29308 天火伤害。",
-            upgradeText: "伤害每提升一档+37.5%；\n\n3/5：每次造成伤害时对命中敌人累加 1500 天火值；\n\n5/5：灼灼天炎使自身造成的所有灵蕴伤害提高 33%，持续 15 秒。",
+            upgradeText: "伤害每提升一档+37.5%；\n\n3/5：每次造成伤害时对命中敌人累加 1500 天火值；\n\n5/5：灼灼天炎使自身造成的所有灵蕴伤害提高 33%，持续 15 秒（自灼灼天炎释放瞬间起算）。",
             mechanics: ["on_craft_fire_end"],
             params: { damage: stat(29308, 29308 * 0.375), duration: 8, interval: 1, linyinBonus: 0.33, linyinDuration: 15 }
         },

@@ -146,6 +146,7 @@
         ice_arrow_volley: "冰箭齐射",
         ice_storm: "玄冰风暴",
         ice_storm_frenzy: "玄冰风暴·疾风",
+        ice_storm_extra: "玄冰风暴·额外召唤",
         shatter: "碎裂",
         ice_amplify: "玄冰激化",
         // 苍木
@@ -179,7 +180,6 @@
         machine_frost_shatter: "霜寒破裂",
         machine_frost_shatter_dot: "霜寒破裂·持续",
         machine_frost_rain: "霜刺寒雨",
-        machine_frost_rain_craft_bonus: "霜刺寒雨·霜华加成",
         machine_frost_crystal_spike: "寒晶刺",
         machine_cold_tide: "寒潮冰涌",
         // 机巧石·苍木
@@ -358,6 +358,7 @@
                 arrowMeterGain: 0,
                 shatterMeterGain: 0,
                 stormMeterGain: 0,
+                craftStoneDamageBonus: 0,
                 triggerThreshold: ELEMENT_TRIGGER_THRESHOLD
             },
             wood: {
@@ -1007,6 +1008,9 @@
             this.totalDamage = 0;
             this.lastSecondSample = 0;
             this.nextThunderFrenzyAt = Infinity;
+            // 洞察层数：由机巧石授予，下一次匠心石（灵蕴技）伤害时一次性消耗掉全部层数。
+            this.insightStacks = 0;
+            this.insightBonusPerStack = 0;
             // 模拟日志：仅在显式开启时记录，避免高级推演的批量模拟产生额外开销。
             this.logEnabled = Boolean(options.collectLog);
             this.logLimit = Math.max(1, Number(options.logLimit) || 5000);
@@ -1074,6 +1078,13 @@
                 }
                 if (stone.id === "fireburst" && stone.rank >= 3) {
                     this.effects.fire.amplifyDamageBonus += stone.params.amplifyBonusAtRank3 || 0;
+                }
+                // 霜刺寒雨 3/5 抬高的是凝冰霜华本体伤害，作为常驻加成生效。
+                if (stone.id === "frost-rain" && stone.rank >= 3) {
+                    this.effects.ice.craftStoneDamageBonus += stone.params.craftBonusAtRank3 || 0;
+                }
+                if (stone.id === "frost-rain" && stone.rank >= 5) {
+                    this.insightBonusPerStack = stone.params.insightBonusPerStack || 0;
                 }
             });
             if (this.craftStone) {
@@ -1299,19 +1310,26 @@
         tickCraftStone() {
             if (!this.craftStone || this.time < this.craftStone.nextCastAt) return;
             const stone = this.craftStone;
-            this.addLog("craft", stone.id, `${stone.name} 开始施法（${stone.castTime}s）`, {
+            // 一次释放算一次灵蕴技：洞察在这里一次性消耗，倍率覆盖本次的所有伤害段。
+            const insight = this.consumeInsight();
+            this.addLog("craft", stone.id, insight.stacks > 0
+                ? `${stone.name} 开始施法（${stone.castTime}s），消耗 ${insight.stacks} 层洞察，本次伤害提高 ${Math.round(insight.bonus * 100)}%`
+                : `${stone.name} 开始施法（${stone.castTime}s）`, {
                 stoneId: stone.id,
-                castTime: stone.castTime
+                castTime: stone.castTime,
+                insightStacks: insight.stacks,
+                insightBonus: insight.bonus
             });
             this.emit(EVENTS.CRAFT_STONE_CAST_START, { stoneId: stone.id });
+            this.dispatchMachineStones(EVENTS.CRAFT_STONE_CAST_START, { stoneId: stone.id });
             const impactAt = this.time + stone.castTime;
             if (impactAt <= this.duration) {
                 if (stone.id === "frost-glory") {
                     const tickCount = Math.max(1, Math.round(stone.castTime));
-                    const perTick = stone.params.damage / tickCount;
+                    const perTick = stone.params.damage * (1 + this.effects.ice.craftStoneDamageBonus) / tickCount;
                     for (let i = 1; i <= tickCount; i += 1) {
                         this.scheduleEvent(this.time + i, () => {
-                            this.addDamage(perTick * this.targetCount, stone.id, "craft_stone");
+                            this.addDamage(perTick * this.targetCount * insight.multiplier, stone.id, "craft_stone");
                             this.consumeColdTideCharge();
                         });
                     }
@@ -1327,7 +1345,7 @@
                         : (stone.params.attacks || 6);
                     const attackStartIndex = hasEarthRift ? 2 : 1;
                     this.scheduleEvent(this.time + interval, () => {
-                        this.addDamage(stone.params.damage * this.targetCount, stone.id, "craft_stone");
+                        this.addDamage(stone.params.damage * this.targetCount * insight.multiplier, stone.id, "craft_stone");
                         this.applyEarthRiftFollowup();
                         this.notifyCraftStoneCastEnd({ stoneId: stone.id });
                     });
@@ -1339,7 +1357,7 @@
                     }
                 } else {
                     this.scheduleEvent(impactAt, () => {
-                        this.addDamage(stone.params.damage * this.targetCount, stone.id, "craft_stone");
+                        this.addDamage(stone.params.damage * this.targetCount * insight.multiplier, stone.id, "craft_stone");
                         if (stone.id === "thunder-aegis") {
                             this.scheduleThunderAegisChains(stone);
                         }
@@ -1348,6 +1366,28 @@
                 }
             }
             stone.nextCastAt += stone.cooldown;
+        }
+
+        // 授予洞察层数。洞察没有持续时间，只等下一次灵蕴技消耗。
+        grantInsight(stacks, sourceId) {
+            if (stacks <= 0) return;
+            const before = this.insightStacks;
+            this.insightStacks += stacks;
+            this.addLog("buff", sourceId, `洞察 ${before} → ${this.insightStacks} 层`, {
+                buff: "insight",
+                beforeStacks: before,
+                afterStacks: this.insightStacks
+            });
+        }
+
+        // 消耗全部洞察，返回 { multiplier, stacks, bonus }。
+        // 不自己写日志，由调用方并进灵蕴技的释放日志，避免同一时刻出现两条。
+        consumeInsight() {
+            const stacks = this.insightStacks;
+            if (stacks <= 0) return { multiplier: 1, stacks: 0, bonus: 0 };
+            const bonus = stacks * this.insightBonusPerStack;
+            this.insightStacks = 0;
+            return { multiplier: 1 + bonus, stacks, bonus };
         }
 
         scheduleThunderAegisChains(stone) {
@@ -1654,10 +1694,11 @@
                     || (eventType === EVENTS.WOOD_BLOOM && mechanics.includes("on_wood_bloom"))
                     || (eventType === EVENTS.CHAIN_LIGHTNING_HIT && mechanics.includes("on_chain_hit"))
                     || (eventType === EVENTS.CRAFT_STONE_CAST_END && mechanics.includes("on_craft_fire_end") && event.stoneId === "blazing-skyfire")
+                    || (eventType === EVENTS.CRAFT_STONE_CAST_START && stone.id === "blazing-land" && event.stoneId === "blazing-skyfire")
                     || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "thunder-guard" && event.stoneId === "thunder-aegis")
                     || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "cold-tide" && event.stoneId === "frost-glory")
-                    || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "frost-rain" && event.stoneId === "frost-glory")
                     || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "frost-shatter" && event.stoneId === "frost-glory")
+                    || (eventType === EVENTS.CRAFT_STONE_CAST_START && stone.id === "frost-shatter" && event.stoneId === "frost-glory")
                     || (eventType === EVENTS.ICE_ELEMENTAL_SUMMONED && stone.id === "frost-crystal-spike")
                     || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "rotten-gale" && event.stoneId === "verdant-life")
                     || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "earth-rift" && event.stoneId === "verdant-life")
@@ -1688,8 +1729,8 @@
                 }
                 if (eventType === EVENTS.ICE_AMPLIFY_FREEZE && stone.id === "frost-rain") {
                     this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_frost_rain");
-                    if (stone.rank >= 5 && params.freezeMeterAtRank5) {
-                        this.addMeter("ice", this.effects.ice.freezeMeterBonus || params.freezeMeterAtRank5);
+                    if (stone.rank >= 5) {
+                        this.grantInsight(params.insightStacks || 3, stone.id);
                     }
                     return;
                 }
@@ -1701,16 +1742,9 @@
                     if (stone.rank >= 5) this.triggerColdTideCraftWaves(stone);
                     return;
                 }
-                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "frost-rain") {
-                    if (stone.rank >= 3 && this.craftStone?.id === "frost-glory") {
-                        this.scheduleEvent(this.time + 0.001, () => {
-                            this.addDamage(this.craftStone.params.damage * 0.30 * this.targetCount, stone.id, "machine_frost_rain_craft_bonus");
-                        });
-                    }
-                    return;
-                }
-                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "frost-shatter") {
-                    if (stone.rank >= 5) this.notifyIceElementalSummoned({ sourceCardId: stone.id });
+                if (eventType === EVENTS.CRAFT_STONE_CAST_START && stone.id === "frost-shatter") {
+                    // 5/5 无视冷却额外召唤一只冰霜元素，凝冰霜华一开始读条就召唤出来。
+                    if (stone.rank >= 5) this.summonIceElemental(stone.id);
                     return;
                 }
                 if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "rotten-gale") {
@@ -1747,10 +1781,19 @@
                     this.addDamage((params.damage || 0) * this.targetCount * bonus, stone.id, "machine_rotten_gale");
                     return;
                 }
-                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "blazing-land") {
+                if (eventType === EVENTS.CRAFT_STONE_CAST_START && stone.id === "blazing-land") {
+                    // 5/5 的灵蕴增伤从灼灼天炎释放瞬间起算，读条 5 秒本身就吃掉窗口的三分之一。
                     if (stone.rank >= 5) {
                         stone.linyinExpiresAt = this.time + (params.linyinDuration || 15);
+                        this.addLog("buff", stone.id, `灵蕴伤害提高 ${Math.round((params.linyinBonus || 0) * 100)}%，持续 ${params.linyinDuration || 15}s`, {
+                            buff: "linyin_bonus",
+                            bonus: params.linyinBonus || 0,
+                            expireAt: Number(stone.linyinExpiresAt.toFixed(1))
+                        });
                     }
+                    return;
+                }
+                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "blazing-land") {
                     for (let delay = 1; delay <= (params.duration || 8); delay += (params.interval || 1)) {
                         this.scheduleEvent(this.time + delay, () => {
                             this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_blazing_land");
@@ -2022,13 +2065,16 @@
             }
         }
 
-        // 结算一次玄冰风暴命中。
-        castIceStorm(card, efficiency, shouldAddStormMeter) {
+        // 结算一次玄冰风暴命中。ownerId 用于把额外召唤的元素归属到召唤者。
+        castIceStorm(card, efficiency, shouldAddStormMeter, ownerId = null) {
             const zuoGui = this.getCard(CARD_IDS.ZUO_GUI);
             // 左归对风暴只提供自身那部分伤害加成，避免重复叠加冰箭增伤。
             const stormOnlyBonus = zuoGui ? zuoGui.params.damageBonus : 0;
             const damage = card.params.stormDamage * (1 + stormOnlyBonus) * efficiency;
-            this.addDamage(damage, card.id, efficiency < 1 ? "ice_storm_frenzy" : "ice_storm");
+            const mechanic = ownerId
+                ? "ice_storm_extra"
+                : (efficiency < 1 ? "ice_storm_frenzy" : "ice_storm");
+            this.addDamage(damage, ownerId || card.id, mechanic);
             this.consumeColdTideCharge();
             this.consumeFrostCrystalSpikeCharge();
             this.notifyIceStormHit({
@@ -2229,8 +2275,31 @@
         }
 
         notifyIceElementalSummoned(event = {}) {
+            const source = this.resolveSourceName(event.sourceCardId);
+            // 每只冰霜元素的出现都记一条，便于对照 5/5 的额外召唤。
+            this.addLog("event", event.sourceCardId, `${source} 召唤冰霜元素${event.extra ? "（无视冷却）" : ""}`, {
+                sourceCardId: event.sourceCardId || null,
+                extra: Boolean(event.extra)
+            });
             this.emit(EVENTS.ICE_ELEMENTAL_SUMMONED, event);
             this.dispatchMachineStones(EVENTS.ICE_ELEMENTAL_SUMMONED, event);
+        }
+
+        // 召唤一只冰霜元素：广播出现事件，并放出一轮玄冰风暴。
+        // 冰霜元素本身就是玄冰风暴的载体，不带齐昊时按其 0 星定义取风暴参数。
+        summonIceElemental(sourceId) {
+            this.notifyIceElementalSummoned({ sourceCardId: sourceId, extra: true });
+            const qiHao = this.getCard(CARD_IDS.QI_HAO);
+            const def = Data.getCardDefById(CARD_IDS.QI_HAO);
+            const params = qiHao ? qiHao.params : (def ? Data.resolveCardParams(def, 0) : null);
+            if (!params) return;
+            const hits = params.burstHits;
+            const interval = params.burstDuration / hits;
+            for (let i = 0; i < hits; i += 1) {
+                this.scheduleEvent(this.time + interval * i, () => {
+                    this.castIceStorm({ id: sourceId, params }, 1 / hits, i === 0, sourceId);
+                });
+            }
         }
 
         notifyWoodBloom(event = {}) {
