@@ -460,7 +460,7 @@
             baseEffectText: "神雷激化（敌方）生效时，每 1 秒对目标和目标周围的 1 名目标造成 1302 神雷伤害。",
             upgradeText: "伤害每提升一档+37.5%；\n\n3/5：静电震击生效频率提高 100%，并额外命中 1 名敌人；\n\n5/5：静电震击结束时发生爆炸，造成 142055 范围神雷伤害并累积 500 神雷值。",
             mechanics: ["on_thunder_amplify"],
-            params: { damage: stat(1302, 1302 * 0.375), duration: 10, interval: 1, burstDamage: 142055 }
+            params: { damage: stat(1302, 1302 * 0.375), duration: 30, interval: 1, burstDamage: 142055 }
         },
         {
             id: "five-thunder-orb",

@@ -145,7 +145,7 @@
         ice_arrow: "冰箭",
         ice_arrow_volley: "冰箭齐射",
         ice_storm: "玄冰风暴",
-        ice_storm_frenzy: "玄冰风暴·疾风",
+        ice_storm_frenzy: "玄冰风暴",
         ice_storm_extra: "玄冰风暴·额外召唤",
         shatter: "碎裂",
         ice_amplify: "玄冰激化",
@@ -155,7 +155,7 @@
         pulse_followup: "追加脉冲",
         pulse_echo: "震荡",
         wood_amplify: "苍木激化",
-        wood_bloom: "绽放",
+        wood_bloom: "苍木激化·绽放",
         // 神雷
         chain_lightning: "连锁闪电",
         chain_lightning_extra: "连锁闪电·额外",
@@ -195,7 +195,7 @@
         machine_chain: "惊雷戟",
         machine_thunder_spear_dot: "惊雷戟·持续",
         machine_thunder_shock: "雷霆震击",
-        machine_thunder_shock_burst: "雷霆震击·爆发",
+        machine_thunder_shock_burst: "雷霆震击·爆炸",
         machine_nine_sky_thunder: "九霄雷动",
         machine_nine_sky_thunder_copy: "九霄雷动·复制",
         machine_thunder_orb: "五雷珠",
@@ -1598,15 +1598,18 @@
 
         triggerThunderShock(stone) {
             const params = stone.params;
+            // 静电震击寄生在神雷激化上，持续时间跟随激化效果本身。
+            const duration = params.duration || 30;
             const interval = stone.rank >= 3 ? 0.5 : (params.interval || 1);
-            const targets = Math.min(this.targetCount, stone.rank >= 3 ? 2 : 1);
-            for (let delay = interval; delay <= (params.duration || 10) + 1e-9; delay += interval) {
+            // 1/5 就打「目标 + 周围 1 名」，3/5 再额外命中 1 名。
+            const targets = Math.min(this.targetCount, stone.rank >= 3 ? 3 : 2);
+            for (let delay = interval; delay <= duration + 1e-9; delay += interval) {
                 this.scheduleEvent(this.time + delay, () => {
                     this.addDamage((params.damage || 0) * targets, stone.id, "machine_thunder_shock");
                 });
             }
             if (stone.rank >= 5) {
-                this.scheduleEvent(this.time + (params.duration || 10), () => {
+                this.scheduleEvent(this.time + duration, () => {
                     this.addDamage((params.burstDamage || 0) * this.targetCount, stone.id, "machine_thunder_shock_burst");
                     this.addMeter("thunder", 500 * this.targetCount);
                 });
