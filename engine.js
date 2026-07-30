@@ -104,6 +104,10 @@
     // 静电过载：可无限叠层，持续时间来自雷魄晶，同一目标共用一条结算节奏。
     const STATIC_OVERLOAD_MAX_STACKS = 0;
     const STATIC_OVERLOAD_DEFAULT_DURATION = 8;
+    const OPENING_PRECAST_SECONDS_BY_CRAFT = Object.freeze({
+        "verdant-life": 2,
+        "thunder-aegis": 1.3
+    });
     const ELEMENT_TRIGGER_THRESHOLD = 10000;
     // 归属激化的伤害机制：这些机制虽走普通伤害路径，但语义上属于激化产出，
     // 日志里额外打上 amplify 标签，便于按激化筛选时一并看到伤害。
@@ -181,6 +185,7 @@
         machine_frost_shatter_dot: "霜寒破裂·持续",
         machine_frost_rain: "霜刺寒雨",
         machine_frost_crystal_spike: "寒晶刺",
+        machine_frost_crystal_shatter: "寒晶刺·碎裂",
         machine_cold_tide: "寒潮冰涌",
         // 机巧石·苍木
         machine_rotten_gale: "腐木瘴风",
@@ -200,8 +205,7 @@
         machine_nine_sky_thunder_copy: "九霄雷动·复制",
         machine_thunder_orb: "五雷珠",
         machine_thunder_orb_burst: "五雷珠·爆发",
-        machine_thunder_guard_external: "天雷护佑·职业法宝",
-        machine_thunder_guard_linyin: "天雷护佑·灵蕴",
+        machine_thunder_guard_external: "天雷护佑·职业技能/法宝",
         // 状态计数（只计次不计伤害）
         machine_fire_meteor_apply: "陨星·首次附加",
         machine_fire_meteor_stack: "陨星·叠层",
@@ -406,6 +410,10 @@
 
             // 震荡持续状态：无层数上限
             this.woodEcho = new StackBuff(WOOD_ECHO_MAX_STACKS, WOOD_ECHO_DURATION, WOOD_ECHO_TICK_INTERVAL);
+
+            // 裂地崩·回响的到期时刻。裂地崩 3/5 命中时写入，5/5 的「回响追击」
+            // 必须据此判断目标身上到底有没有回响 —— 原文：「攻击带有裂地崩·回响的敌方时」。
+            this.earthRiftEchoExpireAt = 0;
 
             // 静电过载持续状态：无层数上限，结算间隔按持续时间均分
             this.staticOverload = new StackBuff(
@@ -1089,8 +1097,19 @@
             });
             if (this.craftStone) {
                 this.craftStone.nextCastAt = 0;
+                this.craftStone.openingPrecastSeconds = this.getOpeningCraftPrecastSeconds(this.craftStone);
                 this.warnings.push(...(this.craftStone.notes || []));
             }
+        }
+
+        getOpeningCraftPrecastSeconds(stone) {
+            if (!stone) return 0;
+            const requested = Math.max(0, Number(OPENING_PRECAST_SECONDS_BY_CRAFT[stone.id]) || 0);
+            if (requested <= 0) return 0;
+            const firstImpactDelay = stone.id === "verdant-life"
+                ? (stone.params.attackInterval || 2.5)
+                : (stone.castTime || 0);
+            return Math.min(requested, Math.max(0, firstImpactDelay));
         }
 
         // 对整套牌执行同名生命周期钩子。
@@ -1193,8 +1212,9 @@
 
         // 统一累计总伤、分卡伤害和机制伤害。
         // countAsTrigger 传 false 时只累加伤害不计次，用于一次触发拆成多笔归属的场景。
-        addDamage(amount, cardId, mechanic, countAsTrigger = true) {
-            const dmg = Math.max(0, amount || 0) * this.getLinyinMultiplier();
+        addDamage(amount, cardId, mechanic, countAsTrigger = true, applyLinyinMultiplier = true) {
+            const multiplier = applyLinyinMultiplier ? this.getLinyinMultiplier() : 1;
+            const dmg = Math.max(0, amount || 0) * multiplier;
             if (dmg <= 0) return;
             const machineStone = this.machineStoneMap ? this.machineStoneMap.get(cardId) : null;
             if (machineStone) machineStone.activated = true;
@@ -1222,11 +1242,20 @@
             this.breakdown.byMechanicCount[mechanic] = (this.breakdown.byMechanicCount[mechanic] || 0) + amount;
         }
 
+        // 全局灵蕴增伤乘区。所有 addDamage 都会乘上它，因此「所有丹青伤害提高 X%」
+        // 这类效果都应挂在这里，而不是给某一发伤害单独补一笔。
         getLinyinMultiplier() {
             let multiplier = 1;
             const blazingLand = this.machineStoneMap ? this.machineStoneMap.get("blazing-land") : null;
             if (blazingLand && blazingLand.linyinExpiresAt && this.time <= blazingLand.linyinExpiresAt) {
                 multiplier *= 1 + (blazingLand.params.linyinBonus || 0);
+            }
+            // 天雷护佑 5/5：持续期间所有丹青伤害提高 70%。
+            const thunderGuard = this.machineStoneMap ? this.machineStoneMap.get("thunder-guard") : null;
+            if (thunderGuard && thunderGuard.rank >= 5
+                && thunderGuard.guardExpiresAt
+                && this.time <= thunderGuard.guardExpiresAt + 1e-9) {
+                multiplier *= 1 + (thunderGuard.params.allLinyinBonus || 0);
             }
             return multiplier;
         }
@@ -1264,6 +1293,7 @@
 
         // 主模拟循环：推进时间、执行时间事件、更新目标状态并结算队列。
         simulate() {
+            this.runOpeningCraftPrecast();
             while (this.time < this.duration) {
                 this.time = Number((this.time + TICK_SECONDS).toFixed(4));
                 this.tickCards.forEach(card => {
@@ -1278,6 +1308,13 @@
                 this.sampleTimeline();
             }
             return this.finalize();
+        }
+
+        runOpeningCraftPrecast() {
+            if (!this.craftStone) return;
+            if ((this.craftStone.openingPrecastSeconds || 0) <= 0) return;
+            this.tickCraftStone();
+            this.flushImmediateEvents();
         }
 
         tickMachineStones() {
@@ -1310,20 +1347,24 @@
         tickCraftStone() {
             if (!this.craftStone || this.time < this.craftStone.nextCastAt) return;
             const stone = this.craftStone;
+            const openingPrecast = Math.max(0, Number(stone.openingPrecastSeconds) || 0);
+            stone.openingPrecastSeconds = 0;
+            const openingPrecastText = openingPrecast > 0 ? `，首轮预读 ${openingPrecast.toFixed(1)}s` : "";
             // 一次释放算一次灵蕴技：洞察在这里一次性消耗，倍率覆盖本次的所有伤害段。
             const insight = this.consumeInsight();
             this.addLog("craft", stone.id, insight.stacks > 0
-                ? `${stone.name} 开始施法（${stone.castTime}s），消耗 ${insight.stacks} 层洞察，本次伤害提高 ${Math.round(insight.bonus * 100)}%`
-                : `${stone.name} 开始施法（${stone.castTime}s）`, {
+                ? `${stone.name} 开始施法（${stone.castTime}s）${openingPrecastText}，消耗 ${insight.stacks} 层洞察，本次伤害提高 ${Math.round(insight.bonus * 100)}%`
+                : `${stone.name} 开始施法（${stone.castTime}s）${openingPrecastText}`, {
                 stoneId: stone.id,
                 castTime: stone.castTime,
+                openingPrecastSeconds: openingPrecast,
                 insightStacks: insight.stacks,
                 insightBonus: insight.bonus
             });
             this.emit(EVENTS.CRAFT_STONE_CAST_START, { stoneId: stone.id });
             this.dispatchMachineStones(EVENTS.CRAFT_STONE_CAST_START, { stoneId: stone.id });
-            const impactAt = this.time + stone.castTime;
-            if (impactAt <= this.duration) {
+            const castEndAt = this.time + Math.max(0, stone.castTime - openingPrecast);
+            if (castEndAt <= this.duration) {
                 if (stone.id === "frost-glory") {
                     const tickCount = Math.max(1, Math.round(stone.castTime));
                     const perTick = stone.params.damage * (1 + this.effects.ice.craftStoneDamageBonus) / tickCount;
@@ -1333,7 +1374,7 @@
                             this.consumeColdTideCharge();
                         });
                     }
-                    this.scheduleEvent(impactAt, () => {
+                    this.scheduleEvent(castEndAt, () => {
                         this.notifyCraftStoneCastEnd({ stoneId: stone.id });
                     });
                 } else if (stone.id === "verdant-life") {
@@ -1344,28 +1385,31 @@
                         ? Math.max(0, (stone.params.attacks || 6) - 1)
                         : (stone.params.attacks || 6);
                     const attackStartIndex = hasEarthRift ? 2 : 1;
-                    this.scheduleEvent(this.time + interval, () => {
-                        this.addDamage(stone.params.damage * this.targetCount * insight.multiplier, stone.id, "craft_stone");
-                        this.applyEarthRiftFollowup();
+                    this.scheduleEvent(castEndAt, () => {
                         this.notifyCraftStoneCastEnd({ stoneId: stone.id });
                     });
+                    this.scheduleEvent(castEndAt + interval, () => {
+                        this.addDamage(stone.params.damage * this.targetCount * insight.multiplier, stone.id, "craft_stone");
+                        this.applyEarthRiftFollowup();
+                    });
                     for (let i = 0; i < attackCount; i += 1) {
-                        this.scheduleEvent(this.time + interval * (attackStartIndex + i + 1), () => {
+                        const delay = castEndAt + interval * (attackStartIndex + i + 1);
+                        this.scheduleEvent(delay, () => {
                             this.addDamage((stone.params.attackDamage || 0) * this.targetCount, stone.id, "craft_stone_attack");
                             this.applyEarthRiftFollowup();
                         });
                     }
                 } else {
-                    this.scheduleEvent(impactAt, () => {
+                    this.scheduleEvent(castEndAt, () => {
+                        this.notifyCraftStoneCastEnd({ stoneId: stone.id });
                         this.addDamage(stone.params.damage * this.targetCount * insight.multiplier, stone.id, "craft_stone");
                         if (stone.id === "thunder-aegis") {
                             this.scheduleThunderAegisChains(stone);
                         }
-                        this.notifyCraftStoneCastEnd({ stoneId: stone.id });
                     });
                 }
             }
-            stone.nextCastAt += stone.cooldown;
+            stone.nextCastAt += stone.cooldown - openingPrecast;
         }
 
         // 授予洞察层数。洞察没有持续时间，只等下一次灵蕴技消耗。
@@ -1459,10 +1503,7 @@
                 this.scheduleEvent(this.time + attackDelay(i), () => {
                     this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_paper_forest");
                     // 5/5 的苍木值只由苍林箭和纸人风暴提供，本体普攻不加。
-                    const earthRift = this.machineStoneMap.get("earth-rift");
-                    if (earthRift && earthRift.rank >= 5) {
-                        this.addDamage((earthRift.params.echoDamage || 0) * this.targetCount, earthRift.id, "machine_earth_rift_echo_followup");
-                    }
+                    this.applyEarthRiftFollowup();
                 });
             }
             if (hasStorm) {
@@ -1471,10 +1512,7 @@
                     this.scheduleEvent(this.time + i * stormInterval, () => {
                         this.addDamage((params.stormDamage || 4513) * this.targetCount, stone.id, "machine_paper_storm");
                         if (stone.rank >= 5) this.addMeter("wood", 80 * this.targetCount);
-                        const earthRift = this.machineStoneMap.get("earth-rift");
-                        if (earthRift && earthRift.rank >= 5) {
-                            this.addDamage((earthRift.params.echoDamage || 0) * this.targetCount, earthRift.id, "machine_earth_rift_echo_followup");
-                        }
+                        this.applyEarthRiftFollowup();
                     });
                 }
             }
@@ -1519,10 +1557,7 @@
                         if (stone.rank >= 3 && this.craftStone && this.craftStone.id === "verdant-life") {
                             this.craftStone.nextCastAt = Math.max(this.time, this.craftStone.nextCastAt - 1);
                         }
-                        const earthRift = this.machineStoneMap.get("earth-rift");
-                        if (earthRift && earthRift.rank >= 5) {
-                            this.addDamage((earthRift.params.echoDamage || 0) * this.targetCount, earthRift.id, "machine_earth_rift_echo_followup");
-                        }
+                        this.applyEarthRiftFollowup();
                     });
                 }
             }
@@ -1532,7 +1567,16 @@
             const params = stone.params;
             this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_earth_rift");
             if (stone.rank >= 3) {
-                for (let delay = 1; delay <= (params.echoDuration || 30); delay += 1) {
+                const duration = params.echoDuration || 30;
+                // 记录回响的到期时刻，供 5/5 的回响追击判断前置条件。
+                this.targets.forEach(target => {
+                    target.earthRiftEchoExpireAt = this.time + duration;
+                });
+                this.addLog("buff", stone.id, `目标附加裂地崩·回响，持续 ${duration}s`, {
+                    buff: "earth_rift_echo",
+                    expireAt: Number((this.time + duration).toFixed(1))
+                });
+                for (let delay = 1; delay <= duration; delay += 1) {
                     this.scheduleEvent(this.time + delay, () => {
                         this.addDamage((params.echoDamage || 0) * this.targetCount, stone.id, "machine_earth_rift_echo");
                     });
@@ -1540,9 +1584,13 @@
             }
         }
 
+        // 裂地崩 5/5：小纸人 / 木引青灵 / 苍木树人攻击「带有回响的敌方」时立即触发一次回响。
+        // 前置条件必须校验：回响不在目标身上时不触发，否则从 0s 起就会凭空追击。
         applyEarthRiftFollowup() {
             const earthRift = this.machineStoneMap.get("earth-rift");
             if (!earthRift || earthRift.rank < 5) return;
+            const target = this.targets[0];
+            if (!target || this.time > target.earthRiftEchoExpireAt) return;
             this.addDamage((earthRift.params.echoDamage || 0) * this.targetCount, earthRift.id, "machine_earth_rift_echo_followup");
         }
 
@@ -1625,8 +1673,20 @@
 
         triggerFrostCrystalSpike(stone) {
             const params = stone.params;
-            this.addDamage((params.damage || 0) * (params.spikeCount || 3), stone.id, "machine_frost_crystal_spike");
-            if (stone.rank >= 3) this.notifyShatter();
+            const spikes = params.spikeCount || 3;
+            this.addDamage((params.damage || 0) * spikes, stone.id, "machine_frost_crystal_spike");
+            // 3/5：每枚寒晶刺造成伤害时都 100% 触发碎裂。
+            // notifyShatter() 只广播事件（上官策据此累加玄冰值），碎裂本身的伤害
+            // 挂在左归的 tryShatter 里，所以这里必须自己结算伤害，否则只加值不打伤害。
+            if (stone.rank >= 3) {
+                const shatterDamage = this.effects.ice.shatterDamage;
+                for (let i = 0; i < spikes; i += 1) {
+                    if (shatterDamage > 0) {
+                        this.addDamage(shatterDamage * this.targetCount, stone.id, "machine_frost_crystal_shatter");
+                    }
+                    this.notifyShatter();
+                }
+            }
         }
 
         grantFrostCrystalSpikeCharges(count) {
@@ -1700,12 +1760,12 @@
                     || (eventType === EVENTS.CRAFT_STONE_CAST_START && stone.id === "blazing-land" && event.stoneId === "blazing-skyfire")
                     || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "thunder-guard" && event.stoneId === "thunder-aegis")
                     || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "cold-tide" && event.stoneId === "frost-glory")
-                    || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "frost-shatter" && event.stoneId === "frost-glory")
                     || (eventType === EVENTS.CRAFT_STONE_CAST_START && stone.id === "frost-shatter" && event.stoneId === "frost-glory")
                     || (eventType === EVENTS.ICE_ELEMENTAL_SUMMONED && stone.id === "frost-crystal-spike")
                     || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "rotten-gale" && event.stoneId === "verdant-life")
                     || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "earth-rift" && event.stoneId === "verdant-life")
                     || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "wood-spirit" && event.stoneId === "verdant-life")
+                    || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "flame-body" && event.stoneId === "blazing-skyfire")
                     || (eventType === EVENTS.COMBUST && stone.id === "flame-body");
                 if (!matches) return;
                 const params = stone.params;
@@ -1814,9 +1874,23 @@
                 if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "thunder-guard") {
                     const duration = params.duration || 10;
                     stone.guardExpiresAt = this.time + duration;
+                    // 5/5 的「所有丹青伤害 +70%」走 getLinyinMultiplier() 全局乘区，
+                    // 这里只记窗口，便于在日志里看出增伤区间。
+                    if (stone.rank >= 5) {
+                        this.addLog("buff", stone.id, `天雷护佑：所有丹青伤害提高 ${Math.round((params.allLinyinBonus || 0) * 100)}%，持续 ${duration}s`, {
+                            buff: "thunder_guard_linyin",
+                            bonus: params.allLinyinBonus || 0,
+                            expireAt: Number(stone.guardExpiresAt.toFixed(1))
+                        });
+                    }
                     if (stone.rank >= 3 && this.externalSkillDps > 0) {
-                        const total = this.externalSkillDps * duration * (params.externalSkillBonus || 0);
-                        this.addDamage(total, stone.id, "machine_thunder_guard_external");
+                        const perTick = this.externalSkillDps * (params.externalSkillBonus || 0);
+                        // 这笔是对外部职业/法宝技能的增伤折算，不属于灵蕴伤害乘区。
+                        for (let second = 1; second <= duration; second += 1) {
+                            this.scheduleEvent(this.time + second, () => {
+                                this.addDamage(perTick, stone.id, "machine_thunder_guard_external", true, false);
+                            });
+                        }
                     }
                     return;
                 }
@@ -1881,6 +1955,18 @@
         // 执行当前拍到时的所有延迟事件。
         flushDelayedEvents() {
             this.getReadyDelayedEvents().forEach(event => event.handler());
+        }
+
+        flushImmediateEvents() {
+            while (true) {
+                const readyEvents = this.getReadyDelayedEvents();
+                const hasQueue = this.queue.length > 0;
+                if (readyEvents.length === 0 && !hasQueue) break;
+                readyEvents.forEach(event => event.handler());
+                if (this.queue.length > 0) {
+                    this.flushQueue();
+                }
+            }
         }
 
         // 处理主事件队列里的单个事件。
@@ -2129,15 +2215,6 @@
             });
         }
 
-        applyThunderGuardLinyinBonus() {
-            const thunderGuard = this.machineStoneMap.get("thunder-guard");
-            if (!thunderGuard || thunderGuard.rank < 5) return;
-            if (!thunderGuard.guardExpiresAt) return;
-            if (this.time > thunderGuard.guardExpiresAt + 1e-9) return;
-            const total = 93805 * this.targetCount * (thunderGuard.params.allLinyinBonus || 0);
-            this.addDamage(total, thunderGuard.id, "machine_thunder_guard_linyin");
-        }
-
         // 给目标叠一层静电过载；层数无上限，单次结算按层数效能倍乘。
         applyStaticOverload(cardId, targetsHit, efficiency) {
             const duration = this.effects.thunder.staticOverloadDuration || STATIC_OVERLOAD_DEFAULT_DURATION;
@@ -2193,7 +2270,6 @@
             if (element === "thunder") {
                 this.scheduleThunderAmplifyTicks();
             }
-            this.applyThunderGuardLinyinBonus();
         }
 
         // 结算内置激化伤害。伤害统一归到内置激化来源，与丹青编成无关。
@@ -2273,6 +2349,12 @@
         }
 
         notifyIceAmplifyFreeze(event = {}) {
+            // 凛霜寒涌 5/5：冻结效果对命中的敌人累加 3000 玄冰值。
+            // effects.ice.freezeMeterBonus 由该石头在初始化时写入，这里是它唯一的消费点。
+            const freezeMeter = this.effects.ice.freezeMeterBonus;
+            if (freezeMeter > 0) {
+                this.addMeter("ice", freezeMeter * this.targetCount);
+            }
             this.emit(EVENTS.ICE_AMPLIFY_FREEZE, event);
             this.dispatchMachineStones(EVENTS.ICE_AMPLIFY_FREEZE, event);
         }

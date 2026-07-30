@@ -21,6 +21,19 @@ function cloneDeck(deck) {
     return deck.map(card => ({ id: card.id, level: card.level }));
 }
 
+// 场景可以只给 deck（数组），也可以给完整 config（{deck, machineStones, craftStone}）。
+// 机巧石/匠心石必须放在构造函数的第一个参数里，塞进第二个参数不会报错但会静默失效。
+function cloneConfig(scenario) {
+    if (Array.isArray(scenario.deck) && !scenario.machineStones && !scenario.craftStone) {
+        return cloneDeck(scenario.deck);
+    }
+    return {
+        deck: cloneDeck(scenario.deck),
+        machineStones: (scenario.machineStones || []).map(s => ({ id: s.id, rank: s.rank })),
+        craftStone: scenario.craftStone ? { id: scenario.craftStone.id || scenario.craftStone } : null
+    };
+}
+
 function createDeck(ids, level) {
     return ids.map(id => ({ id, level }));
 }
@@ -105,6 +118,13 @@ const cardIdsByElement = Data.CARD_DEFS.reduce((acc, card) => {
     return acc;
 }, { fire: [], ice: [], wood: [], thunder: [] });
 
+const CRAFT_STONE_BY_ELEMENT = {
+    fire: "blazing-skyfire",
+    ice: "frost-glory",
+    wood: "verdant-life",
+    thunder: "thunder-aegis"
+};
+
 const scenarios = [
     {
         name: "all_cards_lv0_60s_1target_seed1",
@@ -145,7 +165,30 @@ const scenarios = [
         name: "mixed_levels_120s_2target_seed23",
         deck: createMixedDeck(),
         options: { duration: 120, targetCount: 2, seed: 23 }
-    }
+    },
+    // ---- 机巧石 / 匠心石覆盖 ----
+    // 上面 8 个场景都没有配置任何石头，所以石头相关的改动会「自动通过」。
+    // 以下场景每系一条，把该系全部机巧石 5/5 与对应匠心石一起挂上，
+    // 确保 dispatchMachineStones 的分支、升星效果和伤害归属都被基线锁住。
+    ...["fire", "ice", "wood", "thunder"].map(element => ({
+        name: `${element}_all_stones_r5_243s_1target_seed1`,
+        deck: createDeck(cardIdsByElement[element], 6),
+        machineStones: Data.MACHINE_STONE_DEFS
+            .filter(s => s.element === element)
+            .map(s => ({ id: s.id, rank: 5 })),
+        craftStone: { id: CRAFT_STONE_BY_ELEMENT[element] },
+        options: { duration: 243, targetCount: 1, seed: 1 }
+    })),
+    // 3/5 档单独锁一条，防止 3/5 与 5/5 的分支被改成同一行为。
+    ...["fire", "ice", "wood", "thunder"].map(element => ({
+        name: `${element}_all_stones_r3_243s_3target_seed5`,
+        deck: createDeck(cardIdsByElement[element], 6),
+        machineStones: Data.MACHINE_STONE_DEFS
+            .filter(s => s.element === element)
+            .map(s => ({ id: s.id, rank: 3 })),
+        craftStone: { id: CRAFT_STONE_BY_ELEMENT[element] },
+        options: { duration: 243, targetCount: 3, seed: 5 }
+    }))
 ];
 
 function main() {
@@ -164,7 +207,7 @@ function main() {
 
     scenarios.forEach((scenario, index) => {
         const result = new Engine.CombatEngine(
-            cloneDeck(scenario.deck),
+            cloneConfig(scenario),
             scenario.options
         ).simulate();
         const normalized = normalizeResult(result);
