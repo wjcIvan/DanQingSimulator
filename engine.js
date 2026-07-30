@@ -104,6 +104,9 @@
     // 静电过载：可无限叠层，持续时间来自雷魄晶，同一目标共用一条结算节奏。
     const STATIC_OVERLOAD_MAX_STACKS = 0;
     const STATIC_OVERLOAD_DEFAULT_DURATION = 8;
+    const FLAME_BODY_MAX_STACKS = 12;
+    const FLAME_BODY_DURATION = 12;
+    const FLAME_BODY_TICK_INTERVAL = 1;
     const OPENING_PRECAST_SECONDS_BY_CRAFT = Object.freeze({
         "verdant-life": 2,
         "thunder-aegis": 1.3
@@ -177,7 +180,6 @@
         machine_blazing_land: "烈焰之地",
         machine_flame_body: "烈焰焚身",
         machine_flame_body_combust: "烈焰焚身·爆燃",
-        machine_flame_body_craft: "烈焰焚身·天炎",
         machine_link: "机巧联动",
         // 机巧石·玄冰
         machine_ice_amplify: "凛霜寒涌",
@@ -407,6 +409,9 @@
 
             // 天火陨星持续状态
             this.fireMeteor = new StackBuff(FIRE_METEOR_MAX_STACKS, FIRE_METEOR_DURATION, FIRE_METEOR_TICK_INTERVAL);
+
+            // 烈焰焚身持续状态：可叠层，每层独立计时，每秒结算一次。
+            this.flameBody = new StackBuff(FLAME_BODY_MAX_STACKS, FLAME_BODY_DURATION, FLAME_BODY_TICK_INTERVAL);
 
             // 震荡持续状态：无层数上限
             this.woodEcho = new StackBuff(WOOD_ECHO_MAX_STACKS, WOOD_ECHO_DURATION, WOOD_ECHO_TICK_INTERVAL);
@@ -1478,11 +1483,48 @@
 
         triggerFlameBody(stone, stacks, mechanic) {
             const params = stone.params;
-            const ticks = Math.floor(params.duration || 12);
-            for (let stack = 0; stack < stacks; stack += 1) {
-                for (let delay = 1; delay <= ticks; delay += 1) {
-                    this.scheduleEvent(this.time + delay, () => {
-                        this.addDamage((params.damage || 0) * Math.min(3, this.targetCount), stone.id, mechanic);
+            const duration = params.duration || FLAME_BODY_DURATION;
+            const targetsHit = Math.min(3, this.targetCount);
+            for (let targetIndex = 0; targetIndex < targetsHit; targetIndex += 1) {
+                const target = this.targets[targetIndex];
+                if (!target) continue;
+                const beforeStacks = target.flameBody.prune(this.time);
+                let afterStacks = beforeStacks;
+                for (let stack = 0; stack < stacks; stack += 1) {
+                    afterStacks = target.flameBody.apply(this.time, duration, 1, mechanic);
+                }
+                if (targetIndex === 0) {
+                    this.addLog("buff", stone.id, `目标 1 烈焰焚身 ${beforeStacks} → ${afterStacks} 层`, {
+                        buff: "flame_body",
+                        targetIndex,
+                        beforeStacks,
+                        afterStacks,
+                        mechanic
+                    });
+                }
+            }
+        }
+
+        refreshFlameBodyToStacks(stone, stacks, mechanic, silent = false) {
+            const params = stone.params;
+            const duration = params.duration || FLAME_BODY_DURATION;
+            const targetsHit = Math.min(3, this.targetCount);
+            for (let targetIndex = 0; targetIndex < targetsHit; targetIndex += 1) {
+                const target = this.targets[targetIndex];
+                if (!target) continue;
+                const beforeStacks = target.flameBody.prune(this.time);
+                target.flameBody.clear();
+                let afterStacks = 0;
+                for (let stack = 0; stack < stacks; stack += 1) {
+                    afterStacks = target.flameBody.apply(this.time, duration, 1, mechanic);
+                }
+                if (!silent && targetIndex === 0) {
+                    this.addLog("buff", stone.id, `目标 1 烈焰焚身 ${beforeStacks} → ${afterStacks} 层`, {
+                        buff: "flame_body",
+                        targetIndex,
+                        beforeStacks,
+                        afterStacks,
+                        mechanic
                     });
                 }
             }
@@ -1765,7 +1807,7 @@
                     || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "rotten-gale" && event.stoneId === "verdant-life")
                     || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "earth-rift" && event.stoneId === "verdant-life")
                     || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "wood-spirit" && event.stoneId === "verdant-life")
-                    || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "flame-body" && event.stoneId === "blazing-skyfire")
+                    || (eventType === EVENTS.CRAFT_STONE_CAST_START && stone.id === "flame-body" && event.stoneId === "blazing-skyfire")
                     || (eventType === EVENTS.COMBUST && stone.id === "flame-body");
                 if (!matches) return;
                 const params = stone.params;
@@ -1818,9 +1860,15 @@
                     if (stone.rank >= 5) this.triggerWoodSpirit(stone, 2);
                     return;
                 }
-                if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "flame-body") {
+                if (eventType === EVENTS.CRAFT_STONE_CAST_START && stone.id === "flame-body") {
                     if (event.stoneId === "blazing-skyfire" && stone.rank >= 5) {
-                        this.triggerFlameBody(stone, 12, "machine_flame_body_craft");
+                        this.refreshFlameBodyToStacks(stone, 12, "machine_flame_body");
+                        const castTime = this.craftStone?.castTime || 0;
+                        for (let delay = FLAME_BODY_TICK_INTERVAL; delay <= castTime + 1e-9; delay += FLAME_BODY_TICK_INTERVAL) {
+                            this.scheduleEvent(this.time + delay, () => {
+                                this.refreshFlameBodyToStacks(stone, 12, "machine_flame_body", true);
+                            });
+                        }
                     }
                     return;
                 }
@@ -1929,6 +1977,15 @@
                     this.queueEvent({ type: "WOOD_ECHO_TICK", targetIndex: index });
                     target.woodEcho.tickAt += target.woodEcho.tickInterval;
                 }
+                const flameBodyStacks = target.flameBody.prune(this.time);
+                if (flameBodyStacks > 0
+                    && this.time < this.duration
+                    && target.flameBody.tickAt
+                    && this.time >= target.flameBody.tickAt
+                    && target.flameBody.tickAt <= target.flameBody.lastExpireAt + 1e-9) {
+                    this.queueEvent({ type: "FLAME_BODY_TICK", targetIndex: index });
+                    target.flameBody.tickAt += target.flameBody.tickInterval;
+                }
                 if (target.burnStacks > 0 && this.time >= target.burnExpireAt) {
                     target.clearBurn();
                 }
@@ -1980,6 +2037,9 @@
                     break;
                 case "WOOD_ECHO_TICK":
                     this.handleWoodEchoTick(event.targetIndex);
+                    break;
+                case "FLAME_BODY_TICK":
+                    this.handleFlameBodyTick(event.targetIndex);
                     break;
                 case "STATIC_OVERLOAD_TICK":
                     this.handleStaticOverloadTick(event.targetIndex);
@@ -2127,6 +2187,26 @@
             const weight = target.woodEcho.consumeTick(this.time);
             if (weight <= 0) return;
             this.addDamage(perTick * weight, dice.id, "pulse_echo");
+        }
+
+        handleFlameBodyTick(targetIndex) {
+            const stone = this.machineStoneMap.get("flame-body");
+            if (targetIndex !== 0 || !stone) return;
+            const perTick = stone.params.damage || 0;
+            if (perTick <= 0) return;
+            const totals = new Map();
+            const counts = new Map();
+            this.targets.forEach(target => {
+                target.flameBody.consumeTickByMeta(this.time).forEach((weight, mechanic) => {
+                    if (weight <= 0) return;
+                    totals.set(mechanic, (totals.get(mechanic) || 0) + weight);
+                    counts.set(mechanic, Math.max(counts.get(mechanic) || 0, weight));
+                });
+            });
+            totals.forEach((weight, mechanic) => {
+                this.addDamage(perTick * weight, stone.id, mechanic, false);
+                this.countMechanic(mechanic, counts.get(mechanic) || 0);
+            });
         }
 
         // 结算一次爆燃事件。
