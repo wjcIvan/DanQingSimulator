@@ -644,9 +644,34 @@
         }
         @media (max-width: 720px) {
             .shell { padding: 16px; }
-            .hero { flex-direction: column; }
+            .hero { flex-direction: column; padding: 18px; border-radius: 22px; }
+            .hero-notes { min-width: 0; width: 100%; }
+            .panel { padding: 16px; border-radius: 20px; }
+            .glass-panel { padding: 16px !important; border-radius: 24px; }
+            .lab-dashboard { gap: 12px; margin-bottom: 18px; }
+            .dashboard-item { padding: 10px 12px; }
+            .slider-tech-label { flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 10px; }
             .controls-grid, .stats-grid, .detail-grid { grid-template-columns: 1fr; }
-            .race-section { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }
+            .race-section,
+            .machine-race-section {
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                gap: 0.75rem;
+                margin-bottom: 1.5rem;
+            }
+            .card-box { min-height: auto; }
+            .card-hover-panel { display: none !important; }
+            .log-row { grid-template-columns: 40px 44px 1fr; gap: 6px; font-size: 10px; }
+            .log-time { font-size: 10px; }
+            .log-kind { font-size: 8px; }
+            .log-expanded { inset: 2vh 3vw; }
+        }
+        @media (hover: none) and (pointer: coarse) {
+            .card-box:hover {
+                transform: none;
+                box-shadow: none;
+                z-index: auto;
+            }
+            .card-box:hover .card-hover-panel { display: none !important; }
         }
     </style>
 </head>
