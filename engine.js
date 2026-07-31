@@ -93,6 +93,7 @@
         ICE_ELEMENTAL_SUMMONED: "ice_elemental_summoned",
         FIRE_AMPLIFY_TICK: "fire_amplify_tick",
         WOOD_BLOOM: "wood_bloom",
+        WOOD_GIANT_SUMMONED: "wood_giant_summoned",
         THUNDER_AMPLIFY_TICK: "thunder_amplify_tick",
         CRAFT_STONE_CAST_START: "craft_stone_cast_start",
         CRAFT_STONE_CAST_END: "craft_stone_cast_end"
@@ -588,11 +589,11 @@
         onCombust(engine, event) {
             const target = engine.targets[event.targetIndex];
             if (!target || target.burnStacks < this.params.threshold) return;
-            engine.addLog("event", this.id, `目标 ${event.targetIndex + 1} 爆燃：引爆 ${target.burnStacks} 层燃烧`, {
+            engine.addLog("event", this.id, `目标 ${event.targetIndex + 1} 爆燃：引爆 ${target.burnStacks}-1 层燃烧`, {
                 targetIndex: event.targetIndex,
                 stacks: target.burnStacks
             });
-            engine.addDamage(target.burnStacks * this.params.damagePerExtraLayer, this.id, "combust");
+            engine.addDamage((target.burnStacks-1) * this.params.damagePerExtraLayer, this.id, "combust");
             const preservedTickAt = target.burnTickAt;
             target.burnStacks = 0;
             target.burnExpireAt = 0;
@@ -1021,6 +1022,7 @@
             this.totalDamage = 0;
             this.lastSecondSample = 0;
             this.nextThunderFrenzyAt = Infinity;
+            this.scarletRingState = null;
             // 洞察层数：由机巧石授予，下一次匠心石（灵蕴技）伤害时一次性消耗掉全部层数。
             this.insightStacks = 0;
             this.insightBonusPerStack = 0;
@@ -1385,6 +1387,12 @@
                         this.notifyCraftStoneCastEnd({ stoneId: stone.id });
                     });
                 } else if (stone.id === "verdant-life") {
+                    this.scheduleEvent(castEndAt, () => {
+                        this.notifyCraftStoneCastEnd({ stoneId: stone.id });
+                        this.summonVerdantGiant(stone, insight.multiplier);
+                    });
+                    stone.nextCastAt += stone.cooldown - openingPrecast;
+                    return;
                     const interval = stone.params.attackInterval || 2.5;
                     const hasEarthRift = this.machineStoneMap.has("earth-rift");
                     // 带裂地崩时，树人第二个读条用于释放裂地崩，本体普攻因此少一次。
@@ -1598,6 +1606,27 @@
             }
         }
 
+        summonVerdantGiant(stone, insightMultiplier = 1) {
+            const interval = stone.params.attackInterval || 2.5;
+            const hasEarthRift = this.machineStoneMap.has("earth-rift");
+            const attackCount = hasEarthRift
+                ? Math.max(0, (stone.params.attacks || 6) - 1)
+                : (stone.params.attacks || 6);
+            const attackStartIndex = hasEarthRift ? 2 : 1;
+            this.notifyWoodGiantSummoned({ stoneId: stone.id });
+            this.scheduleEvent(this.time + interval, () => {
+                this.addDamage((stone.params.damage || 0) * this.targetCount * insightMultiplier, stone.id, "craft_stone");
+                this.applyEarthRiftFollowup();
+            });
+            for (let i = 0; i < attackCount; i += 1) {
+                const delay = interval * (attackStartIndex + i + 1);
+                this.scheduleEvent(this.time + delay, () => {
+                    this.addDamage((stone.params.attackDamage || 0) * this.targetCount, stone.id, "craft_stone_attack");
+                    this.applyEarthRiftFollowup();
+                });
+            }
+        }
+
         triggerEarthRift(stone) {
             const params = stone.params;
             this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_earth_rift");
@@ -1760,8 +1789,8 @@
 
         triggerScarletRing(stone) {
             const params = stone.params;
-            const ticks = stone.rank >= 3 ? 2 : 1;
-            for (let i = 0; i < ticks; i += 1) {
+            const hits = stone.rank >= 3 ? 1 + (params.extraTicksAtRank3 || 1) : 1;
+            for (let i = 0; i < hits; i += 1) {
                 this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_fire_tick");
                 if (this.random() < 0.20) {
                     const scarletAnt = this.getCard(CARD_IDS.SCARLET_ANT);
@@ -1775,11 +1804,17 @@
             if (!stone) return;
             const interval = stone.rank >= 5 ? 1.5 : 2;
             const duration = stone.rank >= 5 ? 12 : 10;
-            for (let delay = interval; delay <= duration + 1e-9; delay += interval) {
-                this.scheduleEvent(this.time + delay, () => {
-                    this.dispatchMachineStones(EVENTS.FIRE_AMPLIFY_TICK, { element: "fire" });
-                });
+            const activeUntilAt = this.time + duration;
+            if (!this.scarletRingState) {
+                this.scarletRingState = {
+                    interval,
+                    activeUntilAt,
+                    nextTickAt: this.time + interval
+                };
+                return;
             }
+            this.scarletRingState.interval = interval;
+            this.scarletRingState.activeUntilAt = Math.max(this.scarletRingState.activeUntilAt, activeUntilAt);
         }
 
         dispatchMachineStones(eventType, event = {}) {
@@ -1895,7 +1930,8 @@
                 }
                 if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "earth-rift") {
                     // 树人在冲击波后再读条 2.5 秒才放出裂地崩。
-                    const delay = this.craftStone?.params?.attackInterval || 2.5;
+                    const interval = this.craftStone?.params?.attackInterval || 2.5;
+                    const delay = interval * 2;
                     this.scheduleEvent(this.time + delay, () => this.triggerEarthRift(stone));
                     return;
                 }
@@ -1986,6 +2022,17 @@
                     target.staticOverload.tickAt += target.staticOverload.tickInterval;
                 }
             });
+            if (this.scarletRingState) {
+                while (this.scarletRingState.nextTickAt <= this.time + 1e-9
+                    && this.scarletRingState.nextTickAt <= this.scarletRingState.activeUntilAt + 1e-9) {
+                    this.dispatchMachineStones(EVENTS.FIRE_AMPLIFY_TICK, { element: "fire" });
+                    this.scarletRingState.nextTickAt += this.scarletRingState.interval;
+                }
+                if (this.time > this.scarletRingState.activeUntilAt + 1e-9
+                    && this.scarletRingState.nextTickAt > this.scarletRingState.activeUntilAt + 1e-9) {
+                    this.scarletRingState = null;
+                }
+            }
             this.flushDelayedEvents();
         }
 
@@ -2450,6 +2497,14 @@
         notifyWoodBloom(event = {}) {
             this.emit(EVENTS.WOOD_BLOOM, event);
             this.dispatchMachineStones(EVENTS.WOOD_BLOOM, event);
+        }
+
+        notifyWoodGiantSummoned(event = {}) {
+            const source = this.resolveSourceName(event.stoneId);
+            this.addLog("event", event.stoneId, `${source} 召唤苍木巨人`, {
+                stoneId: event.stoneId || null
+            });
+            this.emit(EVENTS.WOOD_GIANT_SUMMONED, event);
         }
 
         notifyCraftStoneCastEnd(event = {}) {
