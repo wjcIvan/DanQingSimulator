@@ -1010,7 +1010,7 @@
             this.totalDamage = 0;
             this.lastSecondSample = 0;
             this.nextThunderFrenzyAt = Infinity;
-            this.scarletRingState = null;
+            this.fireAmplifyState = null;
             // 洞察层数：由机巧石授予，下一次匠心石（灵蕴技）伤害时一次性消耗掉全部层数。
             this.insightStacks = 0;
             this.insightBonusPerStack = 0;
@@ -1787,22 +1787,28 @@
             }
         }
 
-        scheduleScarletRingTicks() {
-            const stone = this.machineStoneMap.get("scarlet-ring");
-            if (!stone) return;
-            const interval = stone.rank >= 5 ? 1.5 : 2;
-            const duration = stone.rank >= 5 ? 12 : 10;
+        scheduleFireAmplifyTicks() {
+            const ring = this.machineStoneMap.get("scarlet-ring");
+            const speedUp = Boolean(ring && ring.rank >= 5);
+            const interval = speedUp ? 1.5 : 2;
+            const duration = speedUp ? 12 : 10;
             const activeUntilAt = this.time + duration;
-            if (!this.scarletRingState) {
-                this.scarletRingState = {
+            const config = AMPLIFY_DAMAGE.fire;
+            const bonus = 1 + this.effects.fire.amplifyDamageBonus;
+            if (!this.fireAmplifyState) {
+                this.fireAmplifyState = {
                     interval,
                     activeUntilAt,
-                    nextTickAt: this.time + interval
+                    nextTickAt: this.time + interval,
+                    damagePerTick: config.tickDamage * bonus,
+                    damageHostId: config.sourceId
                 };
                 return;
             }
-            this.scarletRingState.interval = interval;
-            this.scarletRingState.activeUntilAt = Math.max(this.scarletRingState.activeUntilAt, activeUntilAt);
+            this.fireAmplifyState.interval = interval;
+            this.fireAmplifyState.activeUntilAt = Math.max(this.fireAmplifyState.activeUntilAt, activeUntilAt);
+            this.fireAmplifyState.damagePerTick = config.tickDamage * bonus;
+            this.fireAmplifyState.damageHostId = config.sourceId;
         }
 
         dispatchMachineStones(eventType, event = {}) {
@@ -2010,15 +2016,16 @@
                     target.staticOverload.tickAt += target.staticOverload.tickInterval;
                 }
             });
-            if (this.scarletRingState) {
-                while (this.scarletRingState.nextTickAt <= this.time + 1e-9
-                    && this.scarletRingState.nextTickAt <= this.scarletRingState.activeUntilAt + 1e-9) {
+            if (this.fireAmplifyState) {
+                while (this.fireAmplifyState.nextTickAt <= this.time + 1e-9
+                    && this.fireAmplifyState.nextTickAt <= this.fireAmplifyState.activeUntilAt + 1e-9) {
+                    this.addDamage(this.fireAmplifyState.damagePerTick, this.fireAmplifyState.damageHostId, "fire_amplify");
                     this.dispatchMachineStones(EVENTS.FIRE_AMPLIFY_TICK, { element: "fire" });
-                    this.scarletRingState.nextTickAt += this.scarletRingState.interval;
+                    this.fireAmplifyState.nextTickAt += this.fireAmplifyState.interval;
                 }
-                if (this.time > this.scarletRingState.activeUntilAt + 1e-9
-                    && this.scarletRingState.nextTickAt > this.scarletRingState.activeUntilAt + 1e-9) {
-                    this.scarletRingState = null;
+                if (this.time > this.fireAmplifyState.activeUntilAt + 1e-9
+                    && this.fireAmplifyState.nextTickAt > this.fireAmplifyState.activeUntilAt + 1e-9) {
+                    this.fireAmplifyState = null;
                 }
             }
             this.flushDelayedEvents();
@@ -2358,10 +2365,11 @@
         triggerAmplify(element) {
             this.emit(EVENTS.ELEMENT_AMPLIFY, { element });
             this.dispatchMachineStones(EVENTS.ELEMENT_AMPLIFY, { element });
-            this.applyAmplifyDamage(element);
             if (element === "fire") {
-                this.scheduleScarletRingTicks();
+                this.scheduleFireAmplifyTicks();
+                return;
             }
+            this.applyAmplifyDamage(element);
             if (element === "thunder") {
                 this.scheduleThunderAmplifyTicks();
             }
@@ -2373,20 +2381,6 @@
             if (!config) return;
             const hostId = config.sourceId;
             const bonus = 1 + this.effects[element].amplifyDamageBonus;
-
-            if (element === "fire") {
-                // 赤焰天环 5/5 会同时缩短天火激化本身的生效间隔并延长持续时间。
-                const ring = this.machineStoneMap.get("scarlet-ring");
-                const speedUp = Boolean(ring && ring.rank >= 5);
-                const interval = speedUp ? 1.5 : config.interval;
-                const duration = speedUp ? config.duration * 1.2 : config.duration;
-                for (let delay = interval; delay <= duration + 1e-9; delay += interval) {
-                    this.scheduleEvent(this.time + delay, () => {
-                        this.addDamage(config.tickDamage * bonus, hostId, "fire_amplify");
-                    });
-                }
-                return;
-            }
 
             if (element === "ice") {
                 this.addDamage(config.initialDamage * bonus, hostId, "ice_amplify");
