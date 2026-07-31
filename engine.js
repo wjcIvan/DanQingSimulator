@@ -1076,7 +1076,9 @@
 
         initializeMachineStoneState() {
             this.machineStones.forEach(stone => {
-                stone.nextAt = 0;
+                stone.nextAt = stone.id === "flame-body"
+                    ? (stone.params.interval || 15)
+                    : 0;
                 stone.counter = 0;
                 stone.pendingCharges = 0;
                 stone.activated = false;
@@ -1404,6 +1406,22 @@
                             this.applyEarthRiftFollowup();
                         });
                     }
+                } else if (stone.id === "blazing-skyfire") {
+                    const segmentCount = 6;
+                    const perSegmentDamage = stone.params.damage / segmentCount;
+                    const flameBody = this.machineStoneMap.get("flame-body");
+                    for (let i = 0; i < segmentCount; i += 1) {
+                        const delay = segmentCount === 1 ? 0 : (stone.castTime * i / (segmentCount - 1));
+                        this.scheduleEvent(this.time + delay, () => {
+                            this.addDamage(perSegmentDamage * this.targetCount * insight.multiplier, stone.id, "craft_stone");
+                            if (flameBody && flameBody.rank >= 5) {
+                                this.triggerFlameBody(flameBody, 2, "machine_flame_body");
+                            }
+                        });
+                    }
+                    this.scheduleEvent(castEndAt, () => {
+                        this.notifyCraftStoneCastEnd({ stoneId: stone.id });
+                    });
                 } else {
                     this.scheduleEvent(castEndAt, () => {
                         this.notifyCraftStoneCastEnd({ stoneId: stone.id });
@@ -1494,31 +1512,6 @@
                     afterStacks = target.flameBody.apply(this.time, duration, 1, mechanic);
                 }
                 if (targetIndex === 0) {
-                    this.addLog("buff", stone.id, `目标 1 烈焰焚身 ${beforeStacks} → ${afterStacks} 层`, {
-                        buff: "flame_body",
-                        targetIndex,
-                        beforeStacks,
-                        afterStacks,
-                        mechanic
-                    });
-                }
-            }
-        }
-
-        refreshFlameBodyToStacks(stone, stacks, mechanic, silent = false) {
-            const params = stone.params;
-            const duration = params.duration || FLAME_BODY_DURATION;
-            const targetsHit = Math.min(3, this.targetCount);
-            for (let targetIndex = 0; targetIndex < targetsHit; targetIndex += 1) {
-                const target = this.targets[targetIndex];
-                if (!target) continue;
-                const beforeStacks = target.flameBody.prune(this.time);
-                target.flameBody.clear();
-                let afterStacks = 0;
-                for (let stack = 0; stack < stacks; stack += 1) {
-                    afterStacks = target.flameBody.apply(this.time, duration, 1, mechanic);
-                }
-                if (!silent && targetIndex === 0) {
                     this.addLog("buff", stone.id, `目标 1 烈焰焚身 ${beforeStacks} → ${afterStacks} 层`, {
                         buff: "flame_body",
                         targetIndex,
@@ -1807,7 +1800,6 @@
                     || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "rotten-gale" && event.stoneId === "verdant-life")
                     || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "earth-rift" && event.stoneId === "verdant-life")
                     || (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "wood-spirit" && event.stoneId === "verdant-life")
-                    || (eventType === EVENTS.CRAFT_STONE_CAST_START && stone.id === "flame-body" && event.stoneId === "blazing-skyfire")
                     || (eventType === EVENTS.COMBUST && stone.id === "flame-body");
                 if (!matches) return;
                 const params = stone.params;
@@ -1858,18 +1850,6 @@
                 }
                 if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "wood-spirit") {
                     if (stone.rank >= 5) this.triggerWoodSpirit(stone, 2);
-                    return;
-                }
-                if (eventType === EVENTS.CRAFT_STONE_CAST_START && stone.id === "flame-body") {
-                    if (event.stoneId === "blazing-skyfire" && stone.rank >= 5) {
-                        this.refreshFlameBodyToStacks(stone, 12, "machine_flame_body");
-                        const castTime = this.craftStone?.castTime || 0;
-                        for (let delay = FLAME_BODY_TICK_INTERVAL; delay <= castTime + 1e-9; delay += FLAME_BODY_TICK_INTERVAL) {
-                            this.scheduleEvent(this.time + delay, () => {
-                                this.refreshFlameBodyToStacks(stone, 12, "machine_flame_body", true);
-                            });
-                        }
-                    }
                     return;
                 }
                 if (eventType === EVENTS.COMBUST && stone.id === "flame-body") {
