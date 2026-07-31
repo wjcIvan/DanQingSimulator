@@ -705,7 +705,7 @@
 
     function runSimulation() {
         const duration = parseInt(document.getElementById("simTime").value, 10) || 60;
-        const iterations = parseInt(document.getElementById("simIter").value, 10) || 100;
+        const iterations = parseInt(document.getElementById("simIter").value, 10) || 50;
         const targetCount = parseInt(document.getElementById("targetCount").value, 10) || 1;
         const externalSkillDps = parseFloat(document.getElementById("externalSkillDps")?.value || "150000") || 150000;
         const deck = getSelectedDeck();
@@ -1020,20 +1020,26 @@
 
         const externalSkillDpsInput = document.getElementById("externalSkillDps");
         const externalDpsVal = document.getElementById("externalDpsVal");
+        const simTimeInput = document.getElementById("simTimeInput");
+        const simIterInput = document.getElementById("simIterInput");
+        const targetCountInput = document.getElementById("targetCountInput");
 
         const syncRangeLabels = () => {
             timeVal.innerText = simTime.value;
             iterVal.innerText = simIter.value;
             targetVal.innerText = targetCount.value;
+            if (simTimeInput) simTimeInput.value = simTime.value;
+            if (simIterInput) simIterInput.value = simIter.value;
+            if (targetCountInput) targetCountInput.value = targetCount.value;
             externalDpsVal.innerText = externalSkillDpsInput.value || "0";
 
             const timePct = (simTime.value - 10) / (600 - 10) * 100;
             simTime.style.backgroundSize = `${timePct}% 100%`;
 
-            const iterPct = (simIter.value - 1) / (1000 - 1) * 100;
+            const iterPct = (simIter.value - 1) / (200 - 1) * 100;
             simIter.style.backgroundSize = `${iterPct}% 100%`;
 
-            const targetPct = (targetCount.value - 1) / (15 - 1) * 100;
+            const targetPct = (targetCount.value - 1) / (10 - 1) * 100;
             targetCount.style.backgroundSize = `${targetPct}% 100%`;
         };
         syncRangeLabels();
@@ -1041,6 +1047,9 @@
         simIter.addEventListener("input", syncRangeLabels);
         targetCount.addEventListener("input", syncRangeLabels);
         externalSkillDpsInput.addEventListener("input", syncRangeLabels);
+        if (simTimeInput) simTimeInput.addEventListener("input", () => { simTime.value = simTimeInput.value; syncRangeLabels(); });
+        if (simIterInput) simIterInput.addEventListener("input", () => { simIter.value = simIterInput.value; syncRangeLabels(); });
+        if (targetCountInput) targetCountInput.addEventListener("input", () => { targetCount.value = targetCountInput.value; syncRangeLabels(); });
 
         document.querySelectorAll(".star-batch-btn").forEach(btn => {
             btn.addEventListener("click", () => {

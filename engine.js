@@ -113,18 +113,6 @@
         "thunder-aegis": 1.3
     });
     const ELEMENT_TRIGGER_THRESHOLD = 10000;
-    // 归属激化的伤害机制：这些机制虽走普通伤害路径，但语义上属于激化产出，
-    // 日志里额外打上 amplify 标签，便于按激化筛选时一并看到伤害。
-    const AMPLIFY_DAMAGE_MECHANICS = new Set([
-        "fire_amplify",
-        "ice_amplify",
-        "wood_amplify",
-        "wood_bloom",
-        "thunder_amplify",
-        "machine_fire_meteor_amplify",
-        "machine_ice_amplify"
-    ]);
-
     // 四系激化的伤害参数。激化是内置逻辑，不依赖具体丹青是否在编，
     // 因此伤害统一归到内置来源，不再计入任何丹青的贡献。
     const AMPLIFY_DAMAGE = {
@@ -1243,7 +1231,7 @@
                 mechanic,
                 mechanicLabel,
                 damage: Math.round(dmg)
-            }, AMPLIFY_DAMAGE_MECHANICS.has(mechanic) ? ["amplify"] : null);
+            });
         }
 
         // 仅记录触发次数，不计入伤害，用于展示层数/刷新等状态统计。
