@@ -440,7 +440,7 @@
             baseEffectText: "苍木树人召唤后使用一次裂地崩：对前方直线区域的所有敌人造成 207708 苍木伤害。",
             upgradeText: "伤害每提升一档+37.5%；\n\n3/5：命中的敌方受到裂地崩·回响，在 30 秒内每 1 秒受到 2887 苍木伤害；\n\n5/5：小纸人、木引青灵、苍木树人攻击带有裂地崩·回响的敌方时，立即触发一次回响。",
             mechanics: ["on_wood_summon"],
-            params: { damage: stat(207708, 207708 * 0.375), echoDamage: 2887, echoDuration: 30 }
+            params: { damage: stat(207708, 207708 * 0.375), echoDamage: stat(2887, 2887 * 0.375), echoDuration: 30 }
         },
         {
             id: "thunder-spear",
