@@ -105,6 +105,8 @@
     // 静电过载：可无限叠层，持续时间来自雷魄晶，同一目标共用一条结算节奏。
     const STATIC_OVERLOAD_MAX_STACKS = 0;
     const STATIC_OVERLOAD_DEFAULT_DURATION = 8;
+    const THUNDER_SPEAR_DURATION = 8;
+    const THUNDER_SPEAR_TICK_INTERVAL = 1;
     const FLAME_BODY_MAX_STACKS = 12;
     const FLAME_BODY_DURATION = 12;
     const FLAME_BODY_TICK_INTERVAL = 1;
@@ -1011,6 +1013,7 @@
             this.lastSecondSample = 0;
             this.nextThunderFrenzyAt = Infinity;
             this.fireAmplifyState = null;
+            this.thunderSpearState = new StackBuff(0, THUNDER_SPEAR_DURATION, THUNDER_SPEAR_TICK_INTERVAL);
             // 洞察层数：由机巧石授予，下一次匠心石（灵蕴技）伤害时一次性消耗掉全部层数。
             this.insightStacks = 0;
             this.insightBonusPerStack = 0;
@@ -1687,12 +1690,11 @@
 
         triggerThunderSpearDot(stone, hits) {
             if (stone.rank < 3) return;
+            if (!this.thunderSpearState) {
+                this.thunderSpearState = new StackBuff(0, THUNDER_SPEAR_DURATION, THUNDER_SPEAR_TICK_INTERVAL);
+            }
             for (let hit = 0; hit < hits; hit += 1) {
-                for (let second = 1; second <= 8; second += 1) {
-                    this.scheduleEvent(this.time + second, () => {
-                        this.addDamage(95, stone.id, "machine_thunder_spear_dot");
-                    });
-                }
+                this.thunderSpearState.apply(this.time, THUNDER_SPEAR_DURATION, 1, stone.id);
             }
         }
 
@@ -2026,6 +2028,22 @@
                 if (this.time > this.fireAmplifyState.activeUntilAt + 1e-9
                     && this.fireAmplifyState.nextTickAt > this.fireAmplifyState.activeUntilAt + 1e-9) {
                     this.fireAmplifyState = null;
+                }
+            }
+            if (this.thunderSpearState) {
+                const thunderSpearStacks = this.thunderSpearState.prune(this.time);
+                if (thunderSpearStacks > 0
+                    && this.time < this.duration
+                    && this.thunderSpearState.tickAt
+                    && this.time >= this.thunderSpearState.tickAt
+                    && this.thunderSpearState.tickAt <= this.thunderSpearState.lastExpireAt + 1e-9) {
+                    const stacks = this.thunderSpearState.consumeTick(this.time);
+                    this.addDamage(95 * stacks, "thunder-spear", "machine_thunder_spear_dot");
+                    this.thunderSpearState.tickAt += this.thunderSpearState.tickInterval;
+                }
+                if (this.time > this.thunderSpearState.lastExpireAt + 1e-9
+                    && this.thunderSpearState.tickAt > this.thunderSpearState.lastExpireAt + 1e-9) {
+                    this.thunderSpearState = null;
                 }
             }
             this.flushDelayedEvents();
