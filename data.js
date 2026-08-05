@@ -28,7 +28,7 @@
             name: "猛虎",
             element: "fire",
             fee: 2,
-            baseEffectText: "燃烧造成伤害时累加 98 天火值；触发爆燃时累加 532 天火值；天火值达到 10000 时触发天火激化。",
+            baseEffectText: "燃烧造成伤害时累加 98 天火值；触发爆燃时累加 532 天火值；天火值达到 10000 时触发天火激化：每 2 秒造成 39181 天火伤害，持续 10 秒。",
             upgradeText: "燃烧累积值每星 +7；爆燃累积值每星 +38。",
             mechanics: ["blaze_meter"],
             params: {
@@ -95,7 +95,7 @@
             name: "上官策",
             element: "ice",
             fee: 2,
-            baseEffectText: "冰箭命中累加 140 玄冰值；碎裂伤害对所有目标各累加 140；玄冰风暴总计累加 1400；达到 10000 时触发玄冰激化。",
+            baseEffectText: "冰箭命中累加 140 玄冰值；碎裂伤害对所有目标各累加 140；玄冰风暴总计累加 1400；达到 10000 时触发玄冰激化：立即造成 43534 玄冰伤害，并在 2 秒后再造成 85327 玄冰伤害。",
             upgradeText: "冰箭/碎裂每星 +10，玄冰风暴每星 +100。",
             mechanics: ["ice_meter"],
             params: {
@@ -168,7 +168,7 @@
             name: "清凉珠",
             element: "wood",
             fee: 2,
-            baseEffectText: "脉冲命中敌人时累加 280 苍木值；达到 10000 时触发苍木激化。",
+            baseEffectText: "脉冲命中敌人时累加 280 苍木值；达到 10000 时触发苍木激化：每 1 秒造成 24916 苍木伤害，持续 9 秒；每 3 次额外触发一次绽放，造成 72108 苍木伤害。",
             upgradeText: "累积值每星 +20。",
             mechanics: ["wood_meter"],
             params: {
@@ -239,7 +239,7 @@
             name: "紫霄葫",
             element: "thunder",
             fee: 2,
-            baseEffectText: "连锁闪电命中敌人时累加 392 神雷值；达到 10000 时触发神雷激化。",
+            baseEffectText: "连锁闪电命中敌人时累加 392 神雷值；达到 10000 时触发神雷激化：造成 93805 神雷伤害。",
             upgradeText: "累积值每星 +28。",
             mechanics: ["thunder_meter"],
             params: {

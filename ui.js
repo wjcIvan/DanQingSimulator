@@ -71,7 +71,7 @@
             case "scarlet-ant":
                 return `造成伤害时，引燃最多 ${p.maxTargets} 名敌人，附加可叠层燃烧：每 ${formatValue(p.burnTickInterval)} 秒造成 ${formatValue(p.burnDamage)} 天火伤害，持续 ${formatValue(p.burnDuration)} 秒。燃烧最多 ${formatValue(p.burnMaxStacks)} 层，每额外 1 层基础伤害提高 ${formatValue(p.extraLayerBonus * 100)}%。`;
             case "fierce-tiger":
-                return `燃烧造成伤害时累加 ${formatValue(p.burnMeterGain)} 天火值；触发爆燃时累加 ${formatValue(p.combustMeterGain)} 天火值；天火值达到 ${formatValue(p.triggerThreshold)} 时触发天火激化。`;
+                return `燃烧造成伤害时累加 ${formatValue(p.burnMeterGain)} 天火值；触发爆燃时累加 ${formatValue(p.combustMeterGain)} 天火值；天火值达到 ${formatValue(p.triggerThreshold)} 时触发天火激化；\n\n天火激化：火焰持续灼烧目标的身躯，在 10 秒内每 2 秒受到 39181 天火伤害。`;
             case "sui-shou":
                 return `燃烧生效频率提高 ${formatValue(p.tickRateBonus * 100)}%；燃烧造成伤害时有 ${formatValue(p.extraStackChance * 100)}% 概率额外叠加 1 层，且不会重置持续时间。`;
             case "two-tail-fox":
@@ -81,7 +81,7 @@
             case "yan-hong":
                 return `释放技能时发射 1 枚冰箭，造成 ${formatValue(p.arrowDamage)} 玄冰伤害，每枚冰箭至多命中 ${formatValue(p.arrowTargets)} 名敌人（${formatValue(p.cooldown)} 秒内置冷却）。`;
             case "shangguan-ce":
-                return `冰箭命中累加 ${formatValue(p.arrowMeterGain)} 玄冰值；碎裂伤害对所有目标各累加 ${formatValue(p.shatterMeterGain)}；玄冰风暴总计累加 ${formatValue(p.stormMeterGain)}；达到 ${formatValue(p.triggerThreshold)} 时触发玄冰激化。`;
+                return `冰箭命中累加 ${formatValue(p.arrowMeterGain)} 玄冰值；碎裂伤害对所有目标各累加 ${formatValue(p.shatterMeterGain)}；玄冰风暴总计累加 ${formatValue(p.stormMeterGain)}；达到 ${formatValue(p.triggerThreshold)} 时触发玄冰激化；\n\n玄冰激化：寒冰在目标体内逐渐凝结，立刻受到 43534 玄冰伤害并使其移动速度降低 70%，持续 2 秒。效果结束时目标再次受到 85327 玄冰伤害并被寒冰冻结，持续 2 秒。`;
             case "wen-min":
                 return `冰箭伤害提高 ${formatValue(p.arrowDamageBonus * 100)}%；战斗中每经过 ${formatValue(p.volleyCooldown)} 秒，召唤 ${formatValue(p.volleyArrows)} 枚冰箭攻击敌人，每枚至多命中 ${formatValue(p.arrowTargets)} 名敌人。`;
             case "zuo-gui":
@@ -91,7 +91,7 @@
             case "folding-fan":
                 return `每 ${formatValue(p.interval)} 秒触发脉冲，对周围敌人造成 ${formatValue(p.pulseDamage)} 苍木伤害。`;
             case "cool-pearl":
-                return `脉冲命中敌人时累加 ${formatValue(p.meterGain)} 苍木值；达到 ${formatValue(p.triggerThreshold)} 时触发苍木激化。`;
+                return `脉冲命中敌人时累加 ${formatValue(p.meterGain)} 苍木值；达到 ${formatValue(p.triggerThreshold)} 时触发苍木激化；\n\n苍木激化：目标持续受到猛毒效果影响，每 1 秒受到 24916 苍木伤害，持续 9 秒，苍木激化每造成 3 次伤害时，触发苍木激化·绽放造成 72108 苍木伤害并被眩晕 0.5 秒。`;
             case "sacred-wood-dice":
                 return `脉冲造成伤害时，在 ${formatValue(p.echoDuration)} 秒内额外造成 ${formatValue(p.echoDamage)} 苍木伤害；进入战斗的 ${formatValue(p.openingPulseWindow)} 秒内总计额外触发 ${formatValue(p.openingPulseTimes)} 次脉冲。`;
             case "lin-feng":
@@ -101,7 +101,7 @@
             case "thunder-banner":
                 return `造成伤害时触发连锁闪电，对最多 ${formatValue(p.maxEnemyTargets)} 名敌人造成 ${formatValue(p.chainDamage)} 神雷伤害（${formatValue(p.cooldown)} 秒内置冷却）。`;
             case "zi-xiao-gourd":
-                return `连锁闪电命中敌人时累加 ${formatValue(p.meterGain)} 神雷值；达到 ${formatValue(p.triggerThreshold)} 时触发神雷激化。`;
+                return `连锁闪电命中敌人时累加 ${formatValue(p.meterGain)} 神雷值；达到 ${formatValue(p.triggerThreshold)} 时触发神雷激化；\n\n神雷激化：立刻造成 93805 神雷伤害并削减目标 100 体力，随后添加神雷激化效果，持续 30 秒。当任意敌人触发神雷激化效果时，所有受到神雷激化效果影响的敌人会再次承受伤害和削减体力效果。`;
             case "thunder-crystal":
                 return `连锁闪电使目标进入静电过载，${formatValue(p.duration)} 秒内总计受到 ${formatValue(p.totalDamage)} 神雷伤害。`;
             case "chain-lightning-wall":
