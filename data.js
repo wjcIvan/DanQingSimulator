@@ -414,7 +414,7 @@
         },
         {
             id: "wood-dice",
-            name: "神木骰",
+            name: "神木骰(机)",
             element: "wood",
             fee: 3,
             baseEffectText: "累积触发 6 次脉冲后，神木骰根据投掷点数获得 1~3 层六六大顺：脉冲消耗 1 层，使造成的伤害增加 40%。",
@@ -427,10 +427,10 @@
             name: "木引青灵",
             element: "wood",
             fee: 4,
-            baseEffectText: "自身的苍木激化触发时召唤 1 只木引青灵：持续 30 秒，每 2 秒攻击一次共 14 次，每次造成 5992 苍木伤害。",
+            baseEffectText: "自身的苍木激化触发时召唤 1 只木引青灵（10 秒内置冷却）：持续 30 秒，每 2 秒攻击一次共 14 次，每次造成 5992 苍木伤害。",
             upgradeText: "伤害每提升一档+12.5%；\n\n3/5：木引青灵攻击时青芜浮生的冷却时间减少1秒；\n\n5/5：青芜浮生同时召唤 2 只木引青灵。",
             mechanics: ["on_wood_amplify"],
-            params: { damage: stat(5992, 5992 * 0.125), duration: 30, attackInterval: 2, attacks: 14 }
+            params: { damage: stat(5992, 5992 * 0.125), duration: 30, attackInterval: 2, attacks: 14, internalCooldown: 10 }
         },
         {
             id: "earth-rift",

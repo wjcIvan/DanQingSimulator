@@ -99,7 +99,8 @@
         CRAFT_STONE_CAST_END: "craft_stone_cast_end"
     };
     const ICE_AMPLIFY_FINAL_DELAY = 2;
-    const WOOD_AMPLIFY_DELAYS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+    const WOOD_AMPLIFY_INTERVAL = 1;
+    const WOOD_AMPLIFY_DURATION = 9;
     const OPENING_PULSE_SCHEDULE = [0, 2, 4];
     const STATIC_OVERLOAD_TICKS = 4;
     // 静电过载：可无限叠层，持续时间来自雷魄晶，同一目标共用一条结算节奏。
@@ -829,6 +830,10 @@
             if (event.mechanic === "pulse_followup") return;
             for (let i = 0; i < this.params.extraPulseCount; i++) {
                 const delay = i === 0 ? 0 : this.params.extraPulseSpacing * i;
+                if (delay <= 1e-9) {
+                    engine.triggerPulse(event.card, this.params.extraPulseEfficiency, "pulse_followup");
+                    continue;
+                }
                 const rawTriggerAt = engine.time + delay;
                 // 末尾 1 秒内的补脉冲允许钳到 duration，避免因为浮点时间错过结算。
                 const triggerAt = rawTriggerAt > engine.duration && rawTriggerAt <= engine.duration + 1
@@ -1008,11 +1013,13 @@
             this.meters = { fire: 0, ice: 0, wood: 0, thunder: 0 };
             this.amplifyTriggers = { fire: 0, ice: 0, wood: 0, thunder: 0 };
             this.amplifyTimeline = { fire: [], ice: [], wood: [], thunder: [] };
+            this.pendingAmplifyCounts = { fire: 0, ice: 0, wood: 0, thunder: 0 };
             this.timeline = [];
             this.totalDamage = 0;
             this.lastSecondSample = 0;
             this.nextThunderFrenzyAt = Infinity;
             this.fireAmplifyState = null;
+            this.woodAmplifyState = null;
             this.thunderSpearState = new StackBuff(0, THUNDER_SPEAR_DURATION, THUNDER_SPEAR_TICK_INTERVAL);
             // 洞察层数：由机巧石授予，下一次匠心石（灵蕴技）伤害时一次性消耗掉全部层数。
             this.insightStacks = 0;
@@ -1072,6 +1079,7 @@
                 stone.nextAt = stone.id === "flame-body"
                     ? (stone.params.interval || 15)
                     : 0;
+                stone.nextTriggerAt = 0;
                 stone.counter = 0;
                 stone.pendingCharges = 0;
                 stone.activated = false;
@@ -1110,6 +1118,17 @@
                 ? (stone.params.attackInterval || 2.5)
                 : (stone.castTime || 0);
             return Math.min(requested, Math.max(0, firstImpactDelay));
+        }
+
+        shouldDelayVerdantLifeCast() {
+            const stone = this.craftStone;
+            if (!stone || stone.id !== "verdant-life") return false;
+            const woodSpirit = this.machineStoneMap.get("wood-spirit");
+            const rottenGale = this.machineStoneMap.get("rotten-gale");
+            if (!woodSpirit || !rottenGale || rottenGale.rank < 5) return false;
+            const woodAmplifyActive = Boolean(this.woodAmplifyState && this.time <= this.woodAmplifyState.activeUntilAt + 1e-9);
+            const woodAmplifyPending = (this.pendingAmplifyCounts.wood || 0) > 0;
+            return woodAmplifyActive || woodAmplifyPending;
         }
 
         // 对整套牌执行同名生命周期钩子。
@@ -1273,8 +1292,10 @@
             if (!threshold) return;
             while (this.meters[element] >= threshold) {
                 this.meters[element] -= threshold;
+                this.pendingAmplifyCounts[element] = (this.pendingAmplifyCounts[element] || 0) + 1;
                 // 激化效果在下一拍入队，保持与旧实现相同的触发时机。
                 this.scheduleEvent(this.time + TICK_SECONDS, () => {
+                    this.pendingAmplifyCounts[element] = Math.max(0, (this.pendingAmplifyCounts[element] || 0) - 1);
                     this.amplifyTriggers[element] += 1;
                     this.amplifyTimeline[element].push(Number(this.time.toFixed(1)));
                     this.addLog("amplify", null, `${ELEMENT_LABELS[element]}激化触发（第 ${this.amplifyTriggers[element]} 次）`, {
@@ -1346,6 +1367,7 @@
 
         tickCraftStone() {
             if (!this.craftStone || this.time < this.craftStone.nextCastAt) return;
+            if (this.shouldDelayVerdantLifeCast()) return;
             const stone = this.craftStone;
             const openingPrecast = Math.max(0, Number(stone.openingPrecastSeconds) || 0);
             stone.openingPrecastSeconds = 0;
@@ -1655,10 +1677,18 @@
             stone.counter = (stone.counter || 0) + 1;
             const threshold = stone.params.pulseThreshold || 6;
             if (stone.counter < threshold) return;
+            stone.activated = true;
             stone.counter = 0;
             const maxStacks = stone.rank >= 3 ? 6 : 3;
             const rolled = 1 + Math.floor(this.random() * maxStacks);
+            const beforeStacks = this.effects.wood.luckStacks;
             this.effects.wood.luckStacks += rolled;
+            this.addLog("buff", stone.id, `六六大顺摇出 ${rolled} 层（${beforeStacks} → ${this.effects.wood.luckStacks}）`, {
+                buff: "wood_dice_luck",
+                rolled,
+                beforeStacks,
+                afterStacks: this.effects.wood.luckStacks
+            });
             if (stone.rank >= 5) {
                 this.addDamage((stone.params.burstDamage || 0) * this.targetCount, stone.id, "machine_wood_dice_burst");
             }
@@ -1674,7 +1704,14 @@
             if (this.effects.wood.luckStacks <= 0) return damage;
             const stone = this.machineStoneMap.get("wood-dice");
             if (!stone) return damage;
+            const beforeStacks = this.effects.wood.luckStacks;
             this.effects.wood.luckStacks -= 1;
+            this.addLog("buff", stone.id, `消耗1层六六大顺（${beforeStacks} → ${this.effects.wood.luckStacks}）`, {
+                buff: "wood_dice_luck_consume",
+                consumed: 1,
+                beforeStacks,
+                afterStacks: this.effects.wood.luckStacks
+            });
             return damage * (1 + (stone.params.damageBonus || 0));
         }
 
@@ -1813,6 +1850,29 @@
             this.fireAmplifyState.damageHostId = config.sourceId;
         }
 
+        scheduleWoodAmplifyTicks() {
+            const config = AMPLIFY_DAMAGE.wood;
+            const bonus = 1 + this.effects.wood.amplifyDamageBonus;
+            const activeUntilAt = this.time + WOOD_AMPLIFY_DURATION;
+            if (!this.woodAmplifyState) {
+                this.woodAmplifyState = {
+                    interval: WOOD_AMPLIFY_INTERVAL,
+                    bloomEvery: config.bloomEvery,
+                    activeUntilAt,
+                    nextTickAt: this.time + WOOD_AMPLIFY_INTERVAL,
+                    damagePerTick: config.tickDamage * bonus,
+                    bloomDamage: config.bloomDamage * bonus,
+                    damageHostId: config.sourceId,
+                    ticksDone: 0
+                };
+                return;
+            }
+            this.woodAmplifyState.activeUntilAt = Math.max(this.woodAmplifyState.activeUntilAt, activeUntilAt);
+            this.woodAmplifyState.damagePerTick = config.tickDamage * bonus;
+            this.woodAmplifyState.bloomDamage = config.bloomDamage * bonus;
+            this.woodAmplifyState.damageHostId = config.sourceId;
+        }
+
         dispatchMachineStones(eventType, event = {}) {
             this.machineStones.forEach(stone => {
                 const mechanics = stone.mechanics || [];
@@ -1892,6 +1952,8 @@
                     return;
                 }
                 if (eventType === EVENTS.ELEMENT_AMPLIFY && event.element === "wood" && stone.id === "wood-spirit") {
+                    if (this.time < (stone.nextTriggerAt || 0)) return;
+                    stone.nextTriggerAt = this.time + (stone.params.internalCooldown || 10);
                     this.triggerWoodSpirit(stone, 1);
                     return;
                 }
@@ -2028,6 +2090,22 @@
                 if (this.time > this.fireAmplifyState.activeUntilAt + 1e-9
                     && this.fireAmplifyState.nextTickAt > this.fireAmplifyState.activeUntilAt + 1e-9) {
                     this.fireAmplifyState = null;
+                }
+            }
+            if (this.woodAmplifyState) {
+                while (this.woodAmplifyState.nextTickAt <= this.time + 1e-9
+                    && this.woodAmplifyState.nextTickAt <= this.woodAmplifyState.activeUntilAt + 1e-9) {
+                    this.addDamage(this.woodAmplifyState.damagePerTick, this.woodAmplifyState.damageHostId, "wood_amplify");
+                    this.woodAmplifyState.ticksDone += 1;
+                    if (this.woodAmplifyState.ticksDone % this.woodAmplifyState.bloomEvery === 0) {
+                        this.addDamage(this.woodAmplifyState.bloomDamage, this.woodAmplifyState.damageHostId, "wood_bloom");
+                        this.notifyWoodBloom({ element: "wood" });
+                    }
+                    this.woodAmplifyState.nextTickAt += this.woodAmplifyState.interval;
+                }
+                if (this.time > this.woodAmplifyState.activeUntilAt + 1e-9
+                    && this.woodAmplifyState.nextTickAt > this.woodAmplifyState.activeUntilAt + 1e-9) {
+                    this.woodAmplifyState = null;
                 }
             }
             if (this.thunderSpearState) {
@@ -2410,18 +2488,7 @@
             }
 
             if (element === "wood") {
-                let tickCount = 0;
-                WOOD_AMPLIFY_DELAYS.forEach(delay => {
-                    this.scheduleEvent(this.time + delay, () => {
-                        this.addDamage(config.tickDamage * bonus, hostId, "wood_amplify");
-                        tickCount += 1;
-                        // 每第 3 次激化伤害额外触发一次绽放。
-                        if (tickCount % config.bloomEvery === 0) {
-                            this.addDamage(config.bloomDamage * bonus, hostId, "wood_bloom");
-                            this.notifyWoodBloom({ element: "wood" });
-                        }
-                    });
-                });
+                this.scheduleWoodAmplifyTicks();
                 return;
             }
 
@@ -2529,7 +2596,7 @@
         describeInactiveMachineStone(stone) {
             switch (stone.id) {
                 case "wood-dice":
-                    return `${stone.name} 未触发：脉冲次数不足 ${stone.params.pulseThreshold || 6} 次`;
+                    return `${stone.name} 未触发：当前仅累计 ${(stone.counter || 0)}/${stone.params.pulseThreshold || 6} 次脉冲`;
                 case "thunder-shock":
                 case "nine-sky-thunder":
                     return `${stone.name} 未触发：本局未达成神雷激化`;
