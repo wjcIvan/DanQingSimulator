@@ -408,7 +408,7 @@
             element: "wood",
             fee: 2,
             baseEffectText: "战斗状态下每 20 秒召唤小纸人：存在 10 秒，每 2 秒攻击一次共 6 次，每次造成 10022 苍木伤害。",
-            upgradeText: "伤害每提升一档+12.5%；\n\n3/5：召唤后前 4 秒释放纸人风暴，对周围敌人造成 11 次 4513 苍木伤害，后 6 秒进行 3 次本体普攻；\n\n5/5：苍林箭和纸人风暴每次命中增加目标 80 苍木值。",
+            upgradeText: "伤害每提升一档+12.5%；\n\n3/5：召唤后前 4 秒释放纸人风暴，对周围敌人造成 11 次 9026 苍木伤害，后 6 秒进行 3 次本体普攻；\n\n5/5：苍林箭和纸人风暴每次命中增加目标 80 苍木值。",
             mechanics: ["periodic_summon"],
             params: { damage: stat(10022, 10022 * 0.125), interval: 20, attacks: 6, attackInterval: 2, upgradedAttacks: 3, stormDamage: stat(9026, 9026 * 0.125), stormHits: 11, stormDuration: 4 }
         },
@@ -438,7 +438,7 @@
             element: "wood",
             fee: 5,
             baseEffectText: "苍木树人召唤后使用一次裂地崩：对前方直线区域的所有敌人造成 207708 苍木伤害。",
-            upgradeText: "伤害每提升一档+37.5%；\n\n3/5：命中的敌方受到裂地崩·回响，在 30 秒内每 1 秒受到 2887 苍木伤害；\n\n5/5：小纸人、木引青灵、苍木树人攻击带有裂地崩·回响的敌方时，立即触发一次回响。",
+            upgradeText: "伤害每提升一档+37.5%；\n\n3/5：命中的敌方受到裂地崩·回响，在 30 秒内每 1 秒受到 5774 苍木伤害；\n\n5/5：小纸人、木引青灵、苍木树人攻击带有裂地崩·回响的敌方时，立即触发一次回响。",
             mechanics: ["on_wood_summon"],
             params: { damage: stat(207708, 207708 * 0.375), echoDamage: stat(5774, 5774 * 0.375), echoDuration: 30 }
         },
