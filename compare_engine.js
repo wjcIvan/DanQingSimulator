@@ -30,7 +30,10 @@ function cloneConfig(scenario) {
     return {
         deck: cloneDeck(scenario.deck),
         machineStones: (scenario.machineStones || []).map(s => ({ id: s.id, rank: s.rank })),
-        craftStone: scenario.craftStone ? { id: scenario.craftStone.id || scenario.craftStone } : null
+        craftStone: scenario.craftStone ? {
+            id: scenario.craftStone.id || scenario.craftStone,
+            level: scenario.craftStone.level ?? 3
+        } : null
     };
 }
 

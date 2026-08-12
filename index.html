@@ -164,7 +164,31 @@
             gap: 1rem;
             margin-bottom: 1rem;
         }
-        .machine-race-section:last-child { margin-bottom: 0; }
+        .craft-page-grid {
+            display: inline-grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 1rem;
+            align-items: start;
+            justify-content: start;
+            width: calc((100% * 4 - 1rem) / 5);
+        }
+        .craft-pair-column {
+            display: grid;
+            gap: 1rem;
+            align-content: start;
+        }
+        .craft-branch-row {
+            display: grid;
+            grid-template-columns: 60px minmax(0, 1fr) 38px;
+            gap: 0.75rem;
+            align-items: center;
+        }
+        .craft-branch-copy {
+            margin: 0.35rem 0 0;
+            color: #475569;
+            font-size: 11px;
+            line-height: 1.5;
+        }
         .race-title {
             grid-column: 1 / -1;
             font-size: 0.85rem;
@@ -639,6 +663,7 @@
         }
         @media (min-width: 1280px) {
             .machine-race-section { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+            .craft-page-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
         }
         @media (max-width: 1200px) {
             .layout { grid-template-columns: 1fr; }
@@ -654,7 +679,8 @@
             .slider-tech-label { flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 10px; }
             .controls-grid, .stats-grid, .detail-grid { grid-template-columns: 1fr; }
             .race-section,
-            .machine-race-section {
+            .machine-race-section,
+            .craft-page-grid {
                 grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
                 gap: 0.75rem;
                 margin-bottom: 1.5rem;
@@ -770,10 +796,9 @@
                                 <h2 class="font-black text-slate-800 flex items-center gap-2">
                                     <span class="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>
                                     匠心石
-                                    <span class="ml-2 text-[11px] px-2 py-1 rounded-full font-black bg-amber-50 text-amber-600 border border-amber-100">4选1</span>
                                 </h2>
                             </div>
-                            <div id="craftStoneGrid" class="race-section"></div>
+                            <div id="craftStoneGrid"></div>
                         </section>
                     </div>
 

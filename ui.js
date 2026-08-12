@@ -12,6 +12,7 @@
     const selected = new Map();
     const selectedMachineStones = new Map();
     let selectedCraftStone = null;
+    const selectedCraftStoneLevels = new Map();
     let chart = null;
     let lastResult = null;
     let currentTab = "basic";
@@ -36,6 +37,7 @@
         selected.clear();
         selectedMachineStones.clear();
         selectedCraftStone = null;
+        selectedCraftStoneLevels.clear();
     }
 
     function getSelectedDeck() {
@@ -260,32 +262,83 @@
     function renderCraftStones() {
         const grid = document.getElementById("craftStoneGrid");
         if (!grid) return;
-        grid.innerHTML = CRAFT_STONE_DEFS.map(stone => {
-            const meta = ELEMENT_META[stone.element];
-            const active = selectedCraftStone === stone.id;
-            return `<div class="card-box rounded-2xl ${meta.border} relative ${active ? "selected" : ""}" data-craft-stone="${stone.id}">
-                ${active ? `<div class="selected-badge">✓</div>` : ""}
-                <div class="w-full">
-                    <div class="flex justify-between items-center mb-1">
-                        <div class="flex items-center gap-2 overflow-hidden">
-                            <span class="text-[16px] font-black text-slate-800 tracking-tight leading-none truncate">${stone.name}</span>
-                            <span class="text-[11px] font-black px-2 py-0.5 rounded-md ${meta.tag} shrink-0">${meta.title}</span>
-                        </div>
-                    </div>
-                    <div class="card-hover-panel">
-                        <div class="card-copy">
-                            <p>${stone.baseEffectText}</p>
-                            <p class="upgrade-line">基础技能 · ${stone.castTime}s 施法 · ${stone.cooldown}s 冷却</p>
-                        </div>
-                    </div>
-                </div>
-            </div>`;
-        }).join("");
+        const pairs = [
+            ["blazing-skyfire-spirit", "blazing-skyfire-trueform"],
+            ["frost-glory-spirit", "frost-glory-trueform"],
+            ["verdant-life-spirit", "verdant-life-trueform"],
+            ["thunder-aegis-spirit", "thunder-aegis-trueform"]
+        ];
+        grid.innerHTML = `<div class="craft-page-grid">${pairs.map(pair => {
+            const stones = pair.map(id => CRAFT_STONE_DEFS.find(stone => stone.id === id)).filter(Boolean);
+            return `<div class="craft-pair-column">${stones.map(stone => renderCraftStone(stone, ELEMENT_META[stone.element])).join("")}</div>`;
+        }).join("")}</div>`;
         grid.querySelectorAll("[data-craft-stone]").forEach(node => node.addEventListener("click", () => {
-            selectedCraftStone = selectedCraftStone === node.dataset.craftStone ? null : node.dataset.craftStone;
+            const id = node.dataset.craftStone;
+            if (selectedCraftStone === id) {
+                selectedCraftStone = null;
+                selectedCraftStoneLevels.set(id, 0);
+            } else {
+                selectedCraftStone = id;
+                if ((selectedCraftStoneLevels.get(id) || 0) <= 0) selectedCraftStoneLevels.set(id, 3);
+            }
             renderCraftStones();
             updateMachineSummary();
         }));
+        grid.querySelectorAll(".craft-rank-slider").forEach(slider => {
+            slider.addEventListener("input", event => {
+                updateCraftStoneLevel(event.target.dataset.id, event.target.value);
+            });
+            slider.addEventListener("click", event => event.stopPropagation());
+            slider.addEventListener("mousedown", event => event.stopPropagation());
+        });
+    }
+
+    function renderCraftStone(stone, meta) {
+        const active = selectedCraftStone === stone.id;
+        const storedLevel = selectedCraftStoneLevels.get(stone.id);
+        const level = active
+            ? (storedLevel ?? 3)
+            : Math.max(0, storedLevel ?? 0);
+        const pct = (level / 3) * 100;
+        return `<div class="card-box rounded-2xl ${meta.border} relative ${active ? "selected" : ""}" data-craft-stone="${stone.id}">
+            ${active ? `<div class="selected-badge">✓</div>` : ""}
+            <div class="w-full">
+                <div class="flex justify-between items-center mb-1">
+                    <div class="flex items-center gap-2 overflow-hidden">
+                        <span class="text-[16px] font-black text-slate-800 tracking-tight leading-none truncate">${stone.name}</span>
+                        <span class="text-[11px] font-black px-2 py-0.5 rounded-md ${meta.tag} shrink-0">${meta.title}</span>
+                    </div>
+                </div>
+                <div class="card-hover-panel">
+                    <div class="card-copy">
+                        <p>${stone.baseEffectText}</p>
+                        <p class="upgrade-line">基础技能 · ${stone.castTime}s 施法 · ${stone.cooldown}s 冷却</p>
+                        <p class="upgrade-line whitespace-pre-line">${(stone.upgrades || []).map((text, index) => `【${index + 1}】${text}`).join("\n")}</p>
+                    </div>
+                </div>
+                <div class="star-ui ${active ? "" : "hidden"}" onclick="event.stopPropagation()">
+                    <div class="flex items-center gap-3 mt-4 mb-1">
+                        <div class="flex-1 relative">
+                            <input class="craft-rank-slider star-slider" type="range" min="0" max="3" value="${level}" data-id="${stone.id}" style="background-size:${pct}% 100%">
+                        </div>
+                        <div class="flex flex-col items-center min-w-[30px]">
+                            <span class="text-[11px] font-black text-indigo-600 leading-none"><span id="craft-rank-${stone.id}">${level}</span>/3</span>
+                            <span class="text-[10px] font-black text-indigo-400">★</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    function updateCraftStoneLevel(id, value) {
+        const level = Math.max(0, Math.min(3, parseInt(value, 10) || 0));
+        selectedCraftStoneLevels.set(id, level);
+        selectedCraftStone = id;
+        const slider = document.querySelector(`.craft-rank-slider[data-id="${id}"]`);
+        if (slider) slider.style.backgroundSize = `${(level / 3) * 100}% 100%`;
+        const label = document.getElementById(`craft-rank-${id}`);
+        if (label) label.innerText = level;
     }
 
     function updateMachineSummary() {
@@ -433,6 +486,10 @@
                 selectedMachineStones.clear();
                 (payload.machineStones || []).forEach(item => selectedMachineStones.set(item.id, { id: item.id, rank: item.rank }));
                 selectedCraftStone = payload.craftStone ? payload.craftStone.id : null;
+                selectedCraftStoneLevels.clear();
+                if (payload.craftStone?.id) {
+                    selectedCraftStoneLevels.set(payload.craftStone.id, payload.craftStone.level || 3);
+                }
                 renderCards();
                 renderMachineStones();
                 renderCraftStones();
@@ -724,7 +781,10 @@
             const engine = new CombatEngine({
                 deck,
                 machineStones,
-                craftStone: selectedCraftStone ? { id: selectedCraftStone } : null
+                craftStone: selectedCraftStone ? {
+                    id: selectedCraftStone,
+                    level: selectedCraftStoneLevels.has(selectedCraftStone) ? selectedCraftStoneLevels.get(selectedCraftStone) : 3
+                } : null
             }, {
                 duration,
                 targetCount,
@@ -1064,6 +1124,7 @@
             selected.clear();
             selectedMachineStones.clear();
             selectedCraftStone = null;
+            selectedCraftStoneLevels.clear();
             renderCards();
             renderMachineStones();
             renderCraftStones();

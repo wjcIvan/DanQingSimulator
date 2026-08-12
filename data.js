@@ -495,10 +495,190 @@
     ];
 
     const CRAFT_STONE_DEFS = [
-        { id: "blazing-skyfire", name: "灼灼天炎", element: "fire", fee: 1, castTime: 5, cooldown: 120, baseEffectText: "施放 5 秒，冷却 120 秒，造成 693014 天火范围伤害。", params: { damage: 693014 } },
-        { id: "frost-glory", name: "凝冰霜华", element: "ice", fee: 1, castTime: 4, cooldown: 90, baseEffectText: "施法 4 秒，冷却 90 秒，引导霜冻射线造成 495005 玄冰伤害。", params: { damage: 495005 } },
-        { id: "verdant-life", name: "青芜浮生", element: "wood", fee: 1, castTime: 2, cooldown: 120, baseEffectText: "施法 2 秒，冷却 120 秒；召唤苍木树人，2.5 秒后释放冲击波造成 279561 苍木伤害，随后每 2.5 秒攻击一次，共 6 次，每次 36667 苍木伤害。", params: { damage: 279561, attackDamage: 36667, duration: 20, attackInterval: 2.5, attacks: 6 } },
-        { id: "thunder-aegis", name: "雷佑灵光", element: "thunder", fee: 1, castTime: 1.3, cooldown: 60, baseEffectText: "施法 1.3 秒，造成 187960 神雷伤害；随后 10 秒内每 2 秒触发一次连锁闪电。", params: { damage: 187960, chainDuration: 10, chainInterval: 2 } }
+        {
+            id: "blazing-skyfire-spirit",
+            baseStoneId: "blazing-skyfire",
+            name: "灼灼天炎·灵通",
+            element: "fire",
+            fee: 1,
+            castTime: 5,
+            cooldown: 120,
+            baseEffectText: "召唤一枚陨星，短暂的延迟后，在目标位置造成693014范围伤害。",
+            upgrades: [
+                "所有天火共鸣效果造成持续伤害时，有10%概率对其主要目标触发焚心效果：立刻造成18352天火伤害；",
+                "灼灼天炎的基础伤害提高10%；",
+                "焚心效果触发时，自身获得1层的洞察效果：下一次灵蕴技消耗所有洞察效果，每层洞察效果使该次灵蕴技造成的伤害提高3%。进入战斗时，立刻获得15层元素洞察效果。"
+            ],
+            params: {
+                damage: 693014,
+                spiritCraftDamageBonus: 0.10,
+                burnheartChance: 0.10,
+                burnheartDamage: 18352,
+                insightStacksOnBurnheart: 1,
+                openingInsightStacks: 15,
+                insightBonusPerStack: 0.03
+            }
+        },
+        {
+            id: "blazing-skyfire-trueform",
+            baseStoneId: "blazing-skyfire",
+            name: "灼灼天炎·本真",
+            element: "fire",
+            fee: 1,
+            castTime: 5,
+            cooldown: 120,
+            baseEffectText: "召唤一枚陨星，短暂的延迟后，在目标位置造成693014范围伤害。",
+            upgrades: [
+                "灼灼天炎在其持续期间对影响范围内的所有敌人累加至多5000天火值；",
+                "天火激化的基础伤害提高10%；",
+                "天火激化触发时，自身造成的所有灵蕴伤害提高12%，持续5秒。"
+            ],
+            params: {
+                damage: 693014,
+                fireMeterPerSegment: 833.33,
+                amplifyDamageBonus: 0.10,
+                linyinBonus: 0.12,
+                linyinDuration: 5
+            }
+        },
+        {
+            id: "frost-glory-spirit",
+            baseStoneId: "frost-glory",
+            name: "凝冰霜华·灵通",
+            element: "ice",
+            fee: 1,
+            castTime: 4,
+            cooldown: 90,
+            baseEffectText: "引导霜冻射线，对前方区域的所有敌人持续造成固定495005伤害。",
+            upgrades: [
+                "凝冰霜华使自身获得2层寒晶刺效果；",
+                "寒晶刺和碎裂的基础伤害提高5%；",
+                "寒晶刺每次造成伤害时，凝冰霜华的冷却时间缩短0.8秒。"
+            ],
+            params: {
+                damage: 495005,
+                openingFrostCrystalCharges: 2,
+                shatterDamageBonus: 0.05,
+                frostCrystalDamageBonus: 0.05,
+                cooldownReductionPerHit: 0.8
+            }
+        },
+        {
+            id: "frost-glory-trueform",
+            baseStoneId: "frost-glory",
+            name: "凝冰霜华·本真",
+            element: "ice",
+            fee: 1,
+            castTime: 4,
+            cooldown: 90,
+            baseEffectText: "引导霜冻射线，对前方区域的所有敌人持续造成固定495005伤害。",
+            upgrades: [
+                "玄冰激化的冻结效果为目标添加霜寒刺骨效果：使其在3秒内额外受到46026伤害，此效果可以多次叠加；",
+                "玄冰激化造成的伤害提高20%；",
+                "凝冰霜华使自身获得灵蕴提升效果：灵韵值累加效率提高15%，持续60秒。"
+            ],
+            params: {
+                damage: 495005,
+                iceAmplifyBonus: 0.20,
+                iceMeterBonus: 0.15,
+                meterBuffDuration: 60,
+                frostCrushDamage: 46026,
+                frostCrushDuration: 3
+            }
+        },
+        {
+            id: "verdant-life-spirit",
+            baseStoneId: "verdant-life",
+            name: "青芜浮生·灵通",
+            element: "wood",
+            fee: 1,
+            castTime: 2,
+            cooldown: 120,
+            baseEffectText: "召唤一只巨型苍木树人，立刻触发一次扩散的冲击波，造成279561伤害和对队友产生83869苍木恢复效果；随后一段时间内持续攻击敌人，每次攻击造成36667伤害和对队友产生10989苍木恢复效果。",
+            upgrades: [
+                "苍木召唤物的持续时间增加20%；",
+                "苍木树人的技能伤害和气血恢复效果增加10%；",
+                "裂地崩·回响持续时间增加5秒；每存在一种苍木召唤物，裂地崩·回响造成伤害和气血恢复效果增加10%。"
+            ],
+            params: {
+                damage: 279561,
+                attackDamage: 36667,
+                duration: 20,
+                summonDurationBonus: 0.20,
+                summonDamageBonus: 0.10,
+                earthRiftEchoBonus: 0.10,
+                woodDiceTriggers: 0
+            }
+        },
+        {
+            id: "verdant-life-trueform",
+            baseStoneId: "verdant-life",
+            name: "青芜浮生·本真",
+            element: "wood",
+            fee: 1,
+            castTime: 2,
+            cooldown: 120,
+            baseEffectText: "召唤一只巨型苍木树人，立刻触发一次扩散的冲击波，造成279561伤害和对队友产生83869苍木恢复效果；随后一段时间内持续攻击敌人，每次攻击造成36667伤害和对队友产生10989苍木恢复效果。",
+            upgrades: [
+                "脉冲有10%概率直接触发腐木瘴风的范围伤害或者范围治疗效果；",
+                "苍木激化·绽放造成的伤害和气血恢复效果增加10%；",
+                "青芜浮生释放时，能够立即触发6点神木骰效果。"
+            ],
+            params: {
+                damage: 279561,
+                attackDamage: 36667,
+                duration: 20,
+                pulseProcChance: 0.10,
+                pulseProcDamage: 25042,
+                woodBloomBonus: 0.10,
+                openingWoodDiceTriggers: 6
+            }
+        },
+        {
+            id: "thunder-aegis-spirit",
+            baseStoneId: "thunder-aegis",
+            name: "雷佑灵光·灵通",
+            element: "thunder",
+            fee: 1,
+            castTime: 1.3,
+            cooldown: 60,
+            baseEffectText: "引动雷电，立刻震击周围的所有敌人和队友，造成187960神雷伤害和75076神雷恢复效果，并在10秒内每2秒触发一次连锁闪电，自身获得护盾。",
+            upgrades: [
+                "惊雷戟每命中50次时，在目标周围产生一次雷暴，造成68154神雷伤害，此效果由命中的所有敌人分摊；",
+                "雷佑灵光基础伤害和气血恢复效果提高10%；",
+                "雷佑灵光期间，惊雷戟额外多发射1次。"
+            ],
+            params: {
+                damage: 187960,
+                craftDamageBonus: 0.10,
+                thunderStormDamage: 68154,
+                thunderStormHitThreshold: 50,
+                chainExtraCast: 1,
+                thunderMeterBonus: 0.10
+            }
+        },
+        {
+            id: "thunder-aegis-trueform",
+            baseStoneId: "thunder-aegis",
+            name: "雷佑灵光·本真",
+            element: "thunder",
+            fee: 1,
+            castTime: 1.3,
+            cooldown: 60,
+            baseEffectText: "引动雷电，立刻震击周围的所有敌人和队友，造成187960神雷伤害和75076神雷恢复效果，并在10秒内每2秒触发一次连锁闪电，自身获得护盾。",
+            upgrades: [
+                "神雷激化触发后的5秒内，所有灵蕴伤害提升20%；",
+                "神雷激化的基础伤害和气血恢复效果提升10%；",
+                "九霄雷动、雷霆震击累积神雷值的效率提升100%。"
+            ],
+            params: {
+                damage: 187960,
+                thunderAmplifyBonus: 0.10,
+                thunderLinyinDuration: 5,
+                thunderLinyinBonus: 0.20,
+                thunderMeterPerHitBonus: 1.0
+            }
+        }
     ];
 
     function resolveValue(value, starLevel) {

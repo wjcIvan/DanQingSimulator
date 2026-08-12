@@ -172,6 +172,7 @@
         machine_blazing_land: "烈焰之地",
         machine_flame_body: "烈焰焚身",
         machine_flame_body_combust: "烈焰焚身·爆燃",
+        craft_burnheart: "焚心",
         machine_link: "机巧联动",
         // 机巧石·玄冰
         machine_ice_amplify: "凛霜寒涌",
@@ -200,6 +201,7 @@
         machine_thunder_orb: "五雷珠",
         machine_thunder_orb_burst: "五雷珠·爆发",
         machine_thunder_guard_external: "天雷护佑·职业技能/法宝",
+        craft_thunder_storm: "雷暴",
         // 状态计数（只计次不计伤害）
         machine_fire_meteor_apply: "陨星·首次附加",
         machine_fire_meteor_stack: "陨星·叠层",
@@ -1021,6 +1023,10 @@
             this.fireAmplifyState = null;
             this.woodAmplifyState = null;
             this.thunderSpearState = new StackBuff(0, THUNDER_SPEAR_DURATION, THUNDER_SPEAR_TICK_INTERVAL);
+            this.thunderAegisExtraCastExpiresAt = 0;
+            this.frostCrystalSpikeArrowCount = 0;
+            this.thunderAegisSpearHitCount = 0;
+            this.woodSummonExpiresAt = { giant: 0, paper: 0, spirit: 0 };
             // 洞察层数：由机巧石授予，下一次匠心石（灵蕴技）伤害时一次性消耗掉全部层数。
             this.insightStacks = 0;
             this.insightBonusPerStack = 0;
@@ -1069,9 +1075,88 @@
 
         buildCraftStone(stoneConfig) {
             if (!stoneConfig) return null;
-            const def = Data.getCraftStoneDefById(stoneConfig.id || stoneConfig);
-            if (!def) throw new Error(`Unknown craft stone id: ${stoneConfig.id || stoneConfig}`);
-            return { ...def, params: { ...def.params } };
+            const requestedId = stoneConfig.id || stoneConfig;
+            let def = Data.getCraftStoneDefById(requestedId);
+            if (!def) {
+                def = Data.CRAFT_STONE_DEFS.find(stone => stone.baseStoneId === requestedId) || null;
+            }
+            if (!def) throw new Error(`Unknown craft stone id: ${requestedId}`);
+            const runtimeId = def.baseStoneId || def.id;
+            const parsedLevel = parseInt(stoneConfig.level, 10);
+            const level = Number.isFinite(parsedLevel) ? Math.max(0, Math.min(3, parsedLevel)) : 0;
+            return { ...def, id: runtimeId, selectedVariantId: def.id, level, params: { ...def.params } };
+        }
+
+        hasCraftVariantActive(variantId, minLevel = 1) {
+            return this.craftStone?.selectedVariantId === variantId && (this.craftStone?.level || 0) >= minLevel;
+        }
+
+        isBlazingSkyfireSpiritActive(minLevel = 1) {
+            return this.hasCraftVariantActive("blazing-skyfire-spirit", minLevel);
+        }
+
+        isBlazingSkyfireTrueformActive(minLevel = 1) {
+            return this.hasCraftVariantActive("blazing-skyfire-trueform", minLevel);
+        }
+
+        isFrostGlorySpiritActive(minLevel = 1) {
+            return this.hasCraftVariantActive("frost-glory-spirit", minLevel);
+        }
+
+        isFrostGloryTrueformActive(minLevel = 1) {
+            return this.hasCraftVariantActive("frost-glory-trueform", minLevel);
+        }
+
+        isVerdantLifeSpiritActive(minLevel = 1) {
+            return this.hasCraftVariantActive("verdant-life-spirit", minLevel);
+        }
+
+        isVerdantLifeTrueformActive(minLevel = 1) {
+            return this.hasCraftVariantActive("verdant-life-trueform", minLevel);
+        }
+
+        isThunderAegisSpiritActive(minLevel = 1) {
+            return this.hasCraftVariantActive("thunder-aegis-spirit", minLevel);
+        }
+
+        isThunderAegisTrueformActive(minLevel = 1) {
+            return this.hasCraftVariantActive("thunder-aegis-trueform", minLevel);
+        }
+
+        grantInsight(stacks, sourceId) {
+            if (stacks <= 0) return;
+            const before = this.insightStacks;
+            this.insightStacks += stacks;
+            this.addLog("buff", sourceId, `洞察 ${before} → ${this.insightStacks} 层`, {
+                buff: "insight",
+                beforeStacks: before,
+                afterStacks: this.insightStacks
+            });
+        }
+
+        consumeInsight() {
+            const stacks = this.insightStacks;
+            if (stacks <= 0) return { multiplier: 1, stacks: 0, bonus: 0 };
+            const bonus = stacks * this.insightBonusPerStack;
+            this.insightStacks = 0;
+            return { multiplier: 1 + bonus, stacks, bonus };
+        }
+
+        tryTriggerBurnheart(triggerMechanic) {
+            const stone = this.craftStone;
+            if (!stone || !this.isBlazingSkyfireSpiritActive()) return;
+            const params = stone.params || {};
+            if (!params.burnheartChance || !params.burnheartDamage) return;
+            if (this.random() >= params.burnheartChance) return;
+            this.addDamage(params.burnheartDamage, stone.id, "craft_burnheart");
+            this.countMechanic(`burnheart_from_${triggerMechanic}`);
+            this.addLog("craft", stone.selectedVariantId || stone.id, `焚心触发（来源：${getMechanicLabel(triggerMechanic)}）`, {
+                mechanic: triggerMechanic,
+                proc: "burnheart"
+            });
+            if (params.insightStacksOnBurnheart) {
+                this.grantInsight(params.insightStacksOnBurnheart, stone.selectedVariantId || stone.id);
+            }
         }
 
         initializeMachineStoneState() {
@@ -1107,6 +1192,24 @@
                 this.craftStone.nextCastAt = 0;
                 this.craftStone.openingPrecastSeconds = this.getOpeningCraftPrecastSeconds(this.craftStone);
                 this.warnings.push(...(this.craftStone.notes || []));
+                if (this.isBlazingSkyfireSpiritActive(3)) {
+                    this.insightBonusPerStack = this.craftStone.params.insightBonusPerStack || 0;
+                    this.grantInsight(this.craftStone.params.openingInsightStacks || 0, this.craftStone.selectedVariantId || this.craftStone.id);
+                }
+                if (this.isFrostGlorySpiritActive(1)) {
+                    const stone = this.getFrostCrystalSpikeStone();
+                    if (stone) {
+                        const opening = this.craftStone.params.openingFrostCrystalCharges || 0;
+                        stone.pendingCharges = (stone.pendingCharges || 0) + opening;
+                        if (opening > 0) {
+                            this.addLog("buff", this.craftStone.selectedVariantId || this.craftStone.id, `获得 ${opening} 层寒晶刺效果`, {
+                                buff: "frost_crystal_spike",
+                                added: opening,
+                                totalCharges: stone.pendingCharges
+                            });
+                        }
+                    }
+                }
             }
         }
 
@@ -1224,32 +1327,39 @@
             if (card) return card.name;
             const def = Data.getCardDefById(sourceId)
                 || Data.getMachineStoneDefById(sourceId)
-                || Data.getCraftStoneDefById(sourceId);
+                || Data.getCraftStoneDefById(sourceId)
+                || Data.CRAFT_STONE_DEFS.find(stone => stone.baseStoneId === sourceId);
             if (def) return def.name;
             return AMPLIFY_SOURCE_LABELS[sourceId] || sourceId;
         }
 
         // 统一累计总伤、分卡伤害和机制伤害。
         // countAsTrigger 传 false 时只累加伤害不计次，用于一次触发拆成多笔归属的场景。
-        addDamage(amount, cardId, mechanic, countAsTrigger = true, applyLinyinMultiplier = true) {
+        addDamage(amount, cardId, mechanic, countAsTrigger = true, applyLinyinMultiplier = true, customMessage = null) {
             const multiplier = applyLinyinMultiplier ? this.getLinyinMultiplier() : 1;
             const dmg = Math.max(0, amount || 0) * multiplier;
             if (dmg <= 0) return;
             const machineStone = this.machineStoneMap ? this.machineStoneMap.get(cardId) : null;
             if (machineStone) machineStone.activated = true;
+            const displaySourceId = this.craftStone && cardId === this.craftStone.id && this.craftStone.selectedVariantId
+                ? this.craftStone.selectedVariantId
+                : cardId;
             this.totalDamage += dmg;
-            this.breakdown.byCard[cardId] = (this.breakdown.byCard[cardId] || 0) + dmg;
+            this.breakdown.byCard[displaySourceId] = (this.breakdown.byCard[displaySourceId] || 0) + dmg;
             this.breakdown.byMechanic[mechanic] = (this.breakdown.byMechanic[mechanic] || 0) + dmg;
             if (countAsTrigger) {
                 this.breakdown.byMechanicCount[mechanic] = (this.breakdown.byMechanicCount[mechanic] || 0) + 1;
             }
             const mechanicLabel = getMechanicLabel(mechanic);
-            const sourceName = this.resolveSourceName(cardId);
-            // 来源名与机制名相同时（例如内置激化）不重复输出。
-            const message = sourceName === mechanicLabel
-                ? `造成 ${Math.round(dmg)} 伤害`
-                : `${mechanicLabel} 造成 ${Math.round(dmg)} 伤害`;
-            this.addLog("damage", cardId, message, {
+            const sourceName = this.resolveSourceName(displaySourceId);
+            const message = typeof customMessage === "function"
+                ? customMessage(Math.round(dmg), sourceName, mechanicLabel)
+                : (customMessage || (sourceName === mechanicLabel
+                    ? `造成 ${Math.round(dmg)} 伤害`
+                    : `${mechanicLabel} 造成 ${Math.round(dmg)} 伤害`));
+            this.addLog("damage", displaySourceId, message, {
+                cardId,
+                displaySourceId,
                 mechanic,
                 mechanicLabel,
                 damage: Math.round(dmg)
@@ -1269,6 +1379,18 @@
             if (blazingLand && blazingLand.linyinExpiresAt && this.time <= blazingLand.linyinExpiresAt) {
                 multiplier *= 1 + (blazingLand.params.linyinBonus || 0);
             }
+            if (this.isBlazingSkyfireTrueformActive(3)) {
+                const stone = this.craftStone;
+                if (stone && stone.trueformLinyinExpiresAt && this.time <= stone.trueformLinyinExpiresAt + 1e-9) {
+                    multiplier *= 1 + (stone.params.linyinBonus || 0);
+                }
+            }
+            if (this.isThunderAegisTrueformActive(1)) {
+                const stone = this.craftStone;
+                if (stone && stone.thunderLinyinExpiresAt && this.time <= stone.thunderLinyinExpiresAt + 1e-9) {
+                    multiplier *= 1 + (stone.params.thunderLinyinBonus || 0);
+                }
+            }
             // 天雷护佑 5/5：持续期间所有丹青伤害提高 70%。
             const thunderGuard = this.machineStoneMap ? this.machineStoneMap.get("thunder-guard") : null;
             if (thunderGuard && thunderGuard.rank >= 5
@@ -1280,13 +1402,28 @@
         }
 
         // 累加元素计量；达到阈值时把激化效果排到下一拍执行。
-        addMeter(element, amount) {
+        addMeter(element, amount, sourceId = null) {
             if (!amount) return;
-            this.meters[element] += amount;
-            this.addLog("meter", null, `${ELEMENT_LABELS[element]}值 +${Math.round(amount)}（当前 ${Math.round(this.meters[element])}）`, {
+            let adjustedAmount = amount;
+            if (element === "ice" && this.isFrostGloryTrueformActive(3)) {
+                const expiresAt = this.craftStone?.meterBuffExpiresAt || 0;
+                if (this.time <= expiresAt + 1e-9) {
+                    adjustedAmount *= 1 + (this.craftStone?.params?.iceMeterBonus || 0);
+                }
+            }
+            if (sourceId && this.craftStone && sourceId === this.craftStone.selectedVariantId) {
+                const params = this.craftStone.params || {};
+                if (sourceId === "blazing-skyfire-trueform" && element === "fire") adjustedAmount *= 1 + (params.fireMeterBonus || 0);
+                if (sourceId === "verdant-life-trueform" && element === "wood") adjustedAmount *= 1 + (params.woodMeterBonus || 0);
+            }
+            this.meters[element] += adjustedAmount;
+            const sourceName = this.resolveSourceName(sourceId);
+            const prefix = sourceName ? `${sourceName} ` : "";
+            this.addLog("meter", sourceId, `${prefix}${ELEMENT_LABELS[element]}值 +${Math.round(adjustedAmount)}（当前 ${Math.round(this.meters[element])}）`, {
                 element,
-                amount: Math.round(amount),
-                total: Math.round(this.meters[element])
+                amount: Math.round(adjustedAmount),
+                total: Math.round(this.meters[element]),
+                sourceId: sourceId || null
             });
             const threshold = this.getElementThreshold(element);
             if (!threshold) return;
@@ -1317,13 +1454,13 @@
             this.runOpeningCraftPrecast();
             while (this.time < this.duration) {
                 this.time = Number((this.time + TICK_SECONDS).toFixed(4));
+                this.tickCraftStone();
                 this.tickCards.forEach(card => {
                     if (card.check(EVENTS.TIME)) {
                         card.trigger(this, EVENTS.TIME);
                     }
                 });
                 this.tickMachineStones();
-                this.tickCraftStone();
                 this.updateTargets();
                 this.flushQueue();
                 this.sampleTimeline();
@@ -1334,6 +1471,7 @@
         runOpeningCraftPrecast() {
             if (!this.craftStone) return;
             if ((this.craftStone.openingPrecastSeconds || 0) <= 0) return;
+            this.time = Number((this.time + TICK_SECONDS).toFixed(4));
             this.tickCraftStone();
             this.flushImmediateEvents();
         }
@@ -1372,12 +1510,13 @@
             const openingPrecast = Math.max(0, Number(stone.openingPrecastSeconds) || 0);
             stone.openingPrecastSeconds = 0;
             const openingPrecastText = openingPrecast > 0 ? `，首轮预读 ${openingPrecast.toFixed(1)}s` : "";
-            // 一次释放算一次灵蕴技：洞察在这里一次性消耗，倍率覆盖本次的所有伤害段。
             const insight = this.consumeInsight();
-            this.addLog("craft", stone.id, insight.stacks > 0
-                ? `${stone.name} 开始施法（${stone.castTime}s）${openingPrecastText}，消耗 ${insight.stacks} 层洞察，本次伤害提高 ${Math.round(insight.bonus * 100)}%`
-                : `${stone.name} 开始施法（${stone.castTime}s）${openingPrecastText}`, {
+            const stoneLogName = stone.name || this.resolveSourceName(stone.selectedVariantId || stone.id);
+            this.addLog("craft", stone.selectedVariantId || stone.id, insight.stacks > 0
+                ? `${stoneLogName} 开始施法（${stone.castTime}s）${openingPrecastText}，消耗 ${insight.stacks} 层洞察，本次伤害提高 ${Math.round(insight.bonus * 100)}%`
+                : `${stoneLogName} 开始施法（${stone.castTime}s）${openingPrecastText}`, {
                 stoneId: stone.id,
+                selectedVariantId: stone.selectedVariantId || stone.id,
                 castTime: stone.castTime,
                 openingPrecastSeconds: openingPrecast,
                 insightStacks: insight.stacks,
@@ -1388,12 +1527,22 @@
             const castEndAt = this.time + Math.max(0, stone.castTime - openingPrecast);
             if (castEndAt <= this.duration) {
                 if (stone.id === "frost-glory") {
+                    if (this.isFrostGloryTrueformActive(3)) {
+                        stone.meterBuffExpiresAt = this.time + (stone.params.meterBuffDuration || 60);
+                        this.addLog("buff", stone.selectedVariantId || stone.id, `灵韵值累加效率提高 ${Math.round((stone.params.iceMeterBonus || 0) * 100)}%，持续 ${stone.params.meterBuffDuration || 60}s`, {
+                            buff: "ice_meter_bonus",
+                            bonus: stone.params.iceMeterBonus || 0,
+                            expireAt: Number(stone.meterBuffExpiresAt.toFixed(1))
+                        });
+                    }
                     const tickCount = Math.max(1, Math.round(stone.castTime));
-                    const perTick = stone.params.damage * (1 + this.effects.ice.craftStoneDamageBonus) / tickCount;
+                    const bonus = this.isFrostGlorySpiritActive(2) ? (stone.params.frostCrystalDamageBonus || 0) : 0;
+                    const perTick = stone.params.damage * (1 + bonus) / tickCount;
                     for (let i = 1; i <= tickCount; i += 1) {
                         this.scheduleEvent(this.time + i, () => {
                             this.addDamage(perTick * this.targetCount * insight.multiplier, stone.id, "craft_stone");
                             this.consumeColdTideCharge();
+                            this.consumeFrostCrystalSpikeCharge(stone.id);
                         });
                     }
                     this.scheduleEvent(castEndAt, () => {
@@ -1403,38 +1552,24 @@
                     this.scheduleEvent(castEndAt, () => {
                         this.notifyCraftStoneCastEnd({ stoneId: stone.id });
                         this.summonVerdantGiant(stone, insight.multiplier);
+                        if (this.isVerdantLifeTrueformActive(3)) {
+                            for (let i = 0; i < (stone.params.openingWoodDiceTriggers || 0); i += 1) this.handleWoodDice();
+                        }
                     });
                     stone.nextCastAt += stone.cooldown - openingPrecast;
                     return;
-                    const interval = stone.params.attackInterval || 2.5;
-                    const hasEarthRift = this.machineStoneMap.has("earth-rift");
-                    // 带裂地崩时，树人第二个读条用于释放裂地崩，本体普攻因此少一次。
-                    const attackCount = hasEarthRift
-                        ? Math.max(0, (stone.params.attacks || 6) - 1)
-                        : (stone.params.attacks || 6);
-                    const attackStartIndex = hasEarthRift ? 2 : 1;
-                    this.scheduleEvent(castEndAt, () => {
-                        this.notifyCraftStoneCastEnd({ stoneId: stone.id });
-                    });
-                    this.scheduleEvent(castEndAt + interval, () => {
-                        this.addDamage(stone.params.damage * this.targetCount * insight.multiplier, stone.id, "craft_stone");
-                        this.applyEarthRiftFollowup();
-                    });
-                    for (let i = 0; i < attackCount; i += 1) {
-                        const delay = castEndAt + interval * (attackStartIndex + i + 1);
-                        this.scheduleEvent(delay, () => {
-                            this.addDamage((stone.params.attackDamage || 0) * this.targetCount, stone.id, "craft_stone_attack");
-                            this.applyEarthRiftFollowup();
-                        });
-                    }
                 } else if (stone.id === "blazing-skyfire") {
                     const segmentCount = 6;
-                    const perSegmentDamage = stone.params.damage / segmentCount;
+                    const spiritBonus = this.isBlazingSkyfireSpiritActive(2) ? (stone.params.spiritCraftDamageBonus || 0) : 0;
+                    const perSegmentDamage = stone.params.damage * (1 + spiritBonus) / segmentCount;
                     const flameBody = this.machineStoneMap.get("flame-body");
                     for (let i = 0; i < segmentCount; i += 1) {
                         const delay = segmentCount === 1 ? 0 : (stone.castTime * i / (segmentCount - 1));
                         this.scheduleEvent(this.time + delay, () => {
                             this.addDamage(perSegmentDamage * this.targetCount * insight.multiplier, stone.id, "craft_stone");
+                            if (this.isBlazingSkyfireTrueformActive()) {
+                                this.addMeter("fire", (stone.params.fireMeterPerSegment || 0) * this.targetCount, stone.selectedVariantId || stone.id);
+                            }
                             if (flameBody && flameBody.rank >= 5) {
                                 this.triggerFlameBody(flameBody, 2, "machine_flame_body");
                             }
@@ -1443,13 +1578,24 @@
                     this.scheduleEvent(castEndAt, () => {
                         this.notifyCraftStoneCastEnd({ stoneId: stone.id });
                     });
+                } else if (stone.id === "thunder-aegis") {
+                    if (this.isThunderAegisSpiritActive(3)) {
+                        this.thunderAegisExtraCastExpiresAt = Math.max(
+                            this.thunderAegisExtraCastExpiresAt,
+                            this.time + (stone.params.chainDuration || 10)
+                        );
+                    }
+                    const spiritBonus = this.isThunderAegisSpiritActive(2) ? (stone.params.craftDamageBonus || 0) : 0;
+                    const baseDamage = stone.params.damage * (1 + spiritBonus);
+                    this.scheduleEvent(castEndAt, () => {
+                        this.notifyCraftStoneCastEnd({ stoneId: stone.id });
+                        this.addDamage(baseDamage * this.targetCount * insight.multiplier, stone.id, "craft_stone");
+                        this.scheduleThunderAegisChains(stone, insight.multiplier);
+                    });
                 } else {
                     this.scheduleEvent(castEndAt, () => {
                         this.notifyCraftStoneCastEnd({ stoneId: stone.id });
                         this.addDamage(stone.params.damage * this.targetCount * insight.multiplier, stone.id, "craft_stone");
-                        if (stone.id === "thunder-aegis") {
-                            this.scheduleThunderAegisChains(stone);
-                        }
                     });
                 }
             }
@@ -1478,7 +1624,7 @@
             return { multiplier: 1 + bonus, stacks, bonus };
         }
 
-        scheduleThunderAegisChains(stone) {
+        scheduleThunderAegisChains(stone, insightMultiplier = 1) {
             const duration = stone.params.chainDuration || 10;
             const interval = stone.params.chainInterval || 2;
             const sourceCard = this.getCard(CARD_IDS.THUNDER_BANNER) || {
@@ -1487,15 +1633,28 @@
             };
             for (let delay = interval; delay <= duration + 1e-9; delay += interval) {
                 this.scheduleEvent(this.time + delay, () => {
-                    this.triggerChainLightning(sourceCard, 1);
+                    this.triggerChainLightning(sourceCard, insightMultiplier);
                 });
             }
+        }
+
+        triggerExtraThunderSpear(sourceCard, efficiency = 1) {
+            const spear = this.machineStoneMap.get("thunder-spear");
+            if (!spear) return;
+            const targetsHit = Math.min(this.targetCount, sourceCard.params.maxEnemyTargets || 3);
+            const hits = spear.rank >= 5 ? 1 + (spear.params.extraAtRank5 || 0) : 1;
+            const amount = (spear.params.damage || 0) * targetsHit * efficiency;
+            for (let i = 0; i < hits; i += 1) {
+                this.addDamage(amount, spear.id, "machine_chain");
+            }
+            this.triggerThunderSpearDot(spear, hits);
+            this.recordThunderAegisSpearHits(hits * targetsHit);
         }
 
         triggerFireMeteor(stone, mechanic) {
             const params = stone.params;
             this.addDamage((params.damage || 0) * this.targetCount, stone.id, mechanic);
-            this.addMeter("fire", params.meter || 0);
+            this.addMeter("fire", params.meter || 0, stone.id);
             if (stone.rank >= 3 && params.burnDamage) {
                 this.targets.forEach((target, targetIndex) => {
                     const beforeStacks = target.fireMeteor.prune(this.time);
@@ -1547,9 +1706,13 @@
         triggerPaperForest(stone) {
             const params = stone.params;
             const hasStorm = stone.rank >= 3;
-            const attackCount = hasStorm ? (params.upgradedAttacks || 3) : (params.attacks || 6);
             const attackInterval = params.attackInterval || 2;
+            const baseDuration = 10;
+            const durationMultiplier = this.getWoodSummonDurationMultiplier();
+            const baseAttackCount = hasStorm ? (params.upgradedAttacks || 3) : (params.attacks || 6);
+            const attackCount = baseAttackCount + Math.floor(baseDuration * (durationMultiplier - 1) / attackInterval);
             const stormDuration = params.stormDuration || 4;
+            this.woodSummonExpiresAt.paper = Math.max(this.woodSummonExpiresAt.paper, this.time + baseDuration * durationMultiplier);
             // 3/5 起：前 4 秒被纸人风暴占满，本体普攻改在剩余 6 秒里进行。
             const attackStartAt = hasStorm ? stormDuration : 0;
             const attackDelay = index => (hasStorm
@@ -1605,7 +1768,10 @@
         triggerWoodSpirit(stone, count) {
             const params = stone.params;
             const attackInterval = params.attackInterval || 2;
-            const attackCount = params.attacks || 14;
+            const baseDuration = params.duration || 30;
+            const durationMultiplier = this.getWoodSummonDurationMultiplier();
+            const attackCount = Math.ceil((params.attacks || 14) * durationMultiplier);
+            this.woodSummonExpiresAt.spirit = Math.max(this.woodSummonExpiresAt.spirit, this.time + baseDuration * durationMultiplier);
             for (let summon = 0; summon < count; summon += 1) {
                 for (let i = 1; i <= attackCount; i += 1) {
                     this.scheduleEvent(this.time + i * attackInterval, () => {
@@ -1619,22 +1785,49 @@
             }
         }
 
+        countActiveWoodSummonTypes() {
+            return Object.values(this.woodSummonExpiresAt)
+                .filter(expiresAt => this.time <= expiresAt + 1e-9)
+                .length;
+        }
+
+        getWoodSummonDurationMultiplier() {
+            return this.isVerdantLifeSpiritActive(1)
+                ? 1 + (this.craftStone?.params?.summonDurationBonus || 0)
+                : 1;
+        }
+
+        getEarthRiftEchoMultiplier() {
+            if (!this.isVerdantLifeSpiritActive(3)) return 1;
+            return 1 + (this.craftStone?.params?.earthRiftEchoBonus || 0) * this.countActiveWoodSummonTypes();
+        }
+
+        getVerdantGiantSkillMultiplier() {
+            return this.isVerdantLifeSpiritActive(2)
+                ? 1 + (this.craftStone?.params?.summonDamageBonus || 0)
+                : 1;
+        }
+
         summonVerdantGiant(stone, insightMultiplier = 1) {
             const interval = stone.params.attackInterval || 2.5;
             const hasEarthRift = this.machineStoneMap.has("earth-rift");
-            const attackCount = hasEarthRift
+            let attackCount = hasEarthRift
                 ? Math.max(0, (stone.params.attacks || 6) - 1)
                 : (stone.params.attacks || 6);
             const attackStartIndex = hasEarthRift ? 2 : 1;
+            const giantDuration = (stone.params.duration || 20) * this.getWoodSummonDurationMultiplier();
+            attackCount = Math.ceil(attackCount * this.getWoodSummonDurationMultiplier());
+            this.woodSummonExpiresAt.giant = Math.max(this.woodSummonExpiresAt.giant, this.time + giantDuration);
             this.notifyWoodGiantSummoned({ stoneId: stone.id });
             this.scheduleEvent(this.time + interval, () => {
-                this.addDamage((stone.params.damage || 0) * this.targetCount * insightMultiplier, stone.id, "craft_stone");
+                this.addDamage((stone.params.damage || 0) * this.getVerdantGiantSkillMultiplier() * this.targetCount * insightMultiplier, stone.id, "craft_stone");
+                if (this.isVerdantLifeTrueformActive(3)) this.handleWoodDice();
                 this.applyEarthRiftFollowup();
             });
             for (let i = 0; i < attackCount; i += 1) {
                 const delay = interval * (attackStartIndex + i + 1);
                 this.scheduleEvent(this.time + delay, () => {
-                    this.addDamage((stone.params.attackDamage || 0) * this.targetCount, stone.id, "craft_stone_attack");
+                    this.addDamage((stone.params.attackDamage || 0) * this.getVerdantGiantSkillMultiplier() * this.targetCount * insightMultiplier, stone.id, "craft_stone_attack");
                     this.applyEarthRiftFollowup();
                 });
             }
@@ -1642,9 +1835,9 @@
 
         triggerEarthRift(stone) {
             const params = stone.params;
-            this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_earth_rift");
+            this.addDamage((params.damage || 0) * this.getVerdantGiantSkillMultiplier() * this.targetCount, stone.id, "machine_earth_rift");
             if (stone.rank >= 3) {
-                const duration = params.echoDuration || 30;
+                const duration = (params.echoDuration || 30) + (this.isVerdantLifeSpiritActive(3) ? 5 : 0);
                 // 记录回响的到期时刻，供 5/5 的回响追击判断前置条件。
                 this.targets.forEach(target => {
                     target.earthRiftEchoExpireAt = this.time + duration;
@@ -1655,7 +1848,7 @@
                 });
                 for (let delay = 1; delay <= duration; delay += 1) {
                     this.scheduleEvent(this.time + delay, () => {
-                        this.addDamage((params.echoDamage || 0) * this.targetCount, stone.id, "machine_earth_rift_echo");
+                        this.addDamage((params.echoDamage || 0) * this.getEarthRiftEchoMultiplier() * this.targetCount, stone.id, "machine_earth_rift_echo");
                     });
                 }
             }
@@ -1668,7 +1861,7 @@
             if (!earthRift || earthRift.rank < 5) return;
             const target = this.targets[0];
             if (!target || this.time > target.earthRiftEchoExpireAt) return;
-            this.addDamage((earthRift.params.echoDamage || 0) * this.targetCount, earthRift.id, "machine_earth_rift_echo_followup");
+            this.addDamage((earthRift.params.echoDamage || 0) * this.getEarthRiftEchoMultiplier() * this.targetCount, earthRift.id, "machine_earth_rift_echo_followup");
         }
 
         handleWoodDice() {
@@ -1719,7 +1912,9 @@
             const params = stone.params;
             const bolts = (params.bolts || 2) + (stone.rank >= 3 ? 1 : 0) + (stone.rank >= 5 ? 1 : 0);
             this.addDamage((params.damage || 0) * bolts * this.targetCount, stone.id, "machine_nine_sky_thunder");
-            if (stone.rank >= 3) this.addMeter("thunder", 100 * bolts * this.targetCount);
+            if (stone.rank >= 3) {
+                this.addMeter("thunder", 100 * this.getThunderMeterEfficiency(), stone.id);
+            }
             if (stone.rank >= 5 && this.targetCount > 1) {
                 this.addDamage((params.damage || 0) * bolts * (this.targetCount - 1), stone.id, "machine_nine_sky_thunder_copy");
             }
@@ -1729,9 +1924,27 @@
             if (stone.rank < 3) return;
             if (!this.thunderSpearState) {
                 this.thunderSpearState = new StackBuff(0, THUNDER_SPEAR_DURATION, THUNDER_SPEAR_TICK_INTERVAL);
+        this.frostCrystalSpikeArrowCount = 0;
             }
             for (let hit = 0; hit < hits; hit += 1) {
                 this.thunderSpearState.apply(this.time, THUNDER_SPEAR_DURATION, 1, stone.id);
+            }
+        }
+
+        getThunderMeterEfficiency() {
+            return this.isThunderAegisTrueformActive(3)
+                ? 1 + (this.craftStone?.params?.thunderMeterPerHitBonus || 0)
+                : 1;
+        }
+
+        recordThunderAegisSpearHits(hits) {
+            if (!this.isThunderAegisSpiritActive(1) || hits <= 0) return;
+            const params = this.craftStone?.params || {};
+            const threshold = params.thunderStormHitThreshold || 50;
+            this.thunderAegisSpearHitCount += hits;
+            while (this.thunderAegisSpearHitCount >= threshold) {
+                this.thunderAegisSpearHitCount -= threshold;
+                this.addDamage((params.thunderStormDamage || 0), this.craftStone.id, "craft_thunder_storm");
             }
         }
 
@@ -1750,7 +1963,7 @@
             if (stone.rank >= 5) {
                 this.scheduleEvent(this.time + duration, () => {
                     this.addDamage((params.burstDamage || 0) * this.targetCount, stone.id, "machine_thunder_shock_burst");
-                    this.addMeter("thunder", 500 * this.targetCount);
+                    this.addMeter("thunder", 500 * this.targetCount * this.getThunderMeterEfficiency(), stone.id);
                 });
             }
         }
@@ -1762,28 +1975,71 @@
             if (thunder) this.triggerNineSkyThunder(thunder);
         }
 
-        triggerFrostCrystalSpike(stone) {
+        getFrostCrystalSpikeStone() {
+            const equipped = this.machineStoneMap.get("frost-crystal-spike");
+            if (equipped) return equipped;
+            if (!this.isFrostGlorySpiritActive(1)) return null;
+            if (!this.syntheticFrostCrystalSpikeStone) {
+                const def = Data.getMachineStoneDefById("frost-crystal-spike");
+                if (!def) return null;
+                this.syntheticFrostCrystalSpikeStone = {
+                    ...def,
+                    rank: 1,
+                    params: Data.resolveMachineStoneParams(def, 1),
+                    synthetic: true
+                };
+            }
+            return this.syntheticFrostCrystalSpikeStone;
+        }
+
+        triggerFrostCrystalSpike(stone, beforeCharges = null, afterCharges = null) {
             const params = stone.params;
             const spikes = params.spikeCount || 3;
-            this.addDamage((params.damage || 0) * spikes, stone.id, "machine_frost_crystal_spike");
-            // 3/5：每枚寒晶刺造成伤害时都 100% 触发碎裂。
-            // notifyShatter() 只广播事件（上官策据此累加玄冰值），碎裂本身的伤害
-            // 挂在左归的 tryShatter 里，所以这里必须自己结算伤害，否则只加值不打伤害。
-            if (stone.rank >= 3) {
-                const shatterDamage = this.effects.ice.shatterDamage;
-                for (let i = 0; i < spikes; i += 1) {
+            const bonus = this.isFrostGlorySpiritActive(2)
+                ? (this.craftStone?.params?.frostCrystalDamageBonus || 0)
+                : 0;
+            const settleSpike = (index) => {
+                const customMessage = beforeCharges !== null && afterCharges !== null
+                    ? (damage) => `寒晶刺第 ${index + 1}/${spikes} 枚造成 ${damage} 伤害（${beforeCharges} → ${afterCharges}）`
+                    : null;
+                this.addDamage((params.damage || 0) * (1 + bonus), stone.id, "machine_frost_crystal_spike", true, true, customMessage);
+                if (this.isFrostGlorySpiritActive(3) && this.craftStone) {
+                    const cooldownReduction = this.craftStone.params?.cooldownReductionPerHit || 0;
+                    if (cooldownReduction > 0) {
+                        this.craftStone.nextCastAt = Math.max(this.time, this.craftStone.nextCastAt - cooldownReduction);
+                    }
+                }
+                if (stone.rank >= 3) {
+                    const shatterDamage = this.effects.ice.shatterDamage * (1 + (this.isFrostGlorySpiritActive(2)
+                        ? (this.craftStone?.params?.shatterDamageBonus || 0)
+                        : 0));
                     if (shatterDamage > 0) {
                         this.addDamage(shatterDamage * this.targetCount, stone.id, "machine_frost_crystal_shatter");
                     }
                     this.notifyShatter();
                 }
+            };
+            for (let index = 0; index < spikes; index += 1) {
+                if (index === 0) {
+                    settleSpike(index);
+                } else {
+                    const triggerAt = Number((this.time + TICK_SECONDS * index).toFixed(4));
+                    this.scheduleEvent(triggerAt, () => settleSpike(index));
+                }
             }
         }
 
-        grantFrostCrystalSpikeCharges(count) {
-            const stone = this.machineStoneMap.get("frost-crystal-spike");
+        grantFrostCrystalSpikeCharges(count, sourceId = null) {
+            const stone = this.getFrostCrystalSpikeStone();
             if (!stone) return;
             stone.pendingCharges = (stone.pendingCharges || 0) + count;
+            if (sourceId) {
+                this.addLog("event", sourceId, `${this.resolveSourceName(sourceId)} 获得 1 层寒晶刺`, {
+                    sourceId,
+                    added: count,
+                    pendingCharges: stone.pendingCharges
+                });
+            }
         }
 
         consumeColdTideCharge() {
@@ -1797,21 +2053,28 @@
             return true;
         }
 
-        handleMachineIceArrow(count) {
-            const stone = this.machineStoneMap.get("frost-crystal-spike");
+        handleMachineIceArrow(count, sourceId = null) {
+            const stone = this.getFrostCrystalSpikeStone();
             if (!stone) return;
-            stone.counter = (stone.counter || 0) + count;
-            while (stone.counter >= (stone.params.arrowThreshold || 10)) {
-                stone.counter -= stone.params.arrowThreshold || 10;
-                this.grantFrostCrystalSpikeCharges(1);
+            this.frostCrystalSpikeArrowCount = (this.frostCrystalSpikeArrowCount || 0) + count;
+            while (this.frostCrystalSpikeArrowCount >= (stone.params.arrowThreshold || 10)) {
+                this.frostCrystalSpikeArrowCount -= stone.params.arrowThreshold || 10;
+                this.grantFrostCrystalSpikeCharges(1, sourceId);
             }
         }
 
-        consumeFrostCrystalSpikeCharge() {
-            const stone = this.machineStoneMap.get("frost-crystal-spike");
+        consumeFrostCrystalSpikeCharge(triggerSource = null) {
+            const stone = this.getFrostCrystalSpikeStone();
             if (!stone || !stone.pendingCharges) return;
+            const before = stone.pendingCharges;
             stone.pendingCharges -= 1;
-            this.triggerFrostCrystalSpike(stone);
+            this.addLog("craft", triggerSource || stone.id, `消耗 1 层寒晶刺效果（${before} → ${stone.pendingCharges}）`, {
+                buff: "frost_crystal_spike_consume",
+                beforeCharges: before,
+                afterCharges: stone.pendingCharges,
+                triggerSource: triggerSource || null
+            });
+            this.scheduleEvent(this.time + TICK_SECONDS, () => this.triggerFrostCrystalSpike(stone, before, stone.pendingCharges));
         }
 
         triggerScarletRing(stone) {
@@ -1819,6 +2082,7 @@
             const hits = stone.rank >= 3 ? 1 + (params.extraTicksAtRank3 || 1) : 1;
             for (let i = 0; i < hits; i += 1) {
                 this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_fire_tick");
+                this.tryTriggerBurnheart("machine_fire_tick");
                 if (this.random() < 0.20) {
                     const scarletAnt = this.getCard(CARD_IDS.SCARLET_ANT);
                     if (scarletAnt) this.applyBurn(0, scarletAnt, 1, true, true);
@@ -1854,6 +2118,7 @@
             const config = AMPLIFY_DAMAGE.wood;
             const bonus = 1 + this.effects.wood.amplifyDamageBonus;
             const activeUntilAt = this.time + WOOD_AMPLIFY_DURATION;
+                const bloomBonus = this.isVerdantLifeTrueformActive(2) ? (this.craftStone?.params?.woodBloomBonus || 0) : 0;
             if (!this.woodAmplifyState) {
                 this.woodAmplifyState = {
                     interval: WOOD_AMPLIFY_INTERVAL,
@@ -1861,7 +2126,7 @@
                     activeUntilAt,
                     nextTickAt: this.time + WOOD_AMPLIFY_INTERVAL,
                     damagePerTick: config.tickDamage * bonus,
-                    bloomDamage: config.bloomDamage * bonus,
+                    bloomDamage: config.bloomDamage * bonus * (1 + bloomBonus),
                     damageHostId: config.sourceId,
                     ticksDone: 0
                 };
@@ -1869,7 +2134,7 @@
             }
             this.woodAmplifyState.activeUntilAt = Math.max(this.woodAmplifyState.activeUntilAt, activeUntilAt);
             this.woodAmplifyState.damagePerTick = config.tickDamage * bonus;
-            this.woodAmplifyState.bloomDamage = config.bloomDamage * bonus;
+            this.woodAmplifyState.bloomDamage = config.bloomDamage * bonus * (1 + bloomBonus);
             this.woodAmplifyState.damageHostId = config.sourceId;
         }
 
@@ -1916,7 +2181,8 @@
                     return;
                 }
                 if (eventType === EVENTS.ICE_AMPLIFY_FREEZE && stone.id === "frost-rain") {
-                    this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_frost_rain");
+                    const bonus = this.isFrostGloryTrueformActive(2) ? (params.insightBonusPerStack || 0) : 0;
+                    this.addDamage((params.damage || 0) * (1 + bonus) * this.targetCount, stone.id, "machine_frost_rain");
                     if (stone.rank >= 5) {
                         this.grantInsight(params.insightStacks || 3, stone.id);
                     }
@@ -1936,7 +2202,7 @@
                     return;
                 }
                 if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "rotten-gale") {
-                    if (stone.rank >= 5) this.addMeter("wood", 10000 * Math.min(5, this.targetCount));
+                    if (stone.rank >= 5) this.addMeter("wood", 10000 * Math.min(5, this.targetCount), stone.id);
                     return;
                 }
                 if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "wood-spirit") {
@@ -1977,11 +2243,24 @@
                     }
                     return;
                 }
+                if (eventType === EVENTS.CRAFT_STONE_CAST_START && stone.id === "blazing-skyfire") {
+                    if (this.isBlazingSkyfireTrueformActive()) {
+                        const craft = this.craftStone;
+                        craft.trueformLinyinExpiresAt = this.time + (craft.params.linyinDuration || 8);
+                        this.addLog("buff", craft.selectedVariantId || craft.id, `灵蕴伤害提高 ${Math.round((craft.params.linyinBonus || 0) * 100)}%，持续 ${craft.params.linyinDuration || 8}s`, {
+                            buff: "trueform_linyin_bonus",
+                            bonus: craft.params.linyinBonus || 0,
+                            expireAt: Number(craft.trueformLinyinExpiresAt.toFixed(1))
+                        });
+                    }
+                    return;
+                }
                 if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "blazing-land") {
                     for (let delay = 1; delay <= (params.duration || 8); delay += (params.interval || 1)) {
                         this.scheduleEvent(this.time + delay, () => {
                             this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_blazing_land");
-                            if (stone.rank >= 3) this.addMeter("fire", 1500 * this.targetCount);
+                            this.tryTriggerBurnheart("machine_blazing_land");
+                            this.addMeter("fire", 1500 * this.targetCount, stone.id);
                         });
                     }
                     return;
@@ -2023,6 +2302,12 @@
                         this.addDamage(amount, stone.id, "machine_chain");
                     }
                     this.triggerThunderSpearDot(stone, hits);
+                    if (stone.id === "thunder-spear") {
+                        this.recordThunderAegisSpearHits(hits * (event.targetsHit || 1));
+                    }
+                    if (stone.id === "thunder-aegis") {
+                        return;
+                    }
                     return;
                 }
                 const count = eventType === EVENTS.ELEMENT_AMPLIFY && event.element === "fire" && stone.id === "fireburst" && stone.rank >= 5 ? 2 : 1;
@@ -2083,7 +2368,12 @@
             if (this.fireAmplifyState) {
                 while (this.fireAmplifyState.nextTickAt <= this.time + 1e-9
                     && this.fireAmplifyState.nextTickAt <= this.fireAmplifyState.activeUntilAt + 1e-9) {
-                    this.addDamage(this.fireAmplifyState.damagePerTick, this.fireAmplifyState.damageHostId, "fire_amplify");
+                    let damagePerTick = this.fireAmplifyState.damagePerTick;
+                    if (this.isBlazingSkyfireTrueformActive()) {
+                        damagePerTick *= 1 + (this.craftStone?.params?.amplifyDamageBonus || 0);
+                    }
+                    this.addDamage(damagePerTick, this.fireAmplifyState.damageHostId, "fire_amplify");
+                    this.tryTriggerBurnheart("fire_amplify");
                     this.dispatchMachineStones(EVENTS.FIRE_AMPLIFY_TICK, { element: "fire" });
                     this.fireAmplifyState.nextTickAt += this.fireAmplifyState.interval;
                 }
@@ -2262,6 +2552,7 @@
             if (!target || target.burnStacks <= 0 || !scarletAnt) return;
             const damage = scarletAnt.params.burnDamage * (1 + Math.max(0, target.burnStacks - 1) * scarletAnt.params.extraLayerBonus);
             this.addDamage(damage, scarletAnt.id, "burn_tick");
+            this.tryTriggerBurnheart("burn_tick");
             this.notifyBurnTick({ targetIndex, damage });
         }
 
@@ -2273,6 +2564,7 @@
             if (stacks <= 0) return;
             this.addDamage(stone.params.burnDamage * stacks, stone.id, "machine_fire_meteor_burn");
             this.addMeter("fire", 200 * stacks);
+            this.tryTriggerBurnheart("machine_fire_meteor_burn");
         }
 
         // 给所有目标叠一层震荡；层数无上限，伤害按层数效能倍乘。
@@ -2324,6 +2616,9 @@
             totals.forEach((weight, mechanic) => {
                 this.addDamage(perTick * weight, stone.id, mechanic, false);
                 this.countMechanic(mechanic, counts.get(mechanic) || 0);
+                if (mechanic === "machine_flame_body" || mechanic === "machine_flame_body_combust") {
+                    this.tryTriggerBurnheart(mechanic);
+                }
             });
         }
 
@@ -2340,9 +2635,9 @@
                 const totalDamage = damagePerArrow * targetsHit;
                 this.addDamage(totalDamage, card.id, mechanic);
                 const consumedColdTide = this.consumeColdTideCharge();
-                this.handleMachineIceArrow(1);
+                this.handleMachineIceArrow(1, card.id);
                 if (!consumedColdTide) this.consumeColdTideCharge();
-                this.consumeFrostCrystalSpikeCharge();
+                this.consumeFrostCrystalSpikeCharge(card.id);
                 this.notifyIceArrowHit({
                     card,
                     targetsHit,
@@ -2363,7 +2658,7 @@
                 : (efficiency < 1 ? "ice_storm_frenzy" : "ice_storm");
             this.addDamage(damage, ownerId || card.id, mechanic);
             this.consumeColdTideCharge();
-            this.consumeFrostCrystalSpikeCharge();
+            this.consumeFrostCrystalSpikeCharge(ownerId || card.id);
             this.notifyIceStormHit({
                 card,
                 efficiency,
@@ -2384,6 +2679,13 @@
                 mechanic,
                 damage
             });
+            const rottenGale = this.machineStoneMap.get("rotten-gale");
+            if (this.isVerdantLifeTrueformActive(1)
+                && rottenGale
+                && this.random() < (this.craftStone?.params?.pulseProcChance || 0)) {
+                const amplifyBonus = 1 + this.effects.wood.amplifyDamageBonus;
+                this.addDamage((rottenGale.params.damage || 0) * this.targetCount * amplifyBonus, rottenGale.id, "machine_rotten_gale");
+            }
             this.applyWoodDicePulseMeter();
             this.handleWoodDice();
         }
@@ -2411,6 +2713,14 @@
                 damagePerTarget,
                 efficiency
             });
+            if (this.isThunderAegisSpiritActive(3)
+                && this.thunderAegisExtraCastExpiresAt > 0
+                && this.time <= this.thunderAegisExtraCastExpiresAt + 1e-9) {
+                const chainExtraCast = this.craftStone?.params?.chainExtraCast || 0;
+                for (let i = 0; i < chainExtraCast; i += 1) {
+                    this.triggerExtraThunderSpear(card, efficiency);
+                }
+            }
         }
 
         // 给目标叠一层静电过载；层数无上限，单次结算按层数效能倍乘。
@@ -2462,6 +2772,15 @@
             this.emit(EVENTS.ELEMENT_AMPLIFY, { element });
             this.dispatchMachineStones(EVENTS.ELEMENT_AMPLIFY, { element });
             if (element === "fire") {
+                if (this.isBlazingSkyfireTrueformActive()) {
+                    const stone = this.craftStone;
+                    stone.trueformLinyinExpiresAt = this.time + (stone.params.linyinDuration || 8);
+                    this.addLog("buff", stone.selectedVariantId || stone.id, `灵蕴伤害提高 ${Math.round((stone.params.linyinBonus || 0) * 100)}%，持续 ${stone.params.linyinDuration || 8}s`, {
+                        buff: "trueform_linyin_bonus",
+                        bonus: stone.params.linyinBonus || 0,
+                        expireAt: Number(stone.trueformLinyinExpiresAt.toFixed(1))
+                    });
+                }
                 this.scheduleFireAmplifyTicks();
                 return;
             }
@@ -2476,12 +2795,12 @@
             const config = AMPLIFY_DAMAGE[element];
             if (!config) return;
             const hostId = config.sourceId;
-            const bonus = 1 + this.effects[element].amplifyDamageBonus;
 
             if (element === "ice") {
-                this.addDamage(config.initialDamage * bonus, hostId, "ice_amplify");
+                const bonus = this.isFrostGloryTrueformActive(2) ? (this.craftStone?.params?.iceAmplifyBonus || 0) : 0;
+                this.addDamage(config.initialDamage * (1 + bonus), hostId, "ice_amplify");
                 this.scheduleEvent(this.time + ICE_AMPLIFY_FINAL_DELAY, () => {
-                    this.addDamage(config.finalDamage * bonus, hostId, "ice_amplify");
+                    this.addDamage(config.finalDamage * (1 + bonus), hostId, "ice_amplify");
                     this.notifyIceAmplifyFreeze({ element: "ice" });
                 });
                 return;
@@ -2493,7 +2812,20 @@
             }
 
             if (element === "thunder") {
-                this.addDamage(config.damage * this.targetCount, hostId, "thunder_amplify");
+                if (this.isThunderAegisTrueformActive(1)) {
+                    const stone = this.craftStone;
+                    stone.thunderLinyinExpiresAt = this.time + (stone.params.thunderLinyinDuration || 5);
+                    this.addLog("buff", stone.selectedVariantId || stone.id, `灵蕴伤害提高 ${Math.round((stone.params.thunderLinyinBonus || 0) * 100)}%，持续 ${stone.params.thunderLinyinDuration || 5}s`, {
+                        buff: "thunder_linyin_bonus",
+                        bonus: stone.params.thunderLinyinBonus || 0,
+                        expireAt: Number(stone.thunderLinyinExpiresAt.toFixed(1))
+                    });
+                }
+                const bonus = this.isThunderAegisTrueformActive(2)
+                    ? (this.craftStone?.params?.thunderAmplifyBonus || 0)
+                    : 0;
+                this.addDamage(config.damage * this.targetCount * (1 + bonus), hostId, "thunder_amplify");
+                return;
             }
         }
 
@@ -2524,11 +2856,23 @@
 
         notifyIceAmplifyFreeze(event = {}) {
             // 凛霜寒涌 5/5：冻结效果对命中的敌人累加 3000 玄冰值。
-            // effects.ice.freezeMeterBonus 由该石头在初始化时写入，这里是它唯一的消费点。
             const freezeMeter = this.effects.ice.freezeMeterBonus;
-            if (freezeMeter > 0) {
+            if (this.isFrostGloryTrueformActive(3)) {
+                this.addMeter("ice", freezeMeter * this.targetCount, this.craftStone?.selectedVariantId || this.craftStone?.id);
+            } else if (freezeMeter > 0) {
                 this.addMeter("ice", freezeMeter * this.targetCount);
             }
+                if (this.isFrostGloryTrueformActive(1)) {
+                    const params = this.craftStone?.params || {};
+                    const total = params.frostCrushDamage || 0;
+                    const duration = params.frostCrushDuration || 3;
+                    if (total > 0) {
+                        const perTick = total / duration;
+                        for (let i = 1; i <= duration; i += 1) {
+                            this.scheduleEvent(this.time + i, () => this.addDamage(perTick * this.targetCount, this.craftStone.selectedVariantId || this.craftStone.id, "craft_stone"));
+                        }
+                    }
+                }
             this.emit(EVENTS.ICE_AMPLIFY_FREEZE, event);
             this.dispatchMachineStones(EVENTS.ICE_AMPLIFY_FREEZE, event);
         }
@@ -2575,8 +2919,12 @@
         }
 
         notifyCraftStoneCastEnd(event = {}) {
-            const name = this.resolveSourceName(event.stoneId);
-            this.addLog("craft", event.stoneId, `${name} 施法结束，联动生效`, { stoneId: event.stoneId });
+            const displayId = this.craftStone?.selectedVariantId || event.stoneId;
+            const name = this.resolveSourceName(displayId);
+            this.addLog("craft", displayId, `${name} 施法结束，联动生效`, {
+                stoneId: event.stoneId,
+                selectedVariantId: displayId || null
+            });
             this.emit(EVENTS.CRAFT_STONE_CAST_END, event);
             this.dispatchMachineStones(EVENTS.CRAFT_STONE_CAST_END, event);
         }
