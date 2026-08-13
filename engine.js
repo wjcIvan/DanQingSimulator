@@ -171,7 +171,6 @@
         machine_fire_tick: "赤焰天环",
         machine_blazing_land: "烈焰之地",
         machine_flame_body: "烈焰焚身",
-        machine_flame_body_combust: "烈焰焚身·爆燃",
         craft_burnheart: "焚心",
         machine_link: "机巧联动",
         // 机巧石·玄冰
@@ -2210,7 +2209,7 @@
                     return;
                 }
                 if (eventType === EVENTS.COMBUST && stone.id === "flame-body") {
-                    if (stone.rank >= 3) this.triggerFlameBody(stone, 2, "machine_flame_body_combust");
+                    if (stone.rank >= 3) this.triggerFlameBody(stone, 2, "machine_flame_body");
                     return;
                 }
                 if (eventType === EVENTS.ELEMENT_AMPLIFY && event.element === "ice" && stone.id === "frost-surge") {
@@ -2616,7 +2615,7 @@
             totals.forEach((weight, mechanic) => {
                 this.addDamage(perTick * weight, stone.id, mechanic, false);
                 this.countMechanic(mechanic, counts.get(mechanic) || 0);
-                if (mechanic === "machine_flame_body" || mechanic === "machine_flame_body_combust") {
+                if (mechanic === "machine_flame_body") {
                     this.tryTriggerBurnheart(mechanic);
                 }
             });
