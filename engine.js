@@ -1022,6 +1022,9 @@
             this.fireAmplifyState = null;
             this.woodAmplifyState = null;
             this.thunderSpearState = new StackBuff(0, THUNDER_SPEAR_DURATION, THUNDER_SPEAR_TICK_INTERVAL);
+            // 雷霆震击是可刷新的单一状态；generation 用于让刷新前已排入队列的 tick/结束事件失效。
+            this.thunderShockState = null;
+            this.thunderShockGeneration = 0;
             this.thunderAegisExtraCastExpiresAt = 0;
             this.frostCrystalSpikeArrowCount = 0;
             this.thunderAegisSpearHitCount = 0;
@@ -1947,24 +1950,51 @@
             }
         }
 
+        settleThunderShock(stone, generation, reason = "expire") {
+            const state = this.thunderShockState;
+            if (!state || !state.active || state.generation !== generation) return;
+            state.active = false;
+            if (stone.rank < 5) return;
+            const params = stone.params;
+            this.addDamage((params.burstDamage || 0) * this.targetCount, stone.id, "machine_thunder_shock_burst");
+            this.addMeter("thunder", 500 * this.targetCount * this.getThunderMeterEfficiency(), stone.id);
+            this.addLog("event", stone.id, reason === "refresh"
+                ? "神雷激化再次触发：旧静电震击提前结束并立即爆炸"
+                : "静电震击结束并发生爆炸", {
+                event: "thunder_shock_end",
+                reason,
+                generation
+            });
+        }
+
         triggerThunderShock(stone) {
             const params = stone.params;
-            // 静电震击寄生在神雷激化上，持续时间跟随激化效果本身。
+            // 再次触发神雷激化时，旧静电震击先结束；5/5 立即结算结束爆炸。
+            if (this.thunderShockState?.active) {
+                this.settleThunderShock(stone, this.thunderShockState.generation, "refresh");
+            }
+            // 静电震击寄生在神雷激化上；刷新后重新开始完整持续时间。
             const duration = params.duration || 30;
             const interval = stone.rank >= 3 ? 0.5 : (params.interval || 1);
+            const generation = ++this.thunderShockGeneration;
+            this.thunderShockState = {
+                active: true,
+                generation,
+                startedAt: this.time,
+                expiresAt: this.time + duration
+            };
             // 1/5 就打「目标 + 周围 1 名」，3/5 再额外命中 1 名。
             const targets = Math.min(this.targetCount, stone.rank >= 3 ? 3 : 2);
             for (let delay = interval; delay <= duration + 1e-9; delay += interval) {
                 this.scheduleEvent(this.time + delay, () => {
+                    if (!this.thunderShockState?.active
+                        || this.thunderShockState.generation !== generation) return;
                     this.addDamage((params.damage || 0) * targets, stone.id, "machine_thunder_shock");
                 });
             }
-            if (stone.rank >= 5) {
-                this.scheduleEvent(this.time + duration, () => {
-                    this.addDamage((params.burstDamage || 0) * this.targetCount, stone.id, "machine_thunder_shock_burst");
-                    this.addMeter("thunder", 500 * this.targetCount * this.getThunderMeterEfficiency(), stone.id);
-                });
-            }
+            this.scheduleEvent(this.time + duration, () => {
+                this.settleThunderShock(stone, generation, "expire");
+            });
         }
 
         scheduleThunderAmplifyTicks() {
