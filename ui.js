@@ -11,7 +11,7 @@
 
     const selected = new Map();
     const selectedMachineStones = new Map();
-    let selectedCraftStone = null;
+    const selectedCraftStones = new Set();
     const selectedCraftStoneLevels = new Map();
     let chart = null;
     let lastResult = null;
@@ -36,7 +36,7 @@
     function initDefaults() {
         selected.clear();
         selectedMachineStones.clear();
-        selectedCraftStone = null;
+        selectedCraftStones.clear();
         selectedCraftStoneLevels.clear();
     }
 
@@ -274,12 +274,11 @@
         }).join("")}</div>`;
         grid.querySelectorAll("[data-craft-stone]").forEach(node => node.addEventListener("click", () => {
             const id = node.dataset.craftStone;
-            if (selectedCraftStone === id) {
-                selectedCraftStone = null;
-                selectedCraftStoneLevels.set(id, 0);
+            if (selectedCraftStones.has(id)) {
+                selectedCraftStones.delete(id);
             } else {
-                selectedCraftStone = id;
-                if ((selectedCraftStoneLevels.get(id) || 0) <= 0) selectedCraftStoneLevels.set(id, 3);
+                selectedCraftStones.add(id);
+                if (!selectedCraftStoneLevels.has(id)) selectedCraftStoneLevels.set(id, 3);
             }
             renderCraftStones();
             updateMachineSummary();
@@ -294,7 +293,7 @@
     }
 
     function renderCraftStone(stone, meta) {
-        const active = selectedCraftStone === stone.id;
+        const active = selectedCraftStones.has(stone.id);
         const storedLevel = selectedCraftStoneLevels.get(stone.id);
         const level = active
             ? (storedLevel ?? 3)
@@ -334,7 +333,7 @@
     function updateCraftStoneLevel(id, value) {
         const level = Math.max(0, Math.min(3, parseInt(value, 10) || 0));
         selectedCraftStoneLevels.set(id, level);
-        selectedCraftStone = id;
+        selectedCraftStones.add(id);
         const slider = document.querySelector(`.craft-rank-slider[data-id="${id}"]`);
         if (slider) slider.style.backgroundSize = `${(level / 3) * 100}% 100%`;
         const label = document.getElementById(`craft-rank-${id}`);
@@ -390,6 +389,16 @@
         });
         renderCards();
         updateSummary();
+    }
+
+    function selectMachineElement(element) {
+        MACHINE_STONE_DEFS.filter(stone => stone.element === element).forEach(stone => {
+            if (!selectedMachineStones.has(stone.id)) {
+                selectedMachineStones.set(stone.id, { id: stone.id, rank: 5 });
+            }
+        });
+        renderMachineStones();
+        updateMachineSummary();
     }
 
     function switchTab(tab) {
@@ -459,7 +468,7 @@
                 ? CRAFT_STONE_DEFS.find(s => s.id === item.craftStone.id)
                 : null;
             const craft = craftDef
-                ? colorize(craftDef.element, craftDef.name)
+                ? colorize(craftDef.element, `${craftDef.name}(${item.craftStone?.level ?? 3})`)
                 : (item.craftStone ? item.craftStone.id : null);
             const machineCost = (item.machineStones || []).reduce((sum, entry) => sum + entry.rank, 0);
             return `
@@ -485,10 +494,11 @@
                 payload.deck.forEach(item => selected.set(item.id, { id: item.id, level: item.level }));
                 selectedMachineStones.clear();
                 (payload.machineStones || []).forEach(item => selectedMachineStones.set(item.id, { id: item.id, rank: item.rank }));
-                selectedCraftStone = payload.craftStone ? payload.craftStone.id : null;
+                selectedCraftStones.clear();
                 selectedCraftStoneLevels.clear();
                 if (payload.craftStone?.id) {
-                    selectedCraftStoneLevels.set(payload.craftStone.id, payload.craftStone.level || 3);
+                    selectedCraftStones.add(payload.craftStone.id);
+                    selectedCraftStoneLevels.set(payload.craftStone.id, payload.craftStone.level ?? 3);
                 }
                 renderCards();
                 renderMachineStones();
@@ -557,15 +567,15 @@
     // 左侧有勾选时只在勾选范围内搜索，全部未选才走全量。
     function buildElementPlans(crossElement) {
         const elements = Object.keys(ELEMENT_META);
-        const hasPicked = selected.size > 0 || selectedMachineStones.size > 0 || Boolean(selectedCraftStone);
+        const hasPicked = selected.size > 0 || selectedMachineStones.size > 0 || selectedCraftStones.size > 0;
         const cardPool = hasPicked && selected.size > 0
             ? CARD_DEFS.filter(card => selected.has(card.id))
             : CARD_DEFS;
         const stonePool = hasPicked && selectedMachineStones.size > 0
             ? MACHINE_STONE_DEFS.filter(stone => selectedMachineStones.has(stone.id))
             : MACHINE_STONE_DEFS;
-        const craftPool = hasPicked && selectedCraftStone
-            ? CRAFT_STONE_DEFS.filter(stone => stone.id === selectedCraftStone)
+        const craftPool = hasPicked && selectedCraftStones.size > 0
+            ? CRAFT_STONE_DEFS.filter(stone => selectedCraftStones.has(stone.id))
             : CRAFT_STONE_DEFS;
 
         if (crossElement) {
@@ -643,7 +653,12 @@
             }));
             const deckCombos = generateSeason2Combos(pool, maxCost);
             const craftOptions = plan.crafts.length > 0
-                ? plan.crafts.map(stone => ({ id: stone.id }))
+                ? plan.crafts.map(stone => ({
+                    id: stone.id,
+                    level: selectedCraftStones.has(stone.id)
+                        ? (selectedCraftStoneLevels.get(stone.id) ?? 3)
+                        : 3
+                }))
                 : [null];
             const stoneCombos = generateMachineStoneCombos(plan.stones, machineLimit);
             deckCombos.forEach(deckCombo => {
@@ -767,7 +782,13 @@
         const externalSkillDps = parseFloat(document.getElementById("externalSkillDps")?.value || "150000") || 150000;
         const deck = getSelectedDeck();
         const machineStones = getSelectedMachineStones();
-        if (deck.length === 0 && machineStones.length === 0 && !selectedCraftStone) {
+        const craftIds = Array.from(selectedCraftStones);
+        if (craftIds.length > 1) {
+            alert("基础模拟至多选择一个匠心石");
+            return;
+        }
+        const craftStoneId = craftIds[0] || null;
+        if (deck.length === 0 && machineStones.length === 0 && !craftStoneId) {
             alert("请至少选择一张丹青、机巧石或匠心石");
             return;
         }
@@ -781,9 +802,9 @@
             const engine = new CombatEngine({
                 deck,
                 machineStones,
-                craftStone: selectedCraftStone ? {
-                    id: selectedCraftStone,
-                    level: selectedCraftStoneLevels.has(selectedCraftStone) ? selectedCraftStoneLevels.get(selectedCraftStone) : 3
+                craftStone: craftStoneId ? {
+                    id: craftStoneId,
+                    level: selectedCraftStoneLevels.has(craftStoneId) ? selectedCraftStoneLevels.get(craftStoneId) : 3
                 } : null
             }, {
                 duration,
@@ -1120,21 +1141,65 @@
             });
         });
 
+        document.querySelectorAll(".machine-star-batch-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const rank = Math.max(1, Math.min(5, parseInt(btn.dataset.star, 10) || 1));
+                selectedMachineStones.forEach(item => { item.rank = rank; });
+                renderMachineStones();
+                updateMachineSummary();
+            });
+        });
+
+        document.querySelectorAll(".craft-star-batch-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const level = Math.max(0, Math.min(3, parseInt(btn.dataset.star, 10) || 0));
+                selectedCraftStones.forEach(id => selectedCraftStoneLevels.set(id, level));
+                renderCraftStones();
+            });
+        });
+
         document.getElementById("clearDeck").addEventListener("click", () => {
             selected.clear();
-            selectedMachineStones.clear();
-            selectedCraftStone = null;
-            selectedCraftStoneLevels.clear();
             renderCards();
-            renderMachineStones();
-            renderCraftStones();
             updateSummary();
-            updateMachineSummary();
         });
         document.getElementById("fullDeck").addEventListener("click", () => {
             CARD_DEFS.forEach(card => selected.set(card.id, { id: card.id, level: selected.get(card.id)?.level ?? 6 }));
             renderCards();
             updateSummary();
+        });
+        document.getElementById("clearMachineStones").addEventListener("click", () => {
+            selectedMachineStones.clear();
+            renderMachineStones();
+            updateMachineSummary();
+        });
+        document.getElementById("fullMachineStones").addEventListener("click", () => {
+            MACHINE_STONE_DEFS.forEach(stone => {
+                if (!selectedMachineStones.has(stone.id)) {
+                    selectedMachineStones.set(stone.id, { id: stone.id, rank: 5 });
+                }
+            });
+            renderMachineStones();
+            updateMachineSummary();
+        });
+        document.querySelectorAll(".machine-element-select-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                selectMachineElement(btn.dataset.element);
+            });
+        });
+        document.getElementById("clearCraftStones").addEventListener("click", () => {
+            selectedCraftStones.clear();
+            selectedCraftStoneLevels.clear();
+            renderCraftStones();
+        });
+        document.getElementById("fullCraftStones").addEventListener("click", () => {
+            CRAFT_STONE_DEFS.forEach(stone => {
+                selectedCraftStones.add(stone.id);
+                if (!selectedCraftStoneLevels.has(stone.id)) {
+                    selectedCraftStoneLevels.set(stone.id, 3);
+                }
+            });
+            renderCraftStones();
         });
         document.querySelectorAll(".element-select-btn").forEach(btn => {
             btn.addEventListener("click", () => {

@@ -787,6 +787,26 @@
                                     机巧石编成
                                     <span id="machineFeeLabel" class="ml-2 text-[15px] px-2 py-0.5 rounded-full font-black bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase">0 / 18 费</span>
                                 </h2>
+                                <div class="flex flex-wrap gap-3">
+                                    <div class="flex p-1 bg-slate-200/50 rounded-xl">
+                                        <button id="fullMachineStones" class="px-3 py-1.5 text-[13px] font-black text-slate-600 hover:text-indigo-600 hover:bg-white rounded-lg transition-all">全选</button>
+                                        <button data-element="fire" class="machine-element-select-btn px-3 py-1.5 text-[13px] font-black text-red-500 hover:bg-white rounded-lg transition-all">火</button>
+                                        <button data-element="ice" class="machine-element-select-btn px-3 py-1.5 text-[13px] font-black text-cyan-600 hover:bg-white rounded-lg transition-all">冰</button>
+                                        <button data-element="wood" class="machine-element-select-btn px-3 py-1.5 text-[13px] font-black text-emerald-600 hover:bg-white rounded-lg transition-all">木</button>
+                                        <button data-element="thunder" class="machine-element-select-btn px-3 py-1.5 text-[13px] font-black text-violet-600 hover:bg-white rounded-lg transition-all">雷</button>
+                                        <button id="clearMachineStones" class="px-3 py-1.5 text-[13px] font-black text-slate-600 hover:text-red-500 hover:bg-white rounded-lg transition-all">重置</button>
+                                    </div>
+                                    <div class="flex p-1 bg-slate-200/50 rounded-xl items-center">
+                                        <span class="px-2 text-[11px] font-black text-slate-400 uppercase tracking-tighter">★</span>
+                                        <div class="flex gap-0.5">
+                                            <button data-star="1" class="machine-star-batch-btn w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">1</button>
+                                            <button data-star="2" class="machine-star-batch-btn w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">2</button>
+                                            <button data-star="3" class="machine-star-batch-btn w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">3</button>
+                                            <button data-star="4" class="machine-star-batch-btn w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">4</button>
+                                            <button data-star="5" class="machine-star-batch-btn w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">5</button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <div id="machineStoneGrid"></div>
                         </section>
@@ -797,6 +817,21 @@
                                     <span class="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>
                                     匠心石
                                 </h2>
+                                <div class="flex flex-wrap gap-3">
+                                    <div class="flex p-1 bg-slate-200/50 rounded-xl">
+                                        <button id="fullCraftStones" class="px-3 py-1.5 text-[13px] font-black text-slate-600 hover:text-indigo-600 hover:bg-white rounded-lg transition-all">全选</button>
+                                        <button id="clearCraftStones" class="px-3 py-1.5 text-[13px] font-black text-slate-600 hover:text-red-500 hover:bg-white rounded-lg transition-all">重置</button>
+                                    </div>
+                                    <div class="flex p-1 bg-slate-200/50 rounded-xl items-center">
+                                        <span class="px-2 text-[11px] font-black text-slate-400 uppercase tracking-tighter">★</span>
+                                        <div class="flex gap-0.5">
+                                            <button data-star="0" class="craft-star-batch-btn w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">0</button>
+                                            <button data-star="1" class="craft-star-batch-btn w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">1</button>
+                                            <button data-star="2" class="craft-star-batch-btn w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">2</button>
+                                            <button data-star="3" class="craft-star-batch-btn w-7 h-7 flex items-center justify-center text-[11px] font-black text-slate-500 hover:bg-white hover:text-indigo-600 rounded-lg transition-all">3</button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <div id="craftStoneGrid"></div>
                         </section>
