@@ -349,7 +349,7 @@
                 triggerThreshold: null
             },
             ice: {
-                arrowDamageBonus: 0,
+                arrowDamageMultiplier: 1,
                 shatterChance: 0,
                 shatterDamage: 0,
                 amplifyDamageBonus: 0,
@@ -653,7 +653,7 @@
         static cardId = CARD_IDS.WEN_MIN;
 
         applyPassive(engine) {
-            engine.effects.ice.arrowDamageBonus += this.params.arrowDamageBonus;
+            engine.effects.ice.arrowDamageMultiplier *= 1 + this.params.arrowDamageBonus;
         }
 
         init() {
@@ -678,7 +678,7 @@
         static cardId = CARD_IDS.ZUO_GUI;
 
         applyPassive(engine) {
-            engine.effects.ice.arrowDamageBonus += this.params.damageBonus;
+            engine.effects.ice.arrowDamageMultiplier *= 1 + this.params.damageBonus;
             engine.effects.ice.shatterChance += this.params.shatterChance;
             engine.effects.ice.shatterDamage += this.params.shatterDamage;
         }
@@ -2512,7 +2512,7 @@
 
         // 计算冰箭单段伤害，统一吃冰系增伤。
         getIceArrowDamage(baseDamage) {
-            return baseDamage * (1 + this.effects.ice.arrowDamageBonus);
+            return baseDamage * this.effects.ice.arrowDamageMultiplier;
         }
 
         // 计算脉冲基础伤害，统一处理多目标衰减。

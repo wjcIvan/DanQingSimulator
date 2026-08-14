@@ -140,10 +140,10 @@
             element: "ice",
             fee: 5,
             baseEffectText: "召唤冰霜元素施放玄冰风暴，造成 128000 玄冰伤害；冰箭造成伤害时，玄冰风暴冷却缩短 2 秒（60 秒内置冷却）。",
-            upgradeText: "玄冰风暴伤害每星 +9334。",
+            upgradeText: "玄冰风暴伤害每星 +9340。",
             mechanics: ["ice_storm"],
             params: {
-                stormDamage: stat(128000, 9334),
+                stormDamage: stat(128000, 9340),
                 cooldown: 60,
                 cooldownReductionPerArrowHit: 2,
                 burstHits: 20,
