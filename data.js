@@ -488,7 +488,7 @@
             element: "thunder",
             fee: 5,
             baseEffectText: "神雷激化触发时获得九霄雷动：在其后 2 秒内额外召唤 2 道雷电打击目标，每道造成 27506 神雷伤害。",
-            upgradeText: "伤害每提升一档+37.5%；\n\n3/5：额外召唤 1 道雷电，并累积 100 神雷值；\n\n5/5：额外召唤 1 道雷电，且会被引雷针复制。",
+            upgradeText: "伤害每提升一档+37.5%；\n\n3/5：额外召唤 1 道雷电，每道雷电累积 100 神雷值；\n\n5/5：额外召唤 1 道雷电，且会被引雷针复制。",
             mechanics: ["on_thunder_amplify"],
             params: { damage: stat(27506, 27506 * 0.375), bolts: 2 }
         }

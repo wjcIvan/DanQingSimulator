@@ -945,7 +945,11 @@
             }
             const crystal = engine.getCard(CARD_IDS.THUNDER_CRYSTAL);
             if (crystal) {
-                crystal.onChainLightningHit(engine, { targetsHit: event.targetsHit, sourceCardId: this.id });
+                crystal.onChainLightningHit(engine, {
+                    targetsHit: event.targetsHit,
+                    sourceCardId: this.id,
+                    skipStaticOverload: event.skipStaticOverload
+                });
             }
         }
 
@@ -1635,7 +1639,8 @@
             };
             for (let delay = interval; delay <= duration + 1e-9; delay += interval) {
                 this.scheduleEvent(this.time + delay, () => {
-                    this.triggerChainLightning(sourceCard, insightMultiplier);
+                    // 雷佑灵光的连锁闪电仍累积神雷值并触发紫电螭吻，但不触发静电过载。
+                    this.triggerChainLightning(sourceCard, insightMultiplier, { skipStaticOverload: true });
                 });
             }
         }
@@ -1915,7 +1920,8 @@
             const bolts = (params.bolts || 2) + (stone.rank >= 3 ? 1 : 0) + (stone.rank >= 5 ? 1 : 0);
             this.addDamage((params.damage || 0) * bolts * this.targetCount, stone.id, "machine_nine_sky_thunder");
             if (stone.rank >= 3) {
-                this.addMeter("thunder", 100 * this.getThunderMeterEfficiency(), stone.id);
+                // 3/5 的神雷值按每道雷电 +100 结算，本真 3 再提高 100% 累积效率。
+                this.addMeter("thunder", 100 * bolts * this.getThunderMeterEfficiency(), stone.id);
             }
             if (stone.rank >= 5 && this.targetCount > 1) {
                 this.addDamage((params.damage || 0) * bolts * (this.targetCount - 1), stone.id, "machine_nine_sky_thunder_copy");
