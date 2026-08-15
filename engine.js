@@ -1755,8 +1755,10 @@
                 if (!thunderBanner) return;
                 const hasPurpleDragon = Boolean(this.getCard(CARD_IDS.PURPLE_DRAGON));
                 const chainCount = hasPurpleDragon ? 6 : 3;
+                const frenzyEfficiency = (params.frenzyEfficiency || 0.8)
+                    * (hasPurpleDragon ? this.effects.thunder.frenzyEfficiency : 1);
                 for (let i = 0; i < chainCount; i += 1) {
-                    this.triggerChainLightning(thunderBanner, 0.8, {
+                    this.triggerChainLightning(thunderBanner, frenzyEfficiency, {
                         skipPurpleDragonExtra: true,
                         skipStaticOverload: true
                     });

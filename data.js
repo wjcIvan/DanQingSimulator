@@ -470,7 +470,7 @@
             baseEffectText: "每 20 秒向敌人发射一枚五雷珠：对路径上所有敌人造成 10832 神雷伤害。",
             upgradeText: "伤害每提升一档+37.5%；\n\n3/5：五雷珠抵达目标位置后引爆，造成 64900 神雷伤害；\n\n5/5：五雷珠释放时触发 80% 效能的狂雷（此效果无法触发静电过载）。",
             mechanics: ["periodic_attack"],
-            params: { damage: stat(10832, 10832 * 0.375), interval: 20, burstDamage: 64900 }
+            params: { damage: stat(10832, 10832 * 0.375), interval: 20, burstDamage: 64900, frenzyEfficiency: 0.80 }
         },
         {
             id: "thunder-guard",
