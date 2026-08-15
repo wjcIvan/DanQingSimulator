@@ -696,7 +696,7 @@
             if (engine.effects.ice.shatterChance <= 0) return;
             if (engine.random() < engine.effects.ice.shatterChance) {
                 // 碎裂始终按全目标结算，再回推给上官策积累玄冰值。
-                engine.addDamage(engine.effects.ice.shatterDamage * engine.targetCount, this.id, "shatter");
+                engine.addDamage(engine.getIceShatterDamage() * engine.targetCount, this.id, "shatter");
                 engine.notifyShatter();
             }
         }
@@ -1202,20 +1202,6 @@
                     this.insightBonusPerStack = this.craftStone.params.insightBonusPerStack || 0;
                     this.grantInsight(this.craftStone.params.openingInsightStacks || 0, this.craftStone.selectedVariantId || this.craftStone.id);
                 }
-                if (this.isFrostGlorySpiritActive(1)) {
-                    const stone = this.getFrostCrystalSpikeStone();
-                    if (stone) {
-                        const opening = this.craftStone.params.openingFrostCrystalCharges || 0;
-                        stone.pendingCharges = (stone.pendingCharges || 0) + opening;
-                        if (opening > 0) {
-                            this.addLog("buff", this.craftStone.selectedVariantId || this.craftStone.id, `获得 ${opening} 层寒晶刺效果`, {
-                                buff: "frost_crystal_spike",
-                                added: opening,
-                                totalCharges: stone.pendingCharges
-                            });
-                        }
-                    }
-                }
             }
         }
 
@@ -1530,6 +1516,12 @@
             });
             this.emit(EVENTS.CRAFT_STONE_CAST_START, { stoneId: stone.id });
             this.dispatchMachineStones(EVENTS.CRAFT_STONE_CAST_START, { stoneId: stone.id });
+            if (stone.id === "frost-glory" && this.isFrostGlorySpiritActive(1)) {
+                this.grantFrostCrystalSpikeCharges(
+                    stone.params.openingFrostCrystalCharges || 0,
+                    stone.selectedVariantId || stone.id
+                );
+            }
             const castEndAt = this.time + Math.max(0, stone.castTime - openingPrecast);
             if (castEndAt <= this.duration) {
                 if (stone.id === "frost-glory") {
@@ -2045,9 +2037,7 @@
                     }
                 }
                 if (stone.rank >= 3) {
-                    const shatterDamage = this.effects.ice.shatterDamage * (1 + (this.isFrostGlorySpiritActive(2)
-                        ? (this.craftStone?.params?.shatterDamageBonus || 0)
-                        : 0));
+                    const shatterDamage = this.getIceShatterDamage();
                     if (shatterDamage > 0) {
                         this.addDamage(shatterDamage * this.targetCount, stone.id, "machine_frost_crystal_shatter");
                     }
@@ -2066,10 +2056,10 @@
 
         grantFrostCrystalSpikeCharges(count, sourceId = null) {
             const stone = this.getFrostCrystalSpikeStone();
-            if (!stone) return;
+            if (!stone || count <= 0) return;
             stone.pendingCharges = (stone.pendingCharges || 0) + count;
             if (sourceId) {
-                this.addLog("event", sourceId, `${this.resolveSourceName(sourceId)} 获得 1 层寒晶刺`, {
+                this.addLog("event", sourceId, `${this.resolveSourceName(sourceId)} 获得 ${count} 层寒晶刺`, {
                     sourceId,
                     added: count,
                     pendingCharges: stone.pendingCharges
@@ -2519,6 +2509,13 @@
         // 计算冰箭单段伤害，统一吃冰系增伤。
         getIceArrowDamage(baseDamage) {
             return baseDamage * this.effects.ice.arrowDamageMultiplier;
+        }
+
+        getIceShatterDamage() {
+            const bonus = this.isFrostGlorySpiritActive(2)
+                ? (this.craftStone?.params?.shatterDamageBonus || 0)
+                : 0;
+            return this.effects.ice.shatterDamage * (1 + bonus);
         }
 
         // 计算脉冲基础伤害，统一处理多目标衰减。
