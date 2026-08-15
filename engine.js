@@ -2831,10 +2831,14 @@
             const hostId = config.sourceId;
 
             if (element === "ice") {
-                const bonus = this.isFrostGloryTrueformActive(2) ? (this.craftStone?.params?.iceAmplifyBonus || 0) : 0;
-                this.addDamage(config.initialDamage * (1 + bonus), hostId, "ice_amplify");
+                const machineMultiplier = 1 + (this.effects.ice.amplifyDamageBonus || 0);
+                const craftMultiplier = this.isFrostGloryTrueformActive(2)
+                    ? 1 + (this.craftStone?.params?.iceAmplifyBonus || 0)
+                    : 1;
+                const damageMultiplier = machineMultiplier * craftMultiplier;
+                this.addDamage(config.initialDamage * damageMultiplier, hostId, "ice_amplify");
                 this.scheduleEvent(this.time + ICE_AMPLIFY_FINAL_DELAY, () => {
-                    this.addDamage(config.finalDamage * (1 + bonus), hostId, "ice_amplify");
+                    this.addDamage(config.finalDamage * damageMultiplier, hostId, "ice_amplify");
                     this.notifyIceAmplifyFreeze({ element: "ice" });
                 });
                 return;
