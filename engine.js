@@ -938,18 +938,31 @@
             if (engine.effects.thunder.extraTriggerChance <= 0) return;
             if (engine.random() >= engine.effects.thunder.extraTriggerChance) return;
             engine.addDamage(event.damagePerTarget * event.targetsHit, this.id, "chain_lightning_extra");
-            const gourd = engine.getCard(CARD_IDS.ZI_XIAO_GOURD);
-            if (gourd) {
-                // 额外雷链需要继续喂给计量和静电过载，行为对齐旧引擎。
-                gourd.onChainLightningHit(engine, { targetsHit: event.targetsHit, sourceCardId: this.id });
-            }
-            const crystal = engine.getCard(CARD_IDS.THUNDER_CRYSTAL);
-            if (crystal) {
-                crystal.onChainLightningHit(engine, {
-                    targetsHit: event.targetsHit,
-                    sourceCardId: this.id,
-                    skipStaticOverload: event.skipStaticOverload
-                });
+            // 紫电螭吻的额外雷链本身也是一次雷链命中：继续触发丹青、
+            // 机巧石联动，但禁止再次触发紫电螭吻，避免递归。
+            engine.notifyChainLightningHit({
+                sourceCardId: this.id,
+                targetsHit: event.targetsHit,
+                damagePerTarget: event.damagePerTarget,
+                efficiency: event.efficiency,
+                skipPurpleDragonExtra: true,
+                skipStaticOverload: Boolean(event.skipStaticOverload)
+            });
+            engine.dispatchMachineStones(EVENTS.CHAIN_LIGHTNING_HIT, {
+                sourceCardId: this.id,
+                targetsHit: event.targetsHit,
+                damagePerTarget: event.damagePerTarget,
+                efficiency: event.efficiency
+            });
+            if (engine.isThunderAegisSpiritActive(3)
+                && engine.thunderAegisExtraCastExpiresAt > 0
+                && engine.time <= engine.thunderAegisExtraCastExpiresAt + 1e-9) {
+                const chainExtraCast = engine.craftStone?.params?.chainExtraCast || 0;
+                for (let i = 0; i < chainExtraCast; i += 1) {
+                    engine.triggerExtraThunderSpear(
+                        engine.getCard(CARD_IDS.THUNDER_BANNER) || { params: { maxEnemyTargets: 3 } }
+                    );
+                }
             }
         }
 
@@ -1488,7 +1501,11 @@
                             this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_periodic");
                             if (params.meter) this.addMeter(stone.element, params.meter);
                         }
-                        stone.nextAt += interval;
+                        // 五雷珠从实际发射时刻重新计算 20 秒间隔；开局预读导致
+                        // 首发落在 0.2s 时，后续应为 20.2s、40.2s，而非回到整点。
+                        stone.nextAt = stone.id === "five-thunder-orb"
+                            ? this.time + interval
+                            : stone.nextAt + interval;
                     }
                 }
             });
@@ -1554,7 +1571,8 @@
                             for (let i = 0; i < (stone.params.openingWoodDiceTriggers || 0); i += 1) this.handleWoodDice();
                         }
                     });
-                    stone.nextCastAt += stone.cooldown - openingPrecast;
+                    // 青芜浮生在读条完成后才开始计算冷却。
+                    stone.nextCastAt = castEndAt + stone.cooldown;
                     return;
                 } else if (stone.id === "blazing-skyfire") {
                     const segmentCount = 6;
@@ -1577,15 +1595,16 @@
                         this.notifyCraftStoneCastEnd({ stoneId: stone.id });
                     });
                 } else if (stone.id === "thunder-aegis") {
-                    if (this.isThunderAegisSpiritActive(3)) {
-                        this.thunderAegisExtraCastExpiresAt = Math.max(
-                            this.thunderAegisExtraCastExpiresAt,
-                            this.time + (stone.params.chainDuration || 10)
-                        );
-                    }
                     const spiritBonus = this.isThunderAegisSpiritActive(2) ? (stone.params.craftDamageBonus || 0) : 0;
                     const baseDamage = stone.params.damage * (1 + spiritBonus);
                     this.scheduleEvent(castEndAt, () => {
+                        if (this.isThunderAegisSpiritActive(3)) {
+                            // 灵通 3 的额外惊雷戟窗口从雷佑灵光读条完成时开始。
+                            this.thunderAegisExtraCastExpiresAt = Math.max(
+                                this.thunderAegisExtraCastExpiresAt,
+                                this.time + (stone.params.chainDuration || 10)
+                            );
+                        }
                         this.notifyCraftStoneCastEnd({ stoneId: stone.id });
                         this.addDamage(baseDamage * this.targetCount * insight.multiplier, stone.id, "craft_stone");
                         this.scheduleThunderAegisChains(stone, insight.multiplier);
@@ -1597,7 +1616,10 @@
                     });
                 }
             }
-            stone.nextCastAt += stone.cooldown - openingPrecast;
+            // 雷佑灵光在读条完成后才进入冷却；其余灵蕴技维持原有计时口径。
+            stone.nextCastAt = stone.id === "thunder-aegis"
+                ? castEndAt + stone.cooldown
+                : stone.nextCastAt + stone.cooldown - openingPrecast;
         }
 
         // 授予洞察层数。洞察没有持续时间，只等下一次灵蕴技消耗。
@@ -1637,12 +1659,13 @@
             }
         }
 
-        triggerExtraThunderSpear(sourceCard, efficiency = 1) {
+        triggerExtraThunderSpear(sourceCard) {
             const spear = this.machineStoneMap.get("thunder-spear");
             if (!spear) return;
             const targetsHit = Math.min(this.targetCount, sourceCard.params.maxEnemyTargets || 3);
             const hits = spear.rank >= 5 ? 1 + (spear.params.extraAtRank5 || 0) : 1;
-            const amount = (spear.params.damage || 0) * targetsHit * efficiency;
+            // 灵通 3 额外发射的是完整惊雷戟，不继承触发它的雷链效能。
+            const amount = (spear.params.damage || 0) * targetsHit;
             for (let i = 0; i < hits; i += 1) {
                 this.addDamage(amount, spear.id, "machine_chain");
             }
@@ -2752,7 +2775,7 @@
                 && this.time <= this.thunderAegisExtraCastExpiresAt + 1e-9) {
                 const chainExtraCast = this.craftStone?.params?.chainExtraCast || 0;
                 for (let i = 0; i < chainExtraCast; i += 1) {
-                    this.triggerExtraThunderSpear(card, efficiency);
+                    this.triggerExtraThunderSpear(card);
                 }
             }
         }
