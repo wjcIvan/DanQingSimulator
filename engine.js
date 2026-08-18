@@ -1234,9 +1234,20 @@
             const woodSpirit = this.machineStoneMap.get("wood-spirit");
             const rottenGale = this.machineStoneMap.get("rotten-gale");
             if (!woodSpirit || !rottenGale || rottenGale.rank < 5) return false;
-            const woodAmplifyActive = Boolean(this.woodAmplifyState && this.time <= this.woodAmplifyState.activeUntilAt + 1e-9);
+            const castTime = Math.max(0, Number(stone.castTime) || 2);
+            const woodAmplifyActive = Boolean(
+                this.woodAmplifyState
+                && this.time <= this.woodAmplifyState.activeUntilAt + 1e-9
+                && this.woodAmplifyState.activeUntilAt - this.time > castTime + 1e-9
+            );
             const woodAmplifyPending = (this.pendingAmplifyCounts.wood || 0) > 0;
-            return woodAmplifyActive || woodAmplifyPending;
+            const delayed = woodAmplifyActive || woodAmplifyPending;
+            if (delayed) {
+                if (!Number.isFinite(stone.woodAmplifyWaitStartedAt)) {
+                    stone.woodAmplifyWaitStartedAt = this.time;
+                }
+            }
+            return delayed;
         }
 
         // 对整套牌执行同名生命周期钩子。
@@ -1519,15 +1530,23 @@
             const openingPrecast = Math.max(0, Number(stone.openingPrecastSeconds) || 0);
             stone.openingPrecastSeconds = 0;
             const openingPrecastText = openingPrecast > 0 ? `，首轮预读 ${openingPrecast.toFixed(1)}s` : "";
+            const woodAmplifyWaitSeconds = Number.isFinite(stone.woodAmplifyWaitStartedAt)
+                ? Math.max(0, this.time - stone.woodAmplifyWaitStartedAt)
+                : 0;
+            stone.woodAmplifyWaitStartedAt = null;
+            const woodAmplifyWaitText = woodAmplifyWaitSeconds > 1e-9
+                ? `，已等待 ${woodAmplifyWaitSeconds.toFixed(1)}s`
+                : "";
             const insight = this.consumeInsight();
             const stoneLogName = stone.name || this.resolveSourceName(stone.selectedVariantId || stone.id);
             this.addLog("craft", stone.selectedVariantId || stone.id, insight.stacks > 0
-                ? `${stoneLogName} 开始施法（${stone.castTime}s）${openingPrecastText}，消耗 ${insight.stacks} 层洞察，本次伤害提高 ${Math.round(insight.bonus * 100)}%`
-                : `${stoneLogName} 开始施法（${stone.castTime}s）${openingPrecastText}`, {
+                ? `${stoneLogName} 开始施法（${stone.castTime}s）${openingPrecastText}${woodAmplifyWaitText}，消耗 ${insight.stacks} 层洞察，本次伤害提高 ${Math.round(insight.bonus * 100)}%`
+                : `${stoneLogName} 开始施法（${stone.castTime}s）${openingPrecastText}${woodAmplifyWaitText}`, {
                 stoneId: stone.id,
                 selectedVariantId: stone.selectedVariantId || stone.id,
                 castTime: stone.castTime,
                 openingPrecastSeconds: openingPrecast,
+                woodAmplifyWaitSeconds: Number(woodAmplifyWaitSeconds.toFixed(1)),
                 insightStacks: insight.stacks,
                 insightBonus: insight.bonus
             });
