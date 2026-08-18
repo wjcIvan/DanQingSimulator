@@ -2310,7 +2310,9 @@
                         this.scheduleEvent(this.time + delay, () => {
                             this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_blazing_land");
                             this.tryTriggerBurnheart("machine_blazing_land");
-                            this.addMeter("fire", 1500 * this.targetCount, stone.id);
+                            if (stone.rank >= 3) {
+                                this.addMeter("fire", 1500 * this.targetCount, stone.id);
+                            }
                         });
                     }
                     return;
