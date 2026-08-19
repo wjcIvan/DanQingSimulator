@@ -1841,8 +1841,13 @@
         }
 
         getEarthRiftEchoMultiplier() {
-            if (!this.isVerdantLifeSpiritActive(3)) return 1;
-            return 1 + (this.craftStone?.params?.earthRiftEchoBonus || 0) * this.countActiveWoodSummonTypes();
+            let multiplier = this.isVerdantLifeSpiritActive(2)
+                ? 1 + (this.craftStone?.params?.summonDamageBonus || 0)
+                : 1;
+            if (this.isVerdantLifeSpiritActive(3)) {
+                multiplier *= 1 + (this.craftStone?.params?.earthRiftEchoBonus || 0) * this.countActiveWoodSummonTypes();
+            }
+            return multiplier;
         }
 
         getVerdantGiantSkillMultiplier() {
