@@ -1682,8 +1682,8 @@
             const spear = this.machineStoneMap.get("thunder-spear");
             if (!spear) return;
             const targetsHit = Math.min(this.targetCount, sourceCard.params.maxEnemyTargets || 3);
-            const hits = spear.rank >= 5 ? 1 + (spear.params.extraAtRank5 || 0) : 1;
-            // 灵通 3 额外发射的是完整惊雷戟，不继承触发它的雷链效能。
+            // 灵通 3 仅额外补发 1 次，不复制惊雷戟 5/5 自身的额外发射次数。
+            const hits = 1;
             const amount = (spear.params.damage || 0) * targetsHit;
             for (let i = 0; i < hits; i += 1) {
                 this.addDamage(amount, spear.id, "machine_chain");
