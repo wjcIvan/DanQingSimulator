@@ -308,7 +308,7 @@
             element: "ice",
             fee: 2,
             baseEffectText: "冰霜元素出现时，在自身脚下引发霜寒破裂：对周围所有敌人造成 60632 玄冰伤害。",
-            upgradeText: "伤害每提升一档+37.5%；\n\n3/5：霜寒爆破使敌人在 6 秒内额外承受 76692 玄冰伤害；\n\n5/5：凝冰霜华无视冷却召唤一只冰霜元素。",
+            upgradeText: "伤害每提升一档+37.5%；\n\n3/5：霜寒破裂使敌人在 6 秒内额外承受 76692 玄冰伤害；\n\n5/5：凝冰霜华无视冷却召唤一只冰霜元素。",
             mechanics: ["on_ice_elemental"],
             params: { damage: stat(60632, 60632 * 0.375), extraDamage: 76692, extraDuration: 6 }
         },
