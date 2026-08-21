@@ -1813,15 +1813,37 @@
             const attackInterval = params.attackInterval || 2;
             const baseDuration = params.duration || 30;
             const durationMultiplier = this.getWoodSummonDurationMultiplier();
-            const attackCount = Math.ceil((params.attacks || 14) * durationMultiplier);
-            this.woodSummonExpiresAt.spirit = Math.max(this.woodSummonExpiresAt.spirit, this.time + baseDuration * durationMultiplier);
+            const attackCount = durationMultiplier > 1 + 1e-9
+                ? (params.extendedAttacks || params.attacks || 14)
+                : (params.attacks || 14);
+            const duration = baseDuration * durationMultiplier;
+            this.woodSummonExpiresAt.spirit = Math.max(this.woodSummonExpiresAt.spirit, this.time + duration);
+            this.addLog("event", stone.id, `召唤 ${count} 只木引青灵（每只攻击 ${attackCount} 次，持续 ${Number(duration.toFixed(1))} 秒）`, {
+                summon: "wood_spirit",
+                count,
+                attacksPerSummon: attackCount,
+                duration: Number(duration.toFixed(1))
+            });
             for (let summon = 0; summon < count; summon += 1) {
                 for (let i = 1; i <= attackCount; i += 1) {
                     this.scheduleEvent(this.time + i * attackInterval, () => {
-                        this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_wood_spirit");
+                        let cooldownMessage = "";
                         if (stone.rank >= 3 && this.craftStone && this.craftStone.id === "verdant-life") {
+                            const cooldownBefore = Math.max(0, this.craftStone.nextCastAt - this.time);
                             this.craftStone.nextCastAt = Math.max(this.time, this.craftStone.nextCastAt - 1);
+                            const cooldownAfter = Math.max(0, this.craftStone.nextCastAt - this.time);
+                            cooldownMessage = cooldownBefore > 0
+                                ? `；青芜浮生CD -${Number((cooldownBefore - cooldownAfter).toFixed(1))}秒（${cooldownBefore.toFixed(1)} → ${cooldownAfter.toFixed(1)}秒）`
+                                : "；青芜浮生CD已就绪（当前0秒）";
                         }
+                        this.addDamage(
+                            (params.damage || 0) * this.targetCount,
+                            stone.id,
+                            "machine_wood_spirit",
+                            true,
+                            true,
+                            damage => `攻击造成 ${damage} 伤害${cooldownMessage}`
+                        );
                         this.applyEarthRiftFollowup();
                     });
                 }
@@ -2293,7 +2315,7 @@
                 }
                 if (eventType === EVENTS.ELEMENT_AMPLIFY && event.element === "wood" && stone.id === "wood-spirit") {
                     if (this.time < (stone.nextTriggerAt || 0)) return;
-                    stone.nextTriggerAt = this.time + (stone.params.internalCooldown || 10);
+                    stone.nextTriggerAt = this.time + (stone.params.internalCooldown || 9);
                     this.triggerWoodSpirit(stone, 1);
                     return;
                 }
