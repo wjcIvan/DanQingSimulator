@@ -571,9 +571,16 @@
         const cardPool = hasPicked && selected.size > 0
             ? CARD_DEFS.filter(card => selected.has(card.id))
             : CARD_DEFS;
-        const stonePool = hasPicked && selectedMachineStones.size > 0
+        const stonePool = (hasPicked && selectedMachineStones.size > 0
             ? MACHINE_STONE_DEFS.filter(stone => selectedMachineStones.has(stone.id))
-            : MACHINE_STONE_DEFS;
+            : MACHINE_STONE_DEFS
+        ).map(stone => ({
+            ...stone,
+            // 高级推演把左侧所选等级视为该石头可用等级上限；未选择任何石头时仍按满级搜索。
+            maxRank: selectedMachineStones.has(stone.id)
+                ? Math.max(1, Math.min(5, selectedMachineStones.get(stone.id).rank || 1))
+                : 5
+        }));
         const craftPool = hasPicked && selectedCraftStones.size > 0
             ? CRAFT_STONE_DEFS.filter(stone => selectedCraftStones.has(stone.id))
             : CRAFT_STONE_DEFS;
@@ -596,7 +603,7 @@
             .filter(plan => plan.cards.length > 0 || plan.stones.length > 0);
     }
 
-    // 系内空间可穷举：每条机巧石取 0~5 星，只保留恰好用满费用上限的配置。
+    // 系内空间可穷举：每条机巧石取 0~所选等级上限，只保留恰好用满费用上限的配置。
     function generateMachineStoneCombos(stones, machineLimit) {
         const results = [];
         const current = [];
@@ -609,7 +616,8 @@
                 return;
             }
             const stone = stones[index];
-            for (let rank = 0; rank <= 5; rank += 1) {
+            const maxRank = Math.max(0, Math.min(5, parseInt(stone.maxRank, 10) || 0));
+            for (let rank = 0; rank <= maxRank; rank += 1) {
                 if (cost + rank > machineLimit) break;
                 current.push({ id: stone.id, rank });
                 backtrack(index + 1, cost + rank);
