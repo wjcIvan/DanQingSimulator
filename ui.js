@@ -14,6 +14,8 @@
     const selectedCraftStones = new Set();
     const selectedCraftStoneLevels = new Map();
     let chart = null;
+    let chartSourceData = [];
+    let dpsChartMode = "rolling";
     let lastResult = null;
     let currentTab = "basic";
     let bfWorkers = [];
@@ -849,7 +851,7 @@
             let sum = 0;
             let count = 0;
             histories.forEach(history => {
-                if (typeof history[i] === "number") {
+                if (Number.isFinite(history[i])) {
                     sum += history[i];
                     count += 1;
                 }
@@ -1017,7 +1019,41 @@
         `);
     }
 
+    function buildRollingDps(data, windowSeconds = 5) {
+        const cumulativeDamage = data.map((dps, index) => {
+            if (dps === null) return null;
+            const value = Number(dps);
+            return Number.isFinite(value) ? value * (index + 1) : null;
+        });
+        // 开局预读和瞬发伤害不参与滚动窗口，避免极端值压平后续走势。
+        const warmupSeconds = data.length >= windowSeconds * 4 ? windowSeconds : 0;
+        return cumulativeDamage.map((total, index) => {
+            const currentSecond = index + 1;
+            if (total === null || currentSecond < warmupSeconds + windowSeconds) return null;
+            const startSecond = currentSecond - windowSeconds;
+            const previousTotal = startSecond > 0 ? cumulativeDamage[startSecond - 1] : 0;
+            if (!Number.isFinite(previousTotal)) return null;
+            return Math.max(0, Math.round((total - previousTotal) / windowSeconds));
+        });
+    }
+
+    function updateChartModeButtons() {
+        document.querySelectorAll(".dps-chart-mode").forEach(button => {
+            const active = button.dataset.mode === dpsChartMode;
+            button.setAttribute("aria-pressed", String(active));
+            button.classList.toggle("bg-white", active);
+            button.classList.toggle("text-indigo-600", active);
+            button.classList.toggle("shadow-sm", active);
+            button.classList.toggle("text-slate-500", !active);
+        });
+    }
+
     function renderChart(data) {
+        chartSourceData = data.map(value => value !== null && Number.isFinite(Number(value)) ? Number(value) : null);
+        const displayData = dpsChartMode === "rolling"
+            ? buildRollingDps(chartSourceData)
+            : chartSourceData;
+        const datasetLabel = dpsChartMode === "rolling" ? "5 秒滚动 DPS" : "累计平均 DPS";
         const ctx = document.getElementById("dpsChart").getContext("2d");
         if (chart) chart.destroy();
         const gradient = ctx.createLinearGradient(0, 0, 0, 260);
@@ -1026,10 +1062,10 @@
         chart = new Chart(ctx, {
             type: "line",
             data: {
-                labels: data.map((_, idx) => `${idx + 1}s`),
+                labels: displayData.map((_, idx) => `${idx + 1}s`),
                 datasets: [{
-                    label: "平均 DPS",
-                    data,
+                    label: datasetLabel,
+                    data: displayData,
                     borderColor: "#6366f1",
                     backgroundColor: gradient,
                     borderWidth: 2,
@@ -1057,7 +1093,7 @@
                         displayColors: false,
                         callbacks: {
                             label(context) {
-                                return `平均 DPS：${context.parsed.y}`;
+                                return `${datasetLabel}：${context.parsed.y.toLocaleString()}`;
                             }
                         }
                     }
@@ -1073,7 +1109,8 @@
                         }
                     },
                     y: {
-                        beginAtZero: true,
+                        beginAtZero: dpsChartMode === "cumulative",
+                        grace: "8%",
                         grid: {
                             color: "rgba(148, 163, 184, 0.16)"
                         },
@@ -1088,6 +1125,14 @@
 
     function bind() {
         document.getElementById("runButton").addEventListener("click", runSimulation);
+        document.querySelectorAll(".dps-chart-mode").forEach(button => {
+            button.addEventListener("click", () => {
+                dpsChartMode = button.dataset.mode === "cumulative" ? "cumulative" : "rolling";
+                updateChartModeButtons();
+                if (chartSourceData.length > 0) renderChart(chartSourceData);
+            });
+        });
+        updateChartModeButtons();
         document.getElementById("btn-tab-basic").addEventListener("click", () => switchTab("basic"));
         document.getElementById("btn-tab-advanced").addEventListener("click", () => switchTab("advanced"));
         document.getElementById("btnStartBF").addEventListener("click", startSeason2BruteForce);

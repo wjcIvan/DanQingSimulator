@@ -884,7 +884,13 @@
                             </div>
 
                             <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 h-[250px]">
-                                <div class="text-[11px] font-bold text-slate-400 uppercase mb-2 ml-1">DPS 演进曲线</div>
+                                <div class="flex items-center justify-between gap-3 mb-2 ml-1">
+                                    <div class="text-[11px] font-bold text-slate-400 uppercase">DPS 演进曲线</div>
+                                    <div class="flex shrink-0 rounded-md bg-slate-100 p-0.5" role="group" aria-label="DPS 曲线模式">
+                                        <button type="button" class="dps-chart-mode rounded px-2 py-1 text-[10px] font-bold bg-white text-indigo-600 shadow-sm" data-mode="rolling" aria-pressed="true">5 秒滚动</button>
+                                        <button type="button" class="dps-chart-mode rounded px-2 py-1 text-[10px] font-bold text-slate-500" data-mode="cumulative" aria-pressed="false">累计平均</button>
+                                    </div>
+                                </div>
                                 <canvas id="dpsChart"></canvas>
                             </div>
 
