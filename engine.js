@@ -116,6 +116,7 @@
         "thunder-aegis": 1.3
     });
     const ELEMENT_TRIGGER_THRESHOLD = 10000;
+    const MACHINE_RESONANCE_BONUS_PER_LEVEL = 0.002;
     // 四系激化的伤害参数。激化是内置逻辑，不依赖具体丹青是否在编，
     // 因此伤害统一归到内置来源，不再计入任何丹青的贡献。
     const AMPLIFY_DAMAGE = {
@@ -1216,6 +1217,31 @@
                     this.grantInsight(this.craftStone.params.openingInsightStacks || 0, this.craftStone.selectedVariantId || this.craftStone.id);
                 }
             }
+            this.logMachineResonance();
+        }
+
+        getMachineResonanceLevels() {
+            const levels = { fire: 0, ice: 0, wood: 0, thunder: 0 };
+            this.machineStones.forEach(stone => {
+                if (Object.prototype.hasOwnProperty.call(levels, stone.element)) {
+                    levels[stone.element] += Math.max(0, Number(stone.rank) || 0);
+                }
+            });
+            return levels;
+        }
+
+        logMachineResonance() {
+            const levels = this.getMachineResonanceLevels();
+            Object.entries(levels).forEach(([element, level]) => {
+                if (level <= 0) return;
+                const bonus = level * MACHINE_RESONANCE_BONUS_PER_LEVEL;
+                this.addLog("buff", null, `${ELEMENT_LABELS[element]}系共鸣：机巧石等级 ${level}，${ELEMENT_LABELS[element]}系伤害提高 ${Number((bonus * 100).toFixed(2))}%`, {
+                    buff: "machine_resonance",
+                    element,
+                    level,
+                    bonus
+                });
+            });
         }
 
         getOpeningCraftPrecastSeconds(stone) {
@@ -1352,7 +1378,9 @@
         // 统一累计总伤、分卡伤害和机制伤害。
         // countAsTrigger 传 false 时只累加伤害不计次，用于一次触发拆成多笔归属的场景。
         addDamage(amount, cardId, mechanic, countAsTrigger = true, applyLinyinMultiplier = true, customMessage = null) {
-            const multiplier = applyLinyinMultiplier ? this.getLinyinMultiplier() : 1;
+            const linyinMultiplier = applyLinyinMultiplier ? this.getLinyinMultiplier() : 1;
+            const resonanceMultiplier = this.getMachineResonanceMultiplier(cardId, mechanic);
+            const multiplier = linyinMultiplier * resonanceMultiplier;
             const dmg = Math.max(0, amount || 0) * multiplier;
             if (dmg <= 0) return;
             const machineStone = this.machineStoneMap ? this.machineStoneMap.get(cardId) : null;
@@ -1415,6 +1443,27 @@
                 multiplier *= 1 + (thunderGuard.params.allLinyinBonus || 0);
             }
             return multiplier;
+        }
+
+        getDamageElement(sourceId) {
+            const machineStone = this.machineStoneMap ? this.machineStoneMap.get(sourceId) : null;
+            if (machineStone?.element) return machineStone.element;
+            const card = this.getCard(sourceId);
+            if (card?.element) return card.element;
+            if (this.craftStone && (sourceId === this.craftStone.id || sourceId === this.craftStone.selectedVariantId)) {
+                return this.craftStone.element || null;
+            }
+            const amplify = Object.entries(AMPLIFY_DAMAGE).find(([, config]) => config.sourceId === sourceId);
+            return amplify ? amplify[0] : null;
+        }
+
+        getMachineResonanceMultiplier(sourceId, mechanic) {
+            // 职业/法宝秒伤是外部输入，不属于机巧石元素伤害。
+            if (mechanic === "machine_thunder_guard_external") return 1;
+            const element = this.getDamageElement(sourceId);
+            if (!element) return 1;
+            const level = this.getMachineResonanceLevels()[element] || 0;
+            return 1 + level * MACHINE_RESONANCE_BONUS_PER_LEVEL;
         }
 
         // 累加元素计量；达到阈值时把激化效果排到下一拍执行。
@@ -3111,6 +3160,13 @@
                 totalDps: Number((this.totalDamage / duration).toFixed(2)),
                 duration,
                 targetCount: this.targetCount,
+                machineResonance: Object.fromEntries(Object.entries(this.getMachineResonanceLevels()).map(([element, level]) => [
+                    element,
+                    {
+                        level,
+                        bonus: level * MACHINE_RESONANCE_BONUS_PER_LEVEL
+                    }
+                ])),
                 dpsHistory: this.timeline,
                 breakdown: {
                     byCard,
