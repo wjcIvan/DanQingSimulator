@@ -529,7 +529,6 @@
                     ${doubleStones ? `<div class="text-[11px] leading-5 font-bold mt-1"><span class="text-slate-400">使用双属性石：</span>${doubleStones}</div>` : ''}
                     ${loadout ? `<div class="text-[11px] leading-5 font-bold"><span class="text-slate-400">单属性补位：</span>${singleStones || "无"}</div>` : ''}
                     ${craft ? `<div class="text-[11px] leading-5 font-bold"><span class="text-slate-400">匠心石：</span>${craft}</div>` : ''}
-                    <div class="mt-2 text-right"><button type="button" class="bf-apply-button">应用到基础模拟</button></div>
                 </div>
             `;
         }).join("");
