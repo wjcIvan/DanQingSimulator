@@ -1247,7 +1247,10 @@
                                     </div>
 
                                     <div id="bfResultBox" class="mt-4 hidden">
-                                        <div class="text-[10px] font-bold text-slate-400 uppercase mb-2">推演结果（按 DPS 排名）</div>
+                                        <div class="flex items-center justify-between mb-2">
+                                            <div class="text-[10px] font-bold text-slate-400 uppercase">推演结果（按 DPS 排名）</div>
+                                            <button type="button" id="bfCurveBtn" class="rounded px-2 py-1 text-[10px] font-bold bg-emerald-600 text-white shadow-sm hover:bg-emerald-700">查看曲线图</button>
+                                        </div>
                                         <div id="bfResultList" class="space-y-2"></div>
                                     </div>
                                 </div>
@@ -1261,6 +1264,25 @@
 
     <div class="text-center text-[12px] text-slate-400 font-bold py-6">
         世外桃源 · 香香卤面馆
+    </div>
+
+    <!-- 放大图表模态框 -->
+    <div id="bfCurveModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50" style="display: none;">
+        <div class="bg-white rounded-xl shadow-2xl p-6 m-4 max-w-7xl w-full max-h-[95vh] overflow-auto">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="text-sm font-bold text-slate-700" id="bfCurveTitle">Top 10 DPS曲线对比</div>
+                    <div class="flex rounded-lg overflow-hidden border border-slate-200">
+                        <button type="button" id="bfCurveModeCumulative" class="px-2 py-1 text-[10px] font-bold bg-white text-slate-600 hover:bg-slate-50">总伤</button>
+                        <button type="button" id="bfCurveModeDps" class="px-2 py-1 text-[10px] font-bold bg-indigo-600 text-white">DPS</button>
+                    </div>
+                </div>
+                <button type="button" id="bfCurveModalClose" class="rounded px-3 py-1 text-xs font-bold bg-slate-200 text-slate-600 hover:bg-slate-300">关闭</button>
+            </div>
+            <div class="relative" style="height: 600px;">
+                <canvas id="bfCurveChartLarge"></canvas>
+            </div>
+        </div>
     </div>
 
     <script src="data.js"></script>

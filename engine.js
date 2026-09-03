@@ -1034,6 +1034,7 @@
             this.amplifyTimeline = { fire: [], ice: [], wood: [], thunder: [] };
             this.pendingAmplifyCounts = { fire: 0, ice: 0, wood: 0, thunder: 0 };
             this.timeline = [];
+            this.cumulativeTimeline = []; // 累计伤害时间序列，供Top10曲线对比使用
             this.totalDamage = 0;
             this.lastSecondSample = 0;
             this.nextThunderFrenzyAt = Infinity;
@@ -2619,6 +2620,7 @@
             const currentSecond = Math.floor(this.time + 1e-9);
             if (currentSecond > this.lastSecondSample && currentSecond <= this.duration) {
                 this.timeline.push(Math.round(this.totalDamage / currentSecond));
+                this.cumulativeTimeline.push(Math.round(this.totalDamage));
                 this.lastSecondSample = currentSecond;
             }
         }
@@ -3168,6 +3170,7 @@
                     }
                 ])),
                 dpsHistory: this.timeline,
+                cumulativeDamageHistory: this.cumulativeTimeline,
                 breakdown: {
                     byCard,
                     byMechanic

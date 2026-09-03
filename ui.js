@@ -16,6 +16,9 @@
     let chart = null;
     let chartSourceData = [];
     let dpsChartMode = "rolling";
+    let bfCurveChartLarge = null; // 放大图表
+    let bfCurveData = null; // 存储曲线数据供放大使用
+    let bfCurveYMode = "cumulative"; // Y轴模式: cumulative 或 dps
     let lastResult = null;
     let currentTab = "basic";
     let bfWorkers = [];
@@ -556,6 +559,252 @@
         });
     }
 
+    // 生成Top10累计伤害曲线数据
+    function renderBfCurveChart(topResults, duration, targetCount, externalSkillDps) {
+        // 对每个配置进行单次模拟，收集累计伤害时间序列
+        const curves = topResults.map((item, index) => {
+            const config = {
+                deck: item.deck,
+                machineStones: item.machineStones || [],
+                craftStone: item.craftStone || null
+            };
+            
+            const engine = new CombatEngine(config, {
+                duration,
+                targetCount,
+                seed: 12345, // 固定种子保证可重复性
+                externalSkillDps
+            });
+            
+            const result = engine.simulate();
+            
+            return {
+                label: `#${index + 1}`,
+                data: result.cumulativeDamageHistory || [],
+                color: getCurveColor(index)
+            };
+        });
+        
+        // 存储曲线数据供放大使用
+        bfCurveData = { curves, duration };
+        
+        // 绑定查看曲线图按钮
+        const curveBtn = document.getElementById("bfCurveBtn");
+        if (curveBtn) {
+            curveBtn.onclick = () => showBfCurveModal();
+        }
+    }
+    
+    // 显示放大的图表模态框
+    function showBfCurveModal() {
+        const modal = document.getElementById("bfCurveModal");
+        const canvas = document.getElementById("bfCurveChartLarge");
+        const closeBtn = document.getElementById("bfCurveModalClose");
+        const cumulativeBtn = document.getElementById("bfCurveModeCumulative");
+        const dpsBtn = document.getElementById("bfCurveModeDps");
+        const titleEl = document.getElementById("bfCurveTitle");
+        
+        if (!modal || !canvas || !bfCurveData) return;
+        
+        // 重置为默认模式（优先展示累计DPS）
+        bfCurveYMode = "dps";
+        updateModeButtons();
+        
+        // 显示模态框
+        modal.style.display = "flex";
+        modal.classList.remove("hidden");
+        
+        // 创建图表
+        createBfCurveChart(canvas);
+        
+        // 绑定模式切换按钮
+        if (cumulativeBtn) {
+            cumulativeBtn.onclick = () => {
+                bfCurveYMode = "cumulative";
+                updateModeButtons();
+                createBfCurveChart(canvas);
+            };
+        }
+        if (dpsBtn) {
+            dpsBtn.onclick = () => {
+                bfCurveYMode = "dps";
+                updateModeButtons();
+                createBfCurveChart(canvas);
+            };
+        }
+        
+        // 更新模式按钮样式
+        function updateModeButtons() {
+            if (cumulativeBtn && dpsBtn) {
+                const isCumulative = bfCurveYMode === "cumulative";
+                cumulativeBtn.className = `px-2 py-1 text-[10px] font-bold ${isCumulative ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`;
+                dpsBtn.className = `px-2 py-1 text-[10px] font-bold ${!isCumulative ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`;
+            }
+            if (titleEl) {
+                titleEl.textContent = bfCurveYMode === "cumulative" ? "Top 10 总伤曲线对比" : "Top 10 DPS曲线对比";
+            }
+        }
+        
+        // 绑定关闭按钮
+        closeBtn.onclick = () => {
+            modal.style.display = "none";
+            modal.classList.add("hidden");
+        };
+        
+        // 点击背景关闭
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                modal.style.display = "none";
+                modal.classList.add("hidden");
+            }
+        };
+    }
+    
+    // 创建曲线图表
+    function createBfCurveChart(canvas) {
+        if (!canvas || !bfCurveData) return;
+        
+        // 销毁旧图表
+        if (bfCurveChartLarge) {
+            bfCurveChartLarge.destroy();
+            bfCurveChartLarge = null;
+        }
+        
+        const { curves, duration } = bfCurveData;
+        const isDpsMode = bfCurveYMode === "dps";
+        const dpsStartSecond = 60; // DPS模式从60秒开始显示
+        
+        // 转换数据：DPS模式计算累计平均
+        const datasets = curves.map(curve => {
+            let data;
+            if (isDpsMode) {
+                // 计算累计DPS = 累计伤害 / 时间，从60秒开始
+                data = curve.data
+                    .map((value, idx) => {
+                        const dps = value / (idx + 1);
+                        return { x: idx + 1, y: dps };
+                    })
+                    .filter(point => point.x >= dpsStartSecond);
+            } else {
+                data = curve.data.map((value, idx) => ({ x: idx + 1, y: value }));
+            }
+            return {
+                label: curve.label,
+                data,
+                borderColor: curve.color,
+                backgroundColor: curve.color + "10",
+                borderWidth: 2.5,
+                pointRadius: 0,
+                pointHoverRadius: 6,
+                fill: false,
+                tension: 0.1
+            };
+        });
+        
+        const ctx = canvas.getContext("2d");
+        bfCurveChartLarge = new Chart(ctx, {
+            type: "line",
+            data: { datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: "index",
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        position: "bottom",
+                        labels: {
+                            boxWidth: 16,
+                            padding: 12,
+                            font: { size: 12 }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: (items) => {
+                                const x = items[0].parsed.x;
+                                return `时间: ${x}秒`;
+                            },
+                            label: (item) => {
+                                const value = item.parsed.y;
+                                if (isDpsMode) {
+                                    return `${item.dataset.label}: ${value.toLocaleString()}`;
+                                }
+                                return `${item.dataset.label}: ${(value / 1000000).toFixed(2)}M`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: "linear",
+                        title: {
+                            display: true,
+                            text: "时间 (秒)",
+                            font: { size: 12 }
+                        },
+                        min: isDpsMode ? dpsStartSecond : 0,
+                        max: duration,
+                        grid: {
+                            color: "rgba(148, 163, 184, 0.15)"
+                        },
+                        ticks: {
+                            stepSize: duration <= 60 ? 10 : duration <= 120 ? 20 : 30
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: isDpsMode ? "DPS" : "总伤",
+                            font: { size: 12 }
+                        },
+                        beginAtZero: !isDpsMode, // DPS模式自动适应范围
+                        grid: {
+                            color: "rgba(148, 163, 184, 0.15)"
+                        },
+                        ticks: {
+                            callback: (value) => {
+                                if (isDpsMode) {
+                                    if (value >= 1000000) {
+                                        return (value / 1000000).toFixed(1) + "M";
+                                    } else if (value >= 1000) {
+                                        return (value / 1000).toFixed(0) + "K";
+                                    }
+                                    return value;
+                                }
+                                if (value >= 1000000) {
+                                    return (value / 1000000).toFixed(1) + "M";
+                                } else if (value >= 1000) {
+                                    return (value / 1000).toFixed(0) + "K";
+                                }
+                                return value;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // 为曲线生成不同颜色
+    function getCurveColor(index) {
+        const colors = [
+            "#ef4444", // 红 - #1
+            "#f97316", // 橙 - #2
+            "#eab308", // 黄 - #3
+            "#22c55e", // 绿 - #4
+            "#14b8a6", // 青 - #5
+            "#06b6d4", // 蓝 - #6
+            "#3b82f6", // 靛 - #7
+            "#8b5cf6", // 紫 - #8
+            "#ec4899", // 粉 - #9
+            "#6b7280"  // 灰 - #10
+        ];
+        return colors[index % colors.length];
+    }
+
     function stopSeason2BruteForce() {
         bfStopped = true;
         if (bfWorkers.length > 0) {
@@ -818,6 +1067,11 @@
         if (bfStopped) return;
 
         renderSeason2BruteForceResults(finalResults.sort((a, b) => b.avgDps - a.avgDps));
+        
+        // 生成Top10累计伤害曲线对比图
+        const top10 = finalResults.sort((a, b) => b.avgDps - a.avgDps).slice(0, 10);
+        renderBfCurveChart(top10, duration, targetCount, externalSkillDps);
+        
         statusText.innerText = `完成，共遍历 ${combos.length} 个方案${inventoryMode ? "（已满足库存约束）" : ""}`;
         percentText.innerText = "100%";
         progressBar.style.width = "100%";
