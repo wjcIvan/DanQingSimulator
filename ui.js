@@ -143,6 +143,12 @@
         });
     }
 
+    function suppressCardHover(node) {
+        if (!node) return;
+        node.classList.add("hover-suppressed");
+        node.addEventListener("mouseleave", () => node.classList.remove("hover-suppressed"), { once: true });
+    }
+
     function renderCard(card, meta) {
         const picked = selected.get(card.id);
         const level = picked ? picked.level : 6;
@@ -208,6 +214,7 @@
                     selectedMachineStones.set(id, { id, rank: 5 });
                 }
                 renderMachineStones();
+                suppressCardHover(grid.querySelector(`[data-machine-stone="${id}"]`));
                 updateMachineSummary();
             });
         });
@@ -228,7 +235,10 @@
                 updateMachineSummary();
             });
             slider.addEventListener("click", event => event.stopPropagation());
-            slider.addEventListener("mousedown", event => event.stopPropagation());
+            slider.addEventListener("mousedown", event => {
+                event.stopPropagation();
+                suppressCardHover(event.target.closest(".card-box"));
+            });
         });
     }
 
@@ -288,6 +298,7 @@
                 if (!selectedCraftStoneLevels.has(id)) selectedCraftStoneLevels.set(id, 3);
             }
             renderCraftStones();
+            suppressCardHover(grid.querySelector(`[data-craft-stone="${id}"]`));
             updateMachineSummary();
         }));
         grid.querySelectorAll(".craft-rank-slider").forEach(slider => {
@@ -295,7 +306,10 @@
                 updateCraftStoneLevel(event.target.dataset.id, event.target.value);
             });
             slider.addEventListener("click", event => event.stopPropagation());
-            slider.addEventListener("mousedown", event => event.stopPropagation());
+            slider.addEventListener("mousedown", event => {
+                event.stopPropagation();
+                suppressCardHover(event.target.closest(".card-box"));
+            });
         });
     }
 
@@ -385,6 +399,7 @@
             }
         }
         renderCards();
+        suppressCardHover(document.getElementById(`card-anchor-${id}`));
         updateSummary();
     }
 
