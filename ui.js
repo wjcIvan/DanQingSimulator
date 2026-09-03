@@ -20,6 +20,11 @@
     let currentTab = "basic";
     let bfWorkers = [];
     let bfStopped = false;
+    const inventoryCounts = new Map();
+    const INVENTORY_LETTERS = ["A", "B", "C", "D", "E"];
+    let lastStoneMode = "free";
+    let freeMachineLimit = 18;
+    let inventorySlotLimit = 9;
     // 模拟日志只保留第 1 轮，避免多轮迭代把内存和 DOM 撑爆。
     let simulationLog = [];
     let simulationLogTruncated = false;
@@ -473,18 +478,43 @@
                 ? colorize(craftDef.element, `${craftDef.name}(${item.craftStone?.level ?? 3})`)
                 : (item.craftStone ? item.craftStone.id : null);
             const machineCost = (item.machineStones || []).reduce((sum, entry) => sum + entry.rank, 0);
+            const loadout = item.stoneLoadout;
+            const formatStoneId = id => {
+                const stone = MACHINE_STONE_DEFS.find(entry => entry.id === id);
+                return stone ? stone.name : id;
+            };
+            const groupLabels = (items, labelFor) => {
+                const counts = new Map();
+                items.forEach(item => {
+                    const label = labelFor(item);
+                    counts.set(label, (counts.get(label) || 0) + 1);
+                });
+                return Array.from(counts.entries()).map(([label, count]) => (
+                    `<span class="inline-block mr-2">${label}${count > 1 ? ` <strong>×${count}</strong>` : ""}</span>`
+                )).join("");
+            };
+            const doubleStones = loadout
+                ? groupLabels(loadout.doubleStonePairs, pair => `${formatStoneId(pair[0])} / ${formatStoneId(pair[1])}`)
+                : "";
+            const singleStones = loadout
+                ? groupLabels(loadout.singleStoneIds, id => formatStoneId(id))
+                : "";
             return `
                 <div class="bf-result-item" data-lineup='${JSON.stringify({ deck: item.deck, machineStones: item.machineStones || [], craftStone: item.craftStone || null })}'>
                     <div class="flex items-center justify-between gap-3 mb-2">
                         <div class="flex items-center gap-2">
                             <span class="bf-rank ${rankClass}">${index + 1}</span>
+                            ${index === 0 ? '<span class="text-[10px] font-black text-amber-600">最优方案</span>' : ''}
                             <span class="text-sm font-black text-slate-700">${item.avgDps.toFixed(2)} DPS</span>
                         </div>
-                        <span class="text-[11px] font-black text-slate-400 uppercase">${item.cost}费 / 机巧${machineCost}费</span>
+                        <span class="text-[11px] font-black text-slate-400 uppercase">${item.cost}费 / ${loadout ? `机巧${loadout.slotsUsed}槽 · ${loadout.attributeCount}属性` : `机巧${machineCost}费`}</span>
                     </div>
                     <div class="text-[12px] leading-6 font-bold">${lineup}</div>
-                    ${stones ? `<div class="text-[11px] leading-5 font-bold mt-1"><span class="text-slate-400">机巧石：</span>${stones}</div>` : ''}
+                    ${stones ? `<div class="text-[11px] leading-5 font-bold mt-1"><span class="text-slate-400">属性等级：</span>${stones}</div>` : ''}
+                    ${doubleStones ? `<div class="text-[11px] leading-5 font-bold mt-1"><span class="text-slate-400">使用双属性石：</span>${doubleStones}</div>` : ''}
+                    ${loadout ? `<div class="text-[11px] leading-5 font-bold"><span class="text-slate-400">单属性补位：</span>${singleStones || "无"}</div>` : ''}
                     ${craft ? `<div class="text-[11px] leading-5 font-bold"><span class="text-slate-400">匠心石：</span>${craft}</div>` : ''}
+                    <div class="mt-2 text-right"><button type="button" class="bf-apply-button">应用到基础模拟</button></div>
                 </div>
             `;
         }).join("");
@@ -635,8 +665,12 @@
         const maxCost = parseInt(document.getElementById("bfMaxCost").value, 10) || 15;
         const iterations = parseInt(document.getElementById("bfIter").value, 10) || 20;
         const machineCostRaw = parseInt(document.getElementById("bfMachineCost")?.value, 10);
-        const machineLimit = Number.isFinite(machineCostRaw) ? Math.max(0, machineCostRaw) : 18;
+        const inventoryMode = getInventoryMode() === "inventory";
+        const machineLimit = Number.isFinite(machineCostRaw)
+            ? Math.max(0, inventoryMode ? Math.min(9, machineCostRaw) : machineCostRaw)
+            : (inventoryMode ? 9 : 18);
         const crossElement = Boolean(document.getElementById("bfCrossElement")?.checked);
+        const inventoryElement = document.getElementById("bfInventoryElement")?.value || "fire";
         const duration = parseInt(document.getElementById("simTime").value, 10) || 240;
         const targetCount = parseInt(document.getElementById("targetCount").value, 10) || 1;
         const externalSkillDps = parseFloat(document.getElementById("externalSkillDps")?.value || "150000") || 150000;
@@ -654,7 +688,22 @@
         percentText.innerText = "0%";
         progressBar.style.width = "0%";
 
-        const plans = buildElementPlans(crossElement);
+        let plans;
+        if (inventoryMode) {
+            const hasPicked = selected.size > 0 || selectedCraftStones.size > 0;
+            const cardPool = hasPicked && selected.size > 0 ? CARD_DEFS.filter(card => selected.has(card.id)) : CARD_DEFS;
+            const craftPool = hasPicked && selectedCraftStones.size > 0
+                ? CRAFT_STONE_DEFS.filter(stone => selectedCraftStones.has(stone.id))
+                : CRAFT_STONE_DEFS;
+            plans = [{
+                element: inventoryElement,
+                cards: cardPool.filter(card => card.element === inventoryElement),
+                stones: getInventoryStones(inventoryElement).map(stone => ({ ...stone, maxRank: 5 })),
+                crafts: craftPool.filter(stone => stone.element === inventoryElement)
+            }];
+        } else {
+            plans = buildElementPlans(crossElement);
+        }
         const combos = [];
         plans.forEach(plan => {
             const pool = plan.cards.map(card => ({
@@ -670,16 +719,23 @@
                         : 3
                 }))
                 : [null];
-            const stoneCombos = generateMachineStoneCombos(plan.stones, machineLimit);
+            const stoneCombos = inventoryMode
+                ? window.StoneInventory.generateInventoryMachineStoneCombos(
+                    plan.stones,
+                    getInventoryPairs(plan.element),
+                    { slotLimit: machineLimit, minSlotLimit: machineLimit, attributeDrop: 3 }
+                )
+                : generateMachineStoneCombos(plan.stones, machineLimit).map(machineStones => ({ machineStones, loadout: null }));
             deckCombos.forEach(deckCombo => {
-                stoneCombos.forEach(machineStones => {
+                stoneCombos.forEach(stoneCombo => {
                     craftOptions.forEach(craftStone => {
                         combos.push({
                             id: `${combos.length}`,
                             cost: deckCombo.cost,
                             deck: deckCombo.deck,
-                            machineStones,
-                            craftStone
+                            machineStones: stoneCombo.machineStones,
+                            craftStone,
+                            stoneLoadout: stoneCombo.loadout
                         });
                     });
                 });
@@ -748,7 +804,7 @@
         if (bfStopped) return;
 
         renderSeason2BruteForceResults(finalResults.sort((a, b) => b.avgDps - a.avgDps));
-        statusText.innerText = `完成，共遍历 ${combos.length} 个方案`;
+        statusText.innerText = `完成，共遍历 ${combos.length} 个方案${inventoryMode ? "（已满足库存约束）" : ""}`;
         percentText.innerText = "100%";
         progressBar.style.width = "100%";
         document.getElementById("btnStopBF").classList.add("hidden");
@@ -1037,6 +1093,191 @@
         });
     }
 
+    function getInventoryStones(element) {
+        return MACHINE_STONE_DEFS
+            .filter(stone => stone.element === element)
+            .sort((a, b) => a.fee - b.fee || a.name.localeCompare(b.name, "zh-CN"));
+    }
+
+    function getInventoryPairKeys() {
+        const keys = [];
+        for (let left = 0; left < INVENTORY_LETTERS.length; left += 1) {
+            for (let right = left; right < INVENTORY_LETTERS.length; right += 1) {
+                keys.push(`${INVENTORY_LETTERS[left]}${INVENTORY_LETTERS[right]}`);
+            }
+        }
+        return keys;
+    }
+
+    function getInventoryMode() {
+        return document.querySelector('input[name="bfStoneMode"]:checked')?.value || "free";
+    }
+
+    function renderInventoryEditor() {
+        const panel = document.getElementById("bfInventoryPanel");
+        if (!panel) return;
+        const inventoryMode = getInventoryMode() === "inventory";
+        const currentMode = inventoryMode ? "inventory" : "free";
+        const element = document.getElementById("bfInventoryElement")?.value || "fire";
+        const stones = getInventoryStones(element);
+        const limitInput = document.getElementById("bfMachineCost");
+        if (currentMode !== lastStoneMode) {
+            if (lastStoneMode === "inventory") inventorySlotLimit = Math.max(0, Math.min(9, parseInt(limitInput.value, 10) || 9));
+            else freeMachineLimit = Math.max(0, parseInt(limitInput.value, 10) || 18);
+            limitInput.value = inventoryMode ? inventorySlotLimit : freeMachineLimit;
+            lastStoneMode = currentMode;
+        }
+        limitInput.max = inventoryMode ? "9" : "25";
+        panel.classList.toggle("hidden", !inventoryMode);
+        document.getElementById("bfInventorySummary")?.classList.toggle("hidden", !inventoryMode);
+        document.getElementById("bfMachineCostLabel").innerText = inventoryMode ? "机巧石槽位" : "机巧石费用";
+        const crossElement = document.getElementById("bfCrossElement");
+        crossElement.disabled = inventoryMode;
+        if (inventoryMode) crossElement.checked = false;
+
+        document.getElementById("bfInventoryLegend").innerHTML = stones.map((stone, index) => (
+            `<span><strong>${INVENTORY_LETTERS[index]}</strong> · ${stone.name}</span>`
+        )).join("");
+        const headings = stones.map((stone, index) => {
+            const letter = INVENTORY_LETTERS[index].toLowerCase();
+            return `<th scope="col"><span class="inventory-matrix-heading inventory-attribute-${letter}">${stone.name}</span></th>`;
+        }).join("");
+        const rows = stones.map((rowStone, rowIndex) => {
+            const rowLetter = INVENTORY_LETTERS[rowIndex];
+            const rowClass = rowLetter.toLowerCase();
+            const cells = stones.map((columnStone, columnIndex) => {
+                if (columnIndex > rowIndex) return '<td class="inventory-matrix-empty" aria-hidden="true"></td>';
+                const columnLetter = INVENTORY_LETTERS[columnIndex];
+                const columnClass = columnLetter.toLowerCase();
+                const key = `${columnLetter}${rowLetter}`;
+                const count = inventoryCounts.get(`${element}:${key}`) || 0;
+                const label = `${rowStone.name}、${columnStone.name}`;
+                return `<td class="inventory-matrix-cell inventory-row-${rowClass} inventory-column-${columnClass} ${count > 0 ? "has-stock" : ""}" title="${label}">
+                    <div class="inventory-stepper">
+                        <button type="button" data-pair-step="${key}" data-delta="-1" aria-label="减少${label}" ${count === 0 ? "disabled" : ""}>−</button>
+                        <input id="inventory-${key}" type="number" min="0" max="99" value="${count}" data-pair="${key}" aria-label="${label}数量">
+                        <button type="button" data-pair-step="${key}" data-delta="1" aria-label="增加${label}">+</button>
+                    </div>
+                </td>`;
+            }).join("");
+            return `<tr><th scope="row"><span class="inventory-matrix-heading inventory-attribute-${rowClass}">${rowStone.name}</span></th>${cells}</tr>`;
+        }).join("");
+        document.getElementById("bfInventoryGrid").innerHTML = `<table class="inventory-matrix inventory-theme-${element}"><thead><tr><th>属性组合</th>${headings}</tr></thead><tbody>${rows}</tbody></table>`;
+        document.querySelectorAll("#bfInventoryGrid [data-pair]").forEach(input => {
+            input.addEventListener("input", () => {
+                const count = Math.max(0, Math.min(99, parseInt(input.value, 10) || 0));
+                input.value = count;
+                inventoryCounts.set(`${element}:${input.dataset.pair}`, count);
+                updateInventorySummary();
+                input.closest(".inventory-matrix-cell")?.classList.toggle("has-stock", count > 0);
+                const minus = input.parentElement?.querySelector('[data-delta="-1"]');
+                if (minus) minus.disabled = count === 0;
+            });
+        });
+        document.querySelectorAll("#bfInventoryGrid [data-pair-step]").forEach(button => {
+            button.addEventListener("click", () => {
+                const key = button.dataset.pairStep;
+                const delta = parseInt(button.dataset.delta, 10) || 0;
+                const current = inventoryCounts.get(`${element}:${key}`) || 0;
+                inventoryCounts.set(`${element}:${key}`, Math.max(0, Math.min(99, current + delta)));
+                renderInventoryEditor();
+            });
+        });
+        updateInventorySummary();
+    }
+
+    function updateInventorySummary() {
+        const element = document.getElementById("bfInventoryElement")?.value || "fire";
+        const stones = getInventoryStones(element);
+        const total = getInventoryPairKeys().reduce((sum, key) => sum + (inventoryCounts.get(`${element}:${key}`) || 0), 0);
+        const summary = document.getElementById("bfInventorySummary");
+        if (summary) summary.innerHTML = `已录入 <strong class="text-teal-700">${total}</strong> 颗<br><span class="text-slate-400">单属性石不限量</span>`;
+        const owned = document.getElementById("bfInventoryOwned");
+        const copyButton = document.getElementById("bfCopyInventory");
+        if (copyButton) copyButton.disabled = total === 0;
+        if (!owned) return;
+        const items = getInventoryPairKeys().flatMap(key => {
+            const count = inventoryCounts.get(`${element}:${key}`) || 0;
+            if (count === 0) return [];
+            const leftIndex = INVENTORY_LETTERS.indexOf(key[0]);
+            const rightIndex = INVENTORY_LETTERS.indexOf(key[1]);
+            const left = stones[leftIndex]?.name || key[0];
+            const right = stones[rightIndex]?.name || key[1];
+            return [`<span class="inventory-owned-item inventory-theme-${element}"><i></i>${left}<span class="text-slate-300">/</span><i></i>${right}<strong class="text-slate-700">×${count}</strong></span>`];
+        });
+        owned.innerHTML = items.length > 0
+            ? items.join("")
+            : '<span class="text-[11px] font-bold text-slate-400 py-1">尚未录入双属性石</span>';
+    }
+
+    function serializeInventory(element) {
+        return getInventoryPairKeys().flatMap(key => {
+            const count = inventoryCounts.get(`${element}:${key}`) || 0;
+            return Array.from({ length: count }, () => key);
+        }).join(" ");
+    }
+
+    async function copyInventory() {
+        const element = document.getElementById("bfInventoryElement")?.value || "fire";
+        const text = serializeInventory(element);
+        if (!text) return;
+        const button = document.getElementById("bfCopyInventory");
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                const textarea = document.createElement("textarea");
+                textarea.value = text;
+                textarea.style.position = "fixed";
+                textarea.style.opacity = "0";
+                document.body.appendChild(textarea);
+                textarea.select();
+                const copied = document.execCommand("copy");
+                textarea.remove();
+                if (!copied) throw new Error("copy failed");
+            }
+            button.innerText = "已复制";
+            window.setTimeout(() => { button.innerText = "复制库存"; }, 1500);
+        } catch (error) {
+            const input = document.getElementById("bfInventoryText");
+            input.value = text;
+            input.closest("details").open = true;
+            input.focus();
+            input.select();
+            button.innerText = "请手动复制";
+            window.setTimeout(() => { button.innerText = "复制库存"; }, 2000);
+        }
+    }
+
+    function parseInventoryText() {
+        const input = document.getElementById("bfInventoryText");
+        const error = document.getElementById("bfInventoryError");
+        const element = document.getElementById("bfInventoryElement")?.value || "fire";
+        const validKeys = new Set(getInventoryPairKeys());
+        const tokens = (input.value.toUpperCase().match(/[A-E]{2}/g) || []).map(token => token.split("").sort().join(""));
+        const rawParts = input.value.toUpperCase().split(/[\s,，;；/]+/).filter(Boolean);
+        const invalid = rawParts.filter(part => !/^[A-E]{2}$/.test(part));
+        if (invalid.length > 0 || tokens.some(token => !validKeys.has(token))) {
+            error.innerText = "仅支持 AA 到 EE，两颗属性可重复；请用空格或逗号分隔。";
+            return;
+        }
+        getInventoryPairKeys().forEach(key => inventoryCounts.set(`${element}:${key}`, 0));
+        tokens.forEach(key => inventoryCounts.set(`${element}:${key}`, (inventoryCounts.get(`${element}:${key}`) || 0) + 1));
+        error.innerText = "";
+        renderInventoryEditor();
+    }
+
+    function getInventoryPairs(element) {
+        const stones = getInventoryStones(element);
+        const byLetter = new Map(INVENTORY_LETTERS.map((letter, index) => [letter, stones[index]?.id]));
+        const pairs = [];
+        getInventoryPairKeys().forEach(key => {
+            const count = inventoryCounts.get(`${element}:${key}`) || 0;
+            for (let index = 0; index < count; index += 1) pairs.push([byLetter.get(key[0]), byLetter.get(key[1])]);
+        });
+        return pairs;
+    }
+
     function updateChartModeButtons() {
         document.querySelectorAll(".dps-chart-mode").forEach(button => {
             const active = button.dataset.mode === dpsChartMode;
@@ -1137,6 +1378,28 @@
         document.getElementById("btn-tab-advanced").addEventListener("click", () => switchTab("advanced"));
         document.getElementById("btnStartBF").addEventListener("click", startSeason2BruteForce);
         document.getElementById("btnStopBF").addEventListener("click", stopSeason2BruteForce);
+        document.querySelectorAll('input[name="bfStoneMode"]').forEach(input => {
+            input.addEventListener("change", renderInventoryEditor);
+        });
+        document.getElementById("bfInventoryElement")?.addEventListener("change", () => {
+            document.getElementById("bfInventoryError").innerText = "";
+            renderInventoryEditor();
+        });
+        document.getElementById("bfParseInventory")?.addEventListener("click", parseInventoryText);
+        document.getElementById("bfCopyInventory")?.addEventListener("click", copyInventory);
+        document.getElementById("bfInventoryText")?.addEventListener("keydown", event => {
+            if (event.key === "Enter") parseInventoryText();
+        });
+        document.getElementById("bfMachineCost")?.addEventListener("input", () => {
+            if (getInventoryMode() === "inventory") updateInventorySummary();
+        });
+        document.getElementById("bfClearInventory")?.addEventListener("click", () => {
+            const element = document.getElementById("bfInventoryElement")?.value || "fire";
+            getInventoryPairKeys().forEach(key => inventoryCounts.set(`${element}:${key}`, 0));
+            document.getElementById("bfInventoryText").value = "";
+            document.getElementById("bfInventoryError").innerText = "";
+            renderInventoryEditor();
+        });
         document.getElementById("btnCopyLog")?.addEventListener("click", copyLog);
         document.getElementById("btnExpandLog")?.addEventListener("click", toggleLogExpanded);
         document.addEventListener("keydown", event => {
@@ -1268,6 +1531,7 @@
         renderCraftStones();
         updateSummary();
         updateMachineSummary();
+        renderInventoryEditor();
         bind();
     }
 

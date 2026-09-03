@@ -56,7 +56,8 @@ function runBatch(data) {
       avgDamage: totalDamage / iterations,
       deck: combo.deck,
       machineStones: combo.machineStones || [],
-      craftStone: combo.craftStone || null
+      craftStone: combo.craftStone || null,
+      stoneLoadout: combo.stoneLoadout || null
     });
 
     // 批量上报进度，避免每组都跨线程发消息。

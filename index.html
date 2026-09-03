@@ -647,6 +647,236 @@
         .bf-rank.top-1 { background: #f59e0b; }
         .bf-rank.top-2 { background: #8b5cf6; }
         .bf-rank.top-3 { background: #06b6d4; }
+        .bf-apply-button {
+            border: 1px solid #cbd5e1;
+            border-radius: 5px;
+            background: white;
+            padding: 5px 8px;
+            color: #475569;
+            font-size: 10px;
+            font-weight: 900;
+            cursor: pointer;
+        }
+        .bf-apply-button:hover {
+            border-color: #6366f1;
+            color: #4f46e5;
+        }
+        .stone-source-toggle {
+            display: inline-grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            padding: 3px;
+            border-radius: 8px;
+            background: #f1f5f9;
+        }
+        .stone-source-toggle label {
+            position: relative;
+            cursor: pointer;
+        }
+        .stone-source-toggle input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .stone-source-toggle span {
+            display: block;
+            min-width: 92px;
+            padding: 7px 10px;
+            border-radius: 6px;
+            color: #64748b;
+            font-size: 12px;
+            font-weight: 800;
+            text-align: center;
+        }
+        .stone-source-toggle input:checked + span {
+            color: #0f766e;
+            background: white;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, .12);
+        }
+        .inventory-grid {
+            width: 100%;
+            overflow-x: auto;
+            padding-bottom: 3px;
+        }
+        .inventory-matrix {
+            width: 100%;
+            min-width: 430px;
+            border-collapse: separate;
+            border-spacing: 4px;
+            table-layout: fixed;
+        }
+        .inventory-matrix th {
+            height: 34px;
+            padding: 2px;
+            vertical-align: middle;
+        }
+        .inventory-matrix th:first-child {
+            width: 74px;
+            color: #94a3b8;
+            font-size: 12px;
+            text-align: left;
+        }
+        .inventory-matrix-heading {
+            display: flex;
+            min-height: 30px;
+            align-items: center;
+            justify-content: center;
+            padding: 3px 4px;
+            border-left: 3px solid var(--inventory-accent);
+            border-radius: 4px;
+            background: #f8fafc;
+            color: #475569;
+            font-size: 10px;
+            font-weight: 900;
+            line-height: 1.25;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .inventory-matrix tbody th .inventory-matrix-heading {
+            justify-content: flex-start;
+            text-align: left;
+        }
+        .inventory-theme-fire { --inventory-accent: #ef4444; --inventory-soft: #fef2f2; --inventory-line: #fca5a5; }
+        .inventory-theme-ice { --inventory-accent: #06b6d4; --inventory-soft: #ecfeff; --inventory-line: #67e8f9; }
+        .inventory-theme-wood { --inventory-accent: #16a34a; --inventory-soft: #f0fdf4; --inventory-line: #86efac; }
+        .inventory-theme-thunder { --inventory-accent: #8b5cf6; --inventory-soft: #f5f3ff; --inventory-line: #c4b5fd; }
+        .inventory-matrix td {
+            height: 34px;
+            padding: 0;
+        }
+        .inventory-matrix-cell {
+            border: 1px solid color-mix(in srgb, var(--inventory-accent) 28%, #e2e8f0);
+            border-radius: 5px;
+            background: white;
+            overflow: hidden;
+        }
+        .inventory-matrix-cell.has-stock {
+            background: var(--inventory-soft);
+            border-color: var(--inventory-line);
+        }
+        .inventory-stepper {
+            display: grid;
+            grid-template-columns: 24px minmax(24px, 1fr) 24px;
+            align-items: stretch;
+            height: 32px;
+        }
+        .inventory-stepper button {
+            border: 0;
+            background: transparent;
+            color: #94a3b8;
+            font-size: 17px;
+            font-weight: 900;
+            line-height: 1;
+            cursor: pointer;
+        }
+        .inventory-stepper button:hover {
+            color: #0f766e;
+            background: rgba(13, 148, 136, .08);
+        }
+        .inventory-stepper button:disabled {
+            color: #cbd5e1;
+            cursor: default;
+            background: transparent;
+        }
+        .inventory-stepper input {
+            width: 100%;
+            height: 32px;
+            border: 0;
+            background: transparent;
+            text-align: center;
+            color: #0f172a;
+            font-size: 13px;
+            font-weight: 900;
+            outline: none;
+            appearance: textfield;
+        }
+        .inventory-stepper input::-webkit-inner-spin-button,
+        .inventory-stepper input::-webkit-outer-spin-button {
+            appearance: none;
+            margin: 0;
+        }
+        .inventory-matrix-cell:focus-within {
+            border-color: var(--inventory-accent);
+            box-shadow: 0 0 0 2px color-mix(in srgb, var(--inventory-accent) 14%, transparent);
+        }
+        .inventory-matrix-empty {
+            border-radius: 5px;
+            background: #f8fafc;
+        }
+        .inventory-legend {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 6px;
+        }
+        .inventory-legend span {
+            min-width: 0;
+            padding: 6px 8px;
+            border-left: 3px solid #14b8a6;
+            background: #f8fafc;
+            color: #475569;
+            font-size: 11px;
+            font-weight: 700;
+            overflow-wrap: anywhere;
+        }
+        .inventory-owned-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            min-height: 30px;
+        }
+        .inventory-owned-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+        .inventory-copy-button {
+            border: 1px solid #e2e8f0;
+            border-radius: 5px;
+            background: white;
+            padding: 4px 8px;
+            color: #64748b;
+            font-size: 10px;
+            font-weight: 900;
+            cursor: pointer;
+        }
+        .inventory-copy-button:hover:not(:disabled) {
+            border-color: var(--inventory-accent, #0f766e);
+            color: var(--inventory-accent, #0f766e);
+        }
+        .inventory-copy-button:disabled {
+            color: #cbd5e1;
+            cursor: default;
+        }
+        .inventory-owned-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 8px;
+            border: 1px solid #e2e8f0;
+            border-radius: 5px;
+            background: white;
+            color: #475569;
+            font-size: 11px;
+            font-weight: 800;
+        }
+        .inventory-owned-item i {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--inventory-accent);
+        }
+        .inventory-batch summary {
+            width: fit-content;
+            color: #64748b;
+            font-size: 11px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+        .inventory-batch[open] summary { margin-bottom: 8px; }
+        @media (max-width: 720px) {
+            .inventory-legend { grid-template-columns: 1fr; }
+        }
         @media (min-width: 640px) {
             .race-section {
                 grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
@@ -933,6 +1163,51 @@
                         <div id="tab-advanced" class="hidden">
                             <section>
                                 <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                                    <div class="mb-4 pb-4 border-b border-slate-100">
+                                        <div class="flex flex-wrap items-center justify-between gap-3">
+                                            <div>
+                                                <div class="text-[11px] font-bold text-slate-400 uppercase mb-1">机巧石来源</div>
+                                                <div class="stone-source-toggle" role="radiogroup" aria-label="机巧石来源">
+                                                    <label><input type="radio" name="bfStoneMode" value="free" checked><span>自由配点</span></label>
+                                                    <label><input type="radio" name="bfStoneMode" value="inventory"><span>库存组装</span></label>
+                                                </div>
+                                            </div>
+                                            <div id="bfInventorySummary" class="hidden text-right text-[11px] font-bold text-slate-500"></div>
+                                        </div>
+                                        <div id="bfInventoryPanel" class="hidden mt-4">
+                                            <div class="grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-3 mb-3">
+                                                <label class="block">
+                                                    <span class="block text-[11px] font-bold text-slate-400 uppercase mb-1">属性系别</span>
+                                                    <select id="bfInventoryElement" class="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-teal-400">
+                                                        <option value="fire">天火</option>
+                                                        <option value="ice">玄冰</option>
+                                                        <option value="wood">苍木</option>
+                                                        <option value="thunder">神雷</option>
+                                                    </select>
+                                                </label>
+                                                <details class="inventory-batch sm:col-span-2">
+                                                    <summary>批量粘贴</summary>
+                                                    <div class="flex gap-2">
+                                                        <input id="bfInventoryText" type="text" placeholder="AA AA BC BC DC DE DB DE" class="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-teal-400">
+                                                        <button id="bfParseInventory" type="button" class="shrink-0 rounded-md bg-teal-600 px-3 text-xs font-black text-white hover:bg-teal-700">导入</button>
+                                                    </div>
+                                                    <div id="bfInventoryLegend" class="inventory-legend mt-2"></div>
+                                                </details>
+                                            </div>
+                                            <div id="bfInventoryGrid" class="inventory-grid"></div>
+                                            <div class="mt-3 border-t border-slate-100 pt-3">
+                                                <div class="inventory-owned-heading">
+                                                    <div class="text-[11px] font-bold text-slate-400 uppercase">已拥有</div>
+                                                    <button id="bfCopyInventory" type="button" class="inventory-copy-button">复制库存</button>
+                                                </div>
+                                                <div id="bfInventoryOwned" class="inventory-owned-list"></div>
+                                            </div>
+                                            <div class="mt-3 flex items-center justify-between gap-3 text-[11px] font-bold">
+                                                <span id="bfInventoryError" class="text-red-500"></span>
+                                                <button id="bfClearInventory" type="button" class="text-slate-500 hover:text-red-500">清空库存</button>
+                                            </div>
+                                        </div>
+                                    </div>
                                     <div class="grid grid-cols-2 gap-4 mb-4">
                                         <div>
                                             <label class="block text-[11px] font-bold text-slate-400 uppercase mb-1">丹青费用</label>
@@ -943,7 +1218,7 @@
                                             <input type="number" id="bfIter" value="20" class="w-full border-b font-bold py-1 outline-none text-purple-600 focus:border-purple-400 bg-transparent">
                                         </div>
                                         <div>
-                                            <label class="block text-[11px] font-bold text-slate-400 uppercase mb-1">机巧石费用</label>
+                                            <label id="bfMachineCostLabel" class="block text-[11px] font-bold text-slate-400 uppercase mb-1">机巧石费用</label>
                                             <input type="number" id="bfMachineCost" min="0" value="18" class="w-full border-b font-bold py-1 outline-none text-cyan-600 focus:border-cyan-400 bg-transparent">
                                         </div>
                                         <div class="flex items-end">
@@ -982,7 +1257,7 @@
                                     </div>
 
                                     <div id="bfResultBox" class="mt-4 hidden">
-                                        <div class="text-[10px] font-bold text-slate-400 uppercase mb-2">推演结果 (Top 10)</div>
+                                        <div class="text-[10px] font-bold text-slate-400 uppercase mb-2">推演结果（按 DPS 排名）</div>
                                         <div id="bfResultList" class="space-y-2"></div>
                                     </div>
                                 </div>
@@ -999,6 +1274,7 @@
     </div>
 
     <script src="data.js"></script>
+    <script src="stone_inventory.js"></script>
     <script src="engine.js"></script>
     <script src="ui.js"></script>
 </body>
