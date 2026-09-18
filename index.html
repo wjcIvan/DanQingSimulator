@@ -1249,7 +1249,10 @@
                                     <div id="bfResultBox" class="mt-4 hidden">
                                         <div class="flex items-center justify-between mb-2">
                                             <div class="text-[10px] font-bold text-slate-400 uppercase">推演结果（按 DPS 排名）</div>
-                                            <button type="button" id="bfCurveBtn" class="rounded px-2 py-1 text-[10px] font-bold bg-emerald-600 text-white shadow-sm hover:bg-emerald-700">查看曲线图</button>
+                                            <div class="flex items-center gap-2">
+                                                <button type="button" id="bfAnalysisBtn" class="hidden rounded px-2 py-1 text-[10px] font-bold bg-indigo-600 text-white shadow-sm hover:bg-indigo-700">分析建议</button>
+                                                <button type="button" id="bfCurveBtn" class="rounded px-2 py-1 text-[10px] font-bold bg-emerald-600 text-white shadow-sm hover:bg-emerald-700">查看曲线图</button>
+                                            </div>
                                         </div>
                                         <div id="bfResultList" class="space-y-2"></div>
                                     </div>
@@ -1282,6 +1285,20 @@
             <div class="relative" style="height: 600px;">
                 <canvas id="bfCurveChartLarge"></canvas>
             </div>
+        </div>
+    </div>
+
+    <!-- 分析建议模态框 -->
+    <div id="bfAnalysisModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50" style="display: none;">
+        <div class="bg-white rounded-xl shadow-2xl p-6 m-4 max-w-5xl w-full max-h-[95vh] overflow-auto">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="text-sm font-bold text-slate-700">分析建议（基于当前最优方案）</div>
+                    <span id="bfAnalysisModalStatus" class="text-[10px] font-bold text-indigo-500"></span>
+                </div>
+                <button type="button" id="bfAnalysisModalClose" class="rounded px-3 py-1 text-xs font-bold bg-slate-200 text-slate-600 hover:bg-slate-300">关闭</button>
+            </div>
+            <div id="bfAnalysisModalContent"></div>
         </div>
     </div>
 

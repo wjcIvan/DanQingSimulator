@@ -28,6 +28,10 @@
     let lastStoneMode = "free";
     let freeMachineLimit = 18;
     let inventorySlotLimit = 9;
+    // 库存组装分析建议：保存最近一次高级推演的结果与参数，供“分析建议”复用。
+    let bfLastResults = null;
+    let bfLastParams = null;
+    let bfAnalysisRunning = false;
     // 模拟日志只保留第 1 轮，避免多轮迭代把内存和 DOM 撑爆。
     let simulationLog = [];
     let simulationLogTruncated = false;
@@ -945,6 +949,10 @@
         bfStopped = false;
         document.getElementById("bfPlaceholder").classList.add("hidden");
         document.getElementById("bfResultBox").classList.add("hidden");
+        const analysisModal = document.getElementById("bfAnalysisModal");
+        if (analysisModal) { analysisModal.style.display = "none"; analysisModal.classList.add("hidden"); }
+        if (document.getElementById("bfAnalysisModalContent")) document.getElementById("bfAnalysisModalContent").innerHTML = "";
+        if (document.getElementById("bfAnalysisModalStatus")) document.getElementById("bfAnalysisModalStatus").innerText = "";
         document.getElementById("bfProgressBox").classList.remove("hidden");
         document.getElementById("btnStopBF").classList.remove("hidden");
         statusText.innerText = "正在生成组合...";
@@ -1067,6 +1075,17 @@
         if (bfStopped) return;
 
         renderSeason2BruteForceResults(finalResults.sort((a, b) => b.avgDps - a.avgDps));
+        
+        // 保存本次推演结果与参数，供“分析建议”复用（仅库存组装模式需要）。
+        bfLastResults = finalResults.slice().sort((a, b) => b.avgDps - a.avgDps);
+        bfLastParams = {
+            duration,
+            targetCount,
+            externalSkillDps,
+            inventoryMode,
+            inventoryElement
+        };
+        updateAnalysisButtonVisibility();
         
         // 生成Top10累计伤害曲线对比图
         const top10 = finalResults.sort((a, b) => b.avgDps - a.avgDps).slice(0, 10);
@@ -1546,6 +1565,345 @@
         return pairs;
     }
 
+    // 分析建议按钮仅在“库存组装 + 已有推演结果”时可用。
+    function updateAnalysisButtonVisibility() {
+        const button = document.getElementById("bfAnalysisBtn");
+        if (!button) return;
+        const available = getInventoryMode() === "inventory"
+            && Array.isArray(bfLastResults)
+            && bfLastResults.length > 0
+            && !bfAnalysisRunning;
+        button.classList.toggle("hidden", !available);
+        button.disabled = bfAnalysisRunning;
+        button.innerText = bfAnalysisRunning ? "分析中..." : "分析建议";
+    }
+
+    // 共享漏斗：对去重后的组合并集执行 粗筛→复筛→精算。
+    // 每个阶段对每个候选各自取 Top-N（近似质量与原逐候选推演一致），
+    // 但每个唯一组合每阶段只模拟一次，消除跨候选的重复计算。
+    async function runSharedFunnel(allCombos, candidateConfigs, sigOwners, { duration, targetCount, externalSkillDps, iterations, onStage, onProgress }) {
+        const coarseDuration = Math.min(60, duration);
+        const coarseTopN = 500;
+        const midTopN = 20;
+
+        // 每个候选各自取 Top-N，返回并集（保留各候选的近似质量）。
+        const pickPerCandidateTop = (combos, dpsById, topN) => {
+            const perCandidate = candidateConfigs.map(() => []);
+            combos.forEach(combo => {
+                const owners = sigOwners.get(combo.configSig) || [];
+                const dps = dpsById.get(combo.id) ?? -Infinity;
+                owners.forEach(p => perCandidate[p].push({ combo, dps }));
+            });
+            const keep = new Set();
+            perCandidate.forEach(list => {
+                list.sort((a, b) => b.dps - a.dps);
+                list.slice(0, topN).forEach(item => keep.add(item.combo.id));
+            });
+            return combos.filter(combo => keep.has(combo.id));
+        };
+
+        let stageCombos = allCombos;
+        if (allCombos.length > coarseTopN) {
+            if (onStage) onStage("coarse");
+            const coarse = await runParallelSeason2(allCombos, 1, coarseDuration, targetCount, externalSkillDps, onProgress);
+            if (bfStopped) return null;
+            const dpsById = new Map(coarse.map(r => [r.id, r.avgDps]));
+            stageCombos = pickPerCandidateTop(allCombos, dpsById, coarseTopN);
+        }
+        if (onStage) onStage("mid");
+        const mid = await runParallelSeason2(stageCombos, 1, duration, targetCount, externalSkillDps, onProgress);
+        if (bfStopped) return null;
+        const midDps = new Map(mid.map(r => [r.id, r.avgDps]));
+        const finalists = pickPerCandidateTop(stageCombos, midDps, midTopN);
+        if (onStage) onStage("final");
+        const finalResults = await runParallelSeason2(finalists, iterations, duration, targetCount, externalSkillDps, onProgress);
+        if (bfStopped) return null;
+        return { finalists, finalResults };
+    }
+
+    // 库存组装分析建议：
+    // 1) 在已有库存上逐一 +1 每颗候选双属性石并重新推演，找出整体最优 DPS 提升最大的一颗；
+    // 2) 升级策略：确定一个属性、随机获得另一个属性，按 5 种随机结果的平均收益推荐应确定的属性。
+    async function runInventoryAnalysis() {
+        if (bfAnalysisRunning) return;
+        if (getInventoryMode() !== "inventory") {
+            alert("仅库存组装模式支持分析建议");
+            return;
+        }
+        if (!Array.isArray(bfLastResults) || bfLastResults.length === 0 || !bfLastParams) {
+            alert("请先完成一次高级推演");
+            return;
+        }
+
+        const top1 = bfLastResults[0];
+        const element = bfLastParams.inventoryElement;
+        const inventoryStones = getInventoryStones(element);
+        const stoneCount = inventoryStones.length;
+        if (stoneCount === 0) {
+            alert("当前系别没有可用机巧石");
+            return;
+        }
+
+        // 枚举所有不重复的属性组合（含同属性双石）。
+        const pairs = [];
+        for (let i = 0; i < stoneCount; i += 1) {
+            for (let j = i; j < stoneCount; j += 1) pairs.push([i, j]);
+        }
+
+        // 复用推演参数（库存模式下机巧石槽位上限固定 ≤9）。
+        const maxCost = parseInt(document.getElementById("bfMaxCost").value, 10) || 15;
+        const iterations = parseInt(document.getElementById("bfIter").value, 10) || 20;
+        const machineCostRaw = parseInt(document.getElementById("bfMachineCost")?.value, 10);
+        const machineLimit = Number.isFinite(machineCostRaw) ? Math.max(0, Math.min(9, machineCostRaw)) : 9;
+        const duration = bfLastParams.duration;
+        const targetCount = bfLastParams.targetCount;
+        const externalSkillDps = bfLastParams.externalSkillDps;
+
+        // deck 与匠心石组合与库存无关，只生成一次。
+        const hasPicked = selected.size > 0 || selectedCraftStones.size > 0;
+        const cardPool = hasPicked && selected.size > 0 ? CARD_DEFS.filter(card => selected.has(card.id)) : CARD_DEFS;
+        const craftPool = hasPicked && selectedCraftStones.size > 0
+            ? CRAFT_STONE_DEFS.filter(stone => selectedCraftStones.has(stone.id))
+            : CRAFT_STONE_DEFS;
+        const plan = {
+            element,
+            cards: cardPool.filter(card => card.element === element),
+            stones: inventoryStones.map(stone => ({ ...stone, maxRank: 5 })),
+            crafts: craftPool.filter(stone => stone.element === element)
+        };
+        const pool = plan.cards.map(card => ({
+            ...card,
+            level: selected.get(card.id)?.level ?? 6
+        }));
+        const deckCombos = generateSeason2Combos(pool, maxCost);
+        const craftOptions = plan.crafts.length > 0
+            ? plan.crafts.map(stone => ({
+                id: stone.id,
+                level: selectedCraftStones.has(stone.id)
+                    ? (selectedCraftStoneLevels.get(stone.id) ?? 3)
+                    : 3
+            }))
+            : [null];
+
+        bfStopped = false;
+        bfAnalysisRunning = true;
+        updateAnalysisButtonVisibility();
+        const analysisModal = document.getElementById("bfAnalysisModal");
+        const analysisStatus = document.getElementById("bfAnalysisModalStatus");
+        const analysisContent = document.getElementById("bfAnalysisModalContent");
+        if (analysisModal) {
+            analysisModal.style.display = "flex";
+            analysisModal.classList.remove("hidden");
+            const closeBtn = document.getElementById("bfAnalysisModalClose");
+            if (closeBtn) closeBtn.onclick = () => { analysisModal.style.display = "none"; analysisModal.classList.add("hidden"); };
+            analysisModal.onclick = (e) => { if (e.target === analysisModal) { analysisModal.style.display = "none"; analysisModal.classList.add("hidden"); } };
+        }
+        if (analysisContent) analysisContent.innerHTML = '<div class="flex flex-col items-center py-8 gap-3"><div class="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div><p class="text-[11px] font-bold text-slate-400">正在对全部属性组合进行模拟对比...</p></div>';
+
+        // 让出主线程，让浏览器先渲染弹窗和加载动画，避免卡顿。
+        await new Promise(r => setTimeout(r, 50));
+
+        const improvementMatrix = Array.from({ length: stoneCount }, () => Array(stoneCount).fill(0));
+
+        try {
+            // 为每个候选（基础库存 +1 某双属性石）生成机巧石配置，并按配置签名去重。
+            // 组合生成器结果只依赖库存对的多重集合，故"基础对 + 候选对"等价于库存 +1，
+            // 无需反复修改 inventoryCounts。
+            if (analysisStatus) analysisStatus.innerText = "正在生成机巧石配置...";
+            const basePairs = getInventoryPairs(element);
+            const candidateConfigs = [];   // 每个候选的 configSig 集合
+            const uniqueConfigs = new Map(); // configSig -> { machineStones, loadout }
+            for (let p = 0; p < pairs.length; p += 1) {
+                const [i, j] = pairs[p];
+                const candidatePairs = basePairs.concat([[inventoryStones[i].id, inventoryStones[j].id]]);
+                const stoneCombos = window.StoneInventory.generateInventoryMachineStoneCombos(
+                    plan.stones,
+                    candidatePairs,
+                    { slotLimit: machineLimit, minSlotLimit: machineLimit, attributeDrop: 3, expandLoadouts: false }
+                );
+                const sigs = new Set();
+                stoneCombos.forEach(sc => {
+                    const baseSig = sc.machineStones.map(item => `${item.id}:${item.rank}`).join("|");
+                    const ldFingerprint = sc.loadout
+                        ? "|ld:" + sc.loadout.doubleStonePairs.map(p => p.slice().sort().join("")).sort().join(",")
+                          + ":" + sc.loadout.singleStoneIds.slice().sort().join(",")
+                        : "";
+                    const extSig = baseSig + ldFingerprint;
+                    sigs.add(extSig);
+                    if (!uniqueConfigs.has(extSig)) uniqueConfigs.set(extSig, { machineStones: sc.machineStones, loadout: sc.loadout });
+                });
+                candidateConfigs.push(sigs);
+            }
+
+            // 记录每个配置签名归属哪些候选，供漏斗各阶段按候选取 Top-N 及最终归属收益。
+            const sigOwners = new Map();
+            candidateConfigs.forEach((sigs, p) => {
+                sigs.forEach(sig => {
+                    if (!sigOwners.has(sig)) sigOwners.set(sig, []);
+                    sigOwners.get(sig).push(p);
+                });
+            });
+
+            // 构建去重后的组合并集：deck × 唯一配置 × 匠心石。
+            const combos = [];
+            deckCombos.forEach(deckCombo => {
+                uniqueConfigs.forEach((config, sig) => {
+                    craftOptions.forEach(craftStone => {
+                        combos.push({
+                            id: combos.length,
+                            cost: deckCombo.cost,
+                            deck: deckCombo.deck,
+                            machineStones: config.machineStones,
+                            craftStone,
+                            stoneLoadout: config.loadout,
+                            configSig: sig
+                        });
+                    });
+                });
+            });
+
+            // 共享漏斗推演，并把每个唯一配置的最优 DPS 归属到所有能用到它的候选。
+            const bestByCandidate = candidateConfigs.map(() => null);
+            if (combos.length > 0) {
+                let stageLabel = "";
+                const onStage = stage => {
+                    stageLabel = stage === "coarse" ? "粗筛" : stage === "mid" ? "复筛" : "精算";
+                    if (analysisStatus) analysisStatus.innerText = `${stageLabel}中...`;
+                };
+                const onProgress = (done, total) => {
+                    if (analysisStatus) analysisStatus.innerText = `${stageLabel} ${done} / ${total}`;
+                };
+                const funnel = await runSharedFunnel(combos, candidateConfigs, sigOwners, {
+                    duration, targetCount, externalSkillDps, iterations, onStage, onProgress
+                });
+                if (funnel) {
+                    const finalDpsById = new Map(funnel.finalResults.map(r => [r.id, r.avgDps]));
+                    funnel.finalists.forEach(combo => {
+                        const dps = finalDpsById.get(combo.id);
+                        if (!Number.isFinite(dps)) return;
+                        (sigOwners.get(combo.configSig) || []).forEach(p => {
+                            if (bestByCandidate[p] === null || dps > bestByCandidate[p]) bestByCandidate[p] = dps;
+                        });
+                    });
+                }
+            }
+
+            // 写入提升矩阵（无有效结果时视为无提升）。
+            for (let p = 0; p < pairs.length; p += 1) {
+                const [i, j] = pairs[p];
+                const bestDps = bestByCandidate[p] === null ? top1.avgDps : bestByCandidate[p];
+                const improvement = bestDps - top1.avgDps;
+                improvementMatrix[i][j] = improvement;
+                improvementMatrix[j][i] = improvement;
+            }
+
+            // 1) 提升最大的双属性石。
+            let bestPair = pairs[0];
+            let bestImprovement = improvementMatrix[bestPair[0]][bestPair[1]];
+            pairs.forEach(([i, j]) => {
+                if (improvementMatrix[i][j] > bestImprovement) {
+                    bestImprovement = improvementMatrix[i][j];
+                    bestPair = [i, j];
+                }
+            });
+
+            // 2) 升级策略：确定属性 X 时，另一属性在 stoneCount 种结果中均匀随机，取平均收益。
+            const expectedImprovements = [];
+            for (let x = 0; x < stoneCount; x += 1) {
+                const sum = improvementMatrix[x].reduce((acc, value) => acc + value, 0);
+                expectedImprovements.push(sum / stoneCount);
+            }
+            let bestUpgradeIndex = 0;
+            for (let x = 1; x < stoneCount; x += 1) {
+                if (expectedImprovements[x] > expectedImprovements[bestUpgradeIndex]) bestUpgradeIndex = x;
+            }
+
+            renderInventoryAnalysis({
+                top1,
+                inventoryStones,
+                improvementMatrix,
+                bestPair,
+                bestImprovement,
+                expectedImprovements,
+                bestUpgradeIndex
+            });
+            if (analysisStatus) analysisStatus.innerText = "分析完成";
+        } catch (error) {
+            if (analysisStatus) analysisStatus.innerText = "分析失败";
+            if (analysisContent) analysisContent.innerHTML = '<p class="text-[11px] font-bold text-red-500 py-4 text-center">分析失败，请重试</p>';
+        } finally {
+            bfAnalysisRunning = false;
+            if (bfWorkers.length > 0) {
+                bfWorkers.forEach(worker => worker.terminate());
+                bfWorkers = [];
+            }
+            updateAnalysisButtonVisibility();
+        }
+    }
+
+    function renderInventoryAnalysis(analysis) {
+        const modal = document.getElementById("bfAnalysisModal");
+        const content = document.getElementById("bfAnalysisModalContent");
+        if (!content) return;
+
+        const { top1, inventoryStones, improvementMatrix, bestPair, bestImprovement, expectedImprovements, bestUpgradeIndex } = analysis;
+        const stoneCount = inventoryStones.length;
+        const stoneName = index => inventoryStones[index].name;
+        const pairLabel = (i, j) => (i === j ? `${stoneName(i)} ×2` : `${stoneName(i)} / ${stoneName(j)}`);
+        const formatDelta = value => `${value >= 0 ? "+" : ""}${value.toFixed(2)}`;
+        const deltaClass = value => (value >= 0 ? "text-emerald-600" : "text-red-500");
+
+        // 全部组合按提升排序。
+        const allPairs = [];
+        for (let i = 0; i < stoneCount; i += 1) {
+            for (let j = i; j < stoneCount; j += 1) allPairs.push({ i, j, improvement: improvementMatrix[i][j] });
+        }
+        allPairs.sort((a, b) => b.improvement - a.improvement);
+        const pairRows = allPairs.map((pair, index) => (
+            `<tr class="${index === 0 ? "bg-amber-50" : ""}">
+                <td class="px-2 py-1 text-[11px] font-bold text-slate-400">${index + 1}</td>
+                <td class="px-2 py-1 text-[11px] font-bold text-slate-700">${pairLabel(pair.i, pair.j)}</td>
+                <td class="px-2 py-1 text-[11px] font-black ${deltaClass(pair.improvement)}">${formatDelta(pair.improvement)} DPS</td>
+            </tr>`
+        )).join("");
+
+        // 升级策略按期望收益排序。
+        const upgradeOrder = expectedImprovements
+            .map((value, index) => ({ index, value }))
+            .sort((a, b) => b.value - a.value);
+        const upgradeRows = upgradeOrder.map((item, rank) => (
+            `<tr class="${item.index === bestUpgradeIndex ? "bg-amber-50" : ""}">
+                <td class="px-2 py-1 text-[11px] font-bold text-slate-400">${rank + 1}</td>
+                <td class="px-2 py-1 text-[11px] font-bold text-slate-700">${item.index === bestUpgradeIndex ? "⭐ " : ""}${stoneName(item.index)}</td>
+                <td class="px-2 py-1 text-[11px] font-black ${deltaClass(item.value)}">${formatDelta(item.value)} DPS</td>
+            </tr>`
+        )).join("");
+
+        content.innerHTML = `
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div class="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                    <div class="text-[11px] font-black text-slate-500 uppercase mb-2">最佳双属性石（提升最大）</div>
+                    <div class="text-sm font-black text-amber-600 mb-1">${pairLabel(bestPair[0], bestPair[1])}</div>
+                    <div class="text-[11px] font-bold text-slate-500 mb-2">预计提升 <span class="${deltaClass(bestImprovement)}">${formatDelta(bestImprovement)} DPS</span>（当前最优 ${top1.avgDps.toFixed(2)} DPS）</div>
+                    <table class="w-full">
+                        <thead><tr class="text-[10px] text-slate-400 uppercase"><th class="px-2 py-1 text-left">#</th><th class="px-2 py-1 text-left">属性组合</th><th class="px-2 py-1 text-left">提升</th></tr></thead>
+                        <tbody>${pairRows}</tbody>
+                    </table>
+                </div>
+                <div class="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                    <div class="text-[11px] font-black text-slate-500 uppercase mb-2">升级策略（确定一属性 · 随机另一属性）</div>
+                    <div class="text-sm font-black text-amber-600 mb-1">建议确定 <span>${stoneName(bestUpgradeIndex)}</span></div>
+                    <div class="text-[11px] font-bold text-slate-500 mb-2">综合期望收益 <span class="${deltaClass(expectedImprovements[bestUpgradeIndex])}">${formatDelta(expectedImprovements[bestUpgradeIndex])} DPS</span>（${stoneCount} 种随机结果平均）</div>
+                    <table class="w-full">
+                        <thead><tr class="text-[10px] text-slate-400 uppercase"><th class="px-2 py-1 text-left">#</th><th class="px-2 py-1 text-left">确定属性</th><th class="px-2 py-1 text-left">期望收益</th></tr></thead>
+                        <tbody>${upgradeRows}</tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+        if (modal) { modal.style.display = "flex"; modal.classList.remove("hidden"); }
+    }
+
     function updateChartModeButtons() {
         document.querySelectorAll(".dps-chart-mode").forEach(button => {
             const active = button.dataset.mode === dpsChartMode;
@@ -1646,8 +2004,12 @@
         document.getElementById("btn-tab-advanced").addEventListener("click", () => switchTab("advanced"));
         document.getElementById("btnStartBF").addEventListener("click", startSeason2BruteForce);
         document.getElementById("btnStopBF").addEventListener("click", stopSeason2BruteForce);
+        document.getElementById("bfAnalysisBtn")?.addEventListener("click", runInventoryAnalysis);
         document.querySelectorAll('input[name="bfStoneMode"]').forEach(input => {
-            input.addEventListener("change", renderInventoryEditor);
+            input.addEventListener("change", () => {
+                renderInventoryEditor();
+                updateAnalysisButtonVisibility();
+            });
         });
         document.getElementById("bfInventoryElement")?.addEventListener("change", () => {
             document.getElementById("bfInventoryError").innerText = "";

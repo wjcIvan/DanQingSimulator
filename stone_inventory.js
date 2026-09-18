@@ -33,6 +33,7 @@
         const minSlotLimit = clampInteger(options.minSlotLimit ?? 0, 0, slotLimit);
         const attributeLimit = clampInteger(options.attributeLimit ?? maxRanks.reduce((sum, rank) => sum + rank, 0), 0, 100);
         const allowSingles = options.allowSingles !== false;
+        const expandLoadouts = options.expandLoadouts !== false;
         const normalizedPairs = (inventoryPairs || [])
             .map(pair => normalizePair(pair, validIds))
             .filter(Boolean);
@@ -77,9 +78,7 @@
             const slotsUsed = doubleStonePairs.length + singleStoneIds.length;
             if (attributeCount > attributeLimit || slotsUsed > slotLimit || slotsUsed < minSlotLimit) return;
             const key = rankKey(ranks);
-            const previous = results.get(key);
-            if (previous && previous.loadout.slotsUsed <= slotsUsed) return;
-            results.set(key, {
+            const entry = {
                 machineStones: ranks
                     .map((rank, index) => ({ id: ids[index], rank }))
                     .filter(item => item.rank > 0),
@@ -89,7 +88,29 @@
                     slotsUsed,
                     attributeCount
                 }
-            });
+            };
+            const existing = results.get(key);
+            if (!existing) {
+                results.set(key, [entry]);
+                return;
+            }
+            const existingSlots = existing[0].loadout.slotsUsed;
+            if (slotsUsed < existingSlots) {
+                // 更少槽位，替换
+                results.set(key, [entry]);
+            } else if (slotsUsed === existingSlots) {
+                // 相同槽位，去重后追加
+                const isDuplicate = existing.some(e => {
+                    const a = e.loadout.doubleStonePairs.map(p => [...p].sort().join("\u0000")).sort();
+                    const b = entry.loadout.doubleStonePairs.map(p => [...p].sort().join("\u0000")).sort();
+                    if (JSON.stringify(a) !== JSON.stringify(b)) return false;
+                    const sa = e.loadout.singleStoneIds.slice().sort().join(",");
+                    const sb = entry.loadout.singleStoneIds.slice().sort().join(",");
+                    return sa === sb;
+                });
+                if (!isDuplicate) existing.push(entry);
+            }
+            // slotsUsed > existingSlots → 丢弃
         };
 
         states.forEach(state => {
@@ -119,7 +140,93 @@
             fillSingles(0);
         });
 
-        const allResults = Array.from(results.values());
+        if (expandLoadouts) {
+            // ---- 扩展阶段：对每个 rank 向量尝试等价 2-for-2 双属性石替换 ----
+            const buildContribution = pair => {
+                const v = Array(ids.length).fill(0);
+                v[idIndex.get(pair[0])] += 1;
+                v[idIndex.get(pair[1])] += 1;
+                return v;
+            };
+            const normalizePairKey = pair => pair.slice().sort().join("\u0000");
+            const contributionMap = new Map();
+            pairCounts.forEach(({ pair }) => {
+                const key = normalizePairKey(pair);
+                if (!contributionMap.has(key)) contributionMap.set(key, buildContribution(pair));
+            });
+
+            const loadoutId = lo =>
+                lo.doubleStonePairs.map(p => normalizePairKey(p)).sort().join("|") + "::" +
+                lo.singleStoneIds.slice().sort().join("|");
+
+            results.forEach(entries => {
+                const existingIds = new Set(entries.map(e => loadoutId(e.loadout)));
+                entries.forEach(entry => {
+                    const pairs = entry.loadout.doubleStonePairs;
+                    const usedCount = new Map();
+                    pairs.forEach(p => {
+                        const k = normalizePairKey(p);
+                        usedCount.set(k, (usedCount.get(k) || 0) + 1);
+                    });
+
+                    const availForSub = new Map();
+                    pairCounts.forEach(({ pair, count }) => {
+                        const k = normalizePairKey(pair);
+                        const used = usedCount.get(k) || 0;
+                        if (count > used) availForSub.set(k, count - used);
+                    });
+
+                    const usedKeys = [...new Set(pairs.map(p => normalizePairKey(p)))];
+
+                    for (let i = 0; i < usedKeys.length; i++) {
+                        const ki = usedKeys[i];
+                        const ci = contributionMap.get(ki);
+                        for (let j = i; j < usedKeys.length; j++) {
+                            const kj = usedKeys[j];
+                            if (ki === kj && (usedCount.get(ki) || 0) < 2) continue;
+                            const cj = contributionMap.get(kj);
+                            const target = ci.map((v, idx) => v + cj[idx]);
+
+                            for (const [ak, av] of availForSub) {
+                                const ca = contributionMap.get(ak);
+                                for (const [bk, bv] of availForSub) {
+                                    if (ak === bk && av < 2) continue;
+                                    if (ak === ki && bk === kj) continue;
+                                    if (ak === kj && bk === ki) continue;
+                                    const cb = contributionMap.get(bk);
+                                    if (target.every((v, idx) => v === ca[idx] + cb[idx])) {
+                                        const newPairs = [];
+                                        let needPi = 1, needPj = 1;
+                                        pairs.forEach(p => {
+                                            const pk = normalizePairKey(p);
+                                            if (pk === ki && needPi > 0) { needPi--; newPairs.push(ak.split("\u0000")); }
+                                            else if (pk === kj && needPj > 0) { needPj--; newPairs.push(bk.split("\u0000")); }
+                                            else newPairs.push(p.slice());
+                                        });
+                                        const newLoadout = {
+                                            doubleStonePairs: newPairs,
+                                            singleStoneIds: entry.loadout.singleStoneIds.slice(),
+                                            slotsUsed: newPairs.length + entry.loadout.singleStoneIds.length,
+                                            attributeCount: entry.loadout.attributeCount
+                                        };
+                                        const lid = loadoutId(newLoadout);
+                                        if (!existingIds.has(lid)) {
+                                            existingIds.add(lid);
+                                            entries.push({
+                                                machineStones: entry.machineStones.map(m => ({ ...m })),
+                                                loadout: newLoadout
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            });
+        }
+
+        const allResults = Array.from(results.values()).flat();
         const attributeDrop = options.attributeDrop == null
             ? null
             : clampInteger(options.attributeDrop, 0, 100);
