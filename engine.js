@@ -1062,6 +1062,15 @@
             this.machineStones = this.buildMachineStones(config.machineStones);
             this.machineStoneMap = new Map(this.machineStones.map(stone => [stone.id, stone]));
             this.craftStone = this.buildCraftStone(config.craftStone);
+            // 机巧石增强：每 1% 增强提供 1% 属性伤害，上限 3%。
+            this.enhancement = { fire: 0.03, ice: 0.03, wood: 0.03, thunder: 0.03 };
+            if (options.enhancement) {
+                Object.keys(this.enhancement).forEach(elem => {
+                    if (typeof options.enhancement[elem] === 'number') {
+                        this.enhancement[elem] = Math.max(0, Math.min(0.03, options.enhancement[elem]));
+                    }
+                });
+            }
             this.hasExtendedSystems = this.machineStones.length > 0 || Boolean(this.craftStone);
             this.tickCards = CARD_ORDER.map(id => this.cardMap.get(id)).filter(card => card && typeof card.onTick === "function");
             this.eventCards = Object.fromEntries(
@@ -1381,7 +1390,8 @@
         addDamage(amount, cardId, mechanic, countAsTrigger = true, applyLinyinMultiplier = true, customMessage = null) {
             const linyinMultiplier = applyLinyinMultiplier ? this.getLinyinMultiplier() : 1;
             const resonanceMultiplier = this.getMachineResonanceMultiplier(cardId, mechanic);
-            const multiplier = linyinMultiplier * resonanceMultiplier;
+            const enhancementMultiplier = this.getEnhancementMultiplier(cardId);
+            const multiplier = linyinMultiplier * resonanceMultiplier * enhancementMultiplier;
             const dmg = Math.max(0, amount || 0) * multiplier;
             if (dmg <= 0) return;
             const machineStone = this.machineStoneMap ? this.machineStoneMap.get(cardId) : null;
@@ -1465,6 +1475,13 @@
             if (!element) return 1;
             const level = this.getMachineResonanceLevels()[element] || 0;
             return 1 + level * MACHINE_RESONANCE_BONUS_PER_LEVEL;
+        }
+
+        // 机巧石增强乘区：每 1% 增强提供 1% 属性伤害加成，上限 3%。
+        getEnhancementMultiplier(sourceId) {
+            const element = this.getDamageElement(sourceId);
+            if (!element || !this.enhancement[element]) return 1;
+            return 1 + this.enhancement[element] * 1;
         }
 
         // 累加元素计量；达到阈值时把激化效果排到下一拍执行。

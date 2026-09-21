@@ -819,7 +819,7 @@
         document.getElementById("bfStatusText").innerText = "已停止";
     }
 
-    function runParallelSeason2(combos, iterations, duration, targetCount, externalSkillDps, onProgress) {
+    function runParallelSeason2(combos, iterations, duration, targetCount, externalSkillDps, onProgress, enhancement) {
         return new Promise((resolve) => {
             // 主线程在等待期间基本空闲，用满所有核心。
             const threadCount = Math.max(1, navigator.hardwareConcurrency || 4);
@@ -857,7 +857,10 @@
                     }
                 };
 
-                worker.postMessage({ type: "BATCH", data: { combos: chunk, duration, iterations, targetCount, externalSkillDps } });
+                worker.postMessage({
+                    type: "BATCH",
+                    data: { combos: chunk, duration, iterations, targetCount, externalSkillDps, enhancement }
+                });
             });
         });
     }
@@ -941,6 +944,7 @@
         const duration = parseInt(document.getElementById("simTime").value, 10) || 240;
         const targetCount = parseInt(document.getElementById("targetCount").value, 10) || 1;
         const externalSkillDps = parseFloat(document.getElementById("externalSkillDps")?.value || "150000") || 150000;
+        const enhancement = { fire: 0.03, ice: 0.03, wood: 0.03, thunder: 0.03 };
 
         const statusText = document.getElementById("bfStatusText");
         const percentText = document.getElementById("bfPercent");
@@ -1051,7 +1055,7 @@
             const coarse = await runParallelSeason2(combos, 1, coarseDuration, targetCount, externalSkillDps, (finished, total) => {
                 bump();
                 statusText.innerText = `[${stage}/${totalStages}] 粗筛进度: ${finished} / ${total}`;
-            });
+            }, enhancement);
             if (bfStopped) return;
             survivors = pickTop(coarse, coarseTopN);
         }
@@ -1061,7 +1065,7 @@
         const refined = await runParallelSeason2(survivors, 1, duration, targetCount, externalSkillDps, (finished, total) => {
             bump();
             statusText.innerText = `[${stage}/${totalStages}] 复筛进度: ${finished} / ${total}`;
-        });
+        }, enhancement);
         if (bfStopped) return;
 
         const finalists = pickTop(refined, midTopN);
@@ -1071,7 +1075,7 @@
         const finalResults = await runParallelSeason2(finalists, iterations, duration, targetCount, externalSkillDps, (finished, total) => {
             bump();
             statusText.innerText = `[${stage}/${totalStages}] 精算进度: ${finished} / ${total}`;
-        });
+        }, enhancement);
         if (bfStopped) return;
 
         renderSeason2BruteForceResults(finalResults.sort((a, b) => b.avgDps - a.avgDps));
@@ -1164,6 +1168,7 @@
                 targetCount,
                 seed: 1000 + i,
                 externalSkillDps,
+                enhancement: { fire: 0.03, ice: 0.03, wood: 0.03, thunder: 0.03 },
                 // 只让第 1 轮记录日志，其余轮次保持原有性能。
                 collectLog: i === 0
             });
@@ -1581,7 +1586,7 @@
     // 共享漏斗：对去重后的组合并集执行 粗筛→复筛→精算。
     // 每个阶段对每个候选各自取 Top-N（近似质量与原逐候选推演一致），
     // 但每个唯一组合每阶段只模拟一次，消除跨候选的重复计算。
-    async function runSharedFunnel(allCombos, candidateConfigs, sigOwners, { duration, targetCount, externalSkillDps, iterations, onStage, onProgress }) {
+    async function runSharedFunnel(allCombos, candidateConfigs, sigOwners, { duration, targetCount, externalSkillDps, iterations, onStage, onProgress, enhancement }) {
         const coarseDuration = Math.min(60, duration);
         const coarseTopN = 500;
         const midTopN = 20;
@@ -1605,18 +1610,18 @@
         let stageCombos = allCombos;
         if (allCombos.length > coarseTopN) {
             if (onStage) onStage("coarse");
-            const coarse = await runParallelSeason2(allCombos, 1, coarseDuration, targetCount, externalSkillDps, onProgress);
+            const coarse = await runParallelSeason2(allCombos, 1, coarseDuration, targetCount, externalSkillDps, onProgress, enhancement);
             if (bfStopped) return null;
             const dpsById = new Map(coarse.map(r => [r.id, r.avgDps]));
             stageCombos = pickPerCandidateTop(allCombos, dpsById, coarseTopN);
         }
         if (onStage) onStage("mid");
-        const mid = await runParallelSeason2(stageCombos, 1, duration, targetCount, externalSkillDps, onProgress);
+        const mid = await runParallelSeason2(stageCombos, 1, duration, targetCount, externalSkillDps, onProgress, enhancement);
         if (bfStopped) return null;
         const midDps = new Map(mid.map(r => [r.id, r.avgDps]));
         const finalists = pickPerCandidateTop(stageCombos, midDps, midTopN);
         if (onStage) onStage("final");
-        const finalResults = await runParallelSeason2(finalists, iterations, duration, targetCount, externalSkillDps, onProgress);
+        const finalResults = await runParallelSeason2(finalists, iterations, duration, targetCount, externalSkillDps, onProgress, enhancement);
         if (bfStopped) return null;
         return { finalists, finalResults };
     }
@@ -1658,6 +1663,7 @@
         const duration = bfLastParams.duration;
         const targetCount = bfLastParams.targetCount;
         const externalSkillDps = bfLastParams.externalSkillDps;
+        const enhancement = { fire: 0.03, ice: 0.03, wood: 0.03, thunder: 0.03 };
 
         // deck 与匠心石组合与库存无关，只生成一次。
         const hasPicked = selected.size > 0 || selectedCraftStones.size > 0;
@@ -1774,7 +1780,7 @@
                     if (analysisStatus) analysisStatus.innerText = `${stageLabel} ${done} / ${total}`;
                 };
                 const funnel = await runSharedFunnel(combos, candidateConfigs, sigOwners, {
-                    duration, targetCount, externalSkillDps, iterations, onStage, onProgress
+                    duration, targetCount, externalSkillDps, iterations, onStage, onProgress, enhancement
                 });
                 if (funnel) {
                     const finalDpsById = new Map(funnel.finalResults.map(r => [r.id, r.avgDps]));

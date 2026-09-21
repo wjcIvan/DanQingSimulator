@@ -4,7 +4,7 @@ importScripts('data.js', 'engine.js');
 const PROGRESS_BATCH = 50;
 
 function runBatch(data) {
-  const { combos, duration, iterations, targetCount, externalSkillDps } = data;
+  const { combos, duration, iterations, targetCount, externalSkillDps, enhancement } = data;
   const results = [];
   let pending = 0;
 
@@ -25,7 +25,8 @@ function runBatch(data) {
         duration,
         targetCount,
         seed: 1000 + iter,
-        externalSkillDps
+        externalSkillDps,
+        enhancement
       });
       const result = engine.simulate();
 
