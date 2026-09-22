@@ -401,6 +401,9 @@
             this.burnTickAt = 0;
             this.combustAt = null;
 
+            // 目标独立的元素激化值（用于正确计算每个目标的激化进度）
+            this.meters = { fire: 0, ice: 0, wood: 0, thunder: 0 };
+
             // 天火陨星持续状态
             this.fireMeteor = new StackBuff(FIRE_METEOR_MAX_STACKS, FIRE_METEOR_DURATION, FIRE_METEOR_TICK_INTERVAL);
 
@@ -508,12 +511,12 @@
             engine.effects.fire.triggerThreshold = this.params.triggerThreshold;
         }
 
-        onBurnTick(engine) {
-            engine.addMeter("fire", this.params.burnMeterGain);
+        onBurnTick(engine, event) {
+            engine.addMeter("fire", this.params.burnMeterGain, { targetIndex: event.targetIndex });
         }
 
-        onCombust(engine) {
-            engine.addMeter("fire", this.params.combustMeterGain);
+        onCombust(engine, event) {
+            engine.addMeter("fire", this.params.combustMeterGain, { targetIndex: event.targetIndex });
         }
     }
 
@@ -632,11 +635,11 @@
         }
 
         onIceArrowHit(engine, event) {
-            engine.addMeter("ice", this.params.arrowMeterGain * event.targetsHit);
+            engine.addMeterToTargets("ice", this.params.arrowMeterGain, event.targetsHit);
         }
 
         onShatter(engine) {
-            engine.addMeter("ice", this.params.shatterMeterGain * engine.targetCount);
+            engine.addMeter("ice", this.params.shatterMeterGain);
         }
 
         onIceStormHit(engine, event) {
@@ -731,8 +734,11 @@
             }
             if (!this.isBursting) return;
             if (engine.time < this.nextBurstHitAt || this.burstHitsDone >= this.params.burstHits) return;
-            // 齐昊把一次风暴拆成多段 tick，保持与旧版完全一致的节奏。
-            engine.castIceStorm(this, 1 / this.params.burstHits, this.burstHitsDone === 0);
+            // 齐昊每段发射一枚冰箭，至多2目标，可触发碎裂
+            const zuoGui = engine.getCard(CARD_IDS.ZUO_GUI);
+            const zuoBonus = zuoGui ? zuoGui.params.damageBonus : 0;
+            const damagePerArrow = this.params.stormDamage * (1 + zuoBonus) / this.params.burstHits;
+            engine.fireIceArrow(this, 1, damagePerArrow, "ice_storm", 2);
             this.burstHitsDone += 1;
             this.nextBurstHitAt += this.burstTickInterval;
             if (this.burstHitsDone >= this.params.burstHits) {
@@ -741,7 +747,8 @@
         }
 
         onIceArrowHit(_engine, event) {
-            this.cooldownRemaining = Math.max(0, this.cooldownRemaining - (this.params.cooldownReductionPerArrowHit * event.targetsHit));
+            if (event.card === this) return; // 自己的冰箭不缩减冷却
+            this.cooldownRemaining = Math.max(0, this.cooldownRemaining - this.params.cooldownReductionPerArrowHit);
         }
     }
 
@@ -776,7 +783,7 @@
         }
 
         onPulseTriggered(engine) {
-            engine.addMeter("wood", this.params.meterGain * engine.targetCount);
+            engine.addMeter("wood", this.params.meterGain);
         }
     }
 
@@ -884,7 +891,7 @@
         }
 
         onChainLightningHit(engine, event) {
-            engine.addMeter("thunder", this.params.meterGain * event.targetsHit);
+            engine.addMeter("thunder", this.params.meterGain);
         }
     }
 
@@ -1029,7 +1036,9 @@
             this.delayedEvents = [];
             this.warnings = [];
             this.breakdown = createBreakdown();
-            this.meters = { fire: 0, ice: 0, wood: 0, thunder: 0 };
+            // 自身的独立激化值（用于自身触发的激化，如木引青灵检查自身的苍木激化到10000）
+            this.selfMeters = { fire: 0, ice: 0, wood: 0, thunder: 0 };
+            this.selfAmplifyTriggers = { fire: 0, ice: 0, wood: 0, thunder: 0 };
             this.amplifyTriggers = { fire: 0, ice: 0, wood: 0, thunder: 0 };
             this.amplifyTimeline = { fire: [], ice: [], wood: [], thunder: [] };
             this.pendingAmplifyCounts = { fire: 0, ice: 0, wood: 0, thunder: 0 };
@@ -1484,9 +1493,35 @@
             return 1 + this.enhancement[element] * 1;
         }
 
+        // 将激化值等量分配给前 count 个目标的独立计量。
+        // 用于冰箭等「至多命中 N 个目标」且每个目标独立计量的场景。
+        addMeterToTargets(element, amountPerTarget, count, sourceId = null) {
+            const hits = Math.min(count, this.targets.length);
+            for (let i = 0; i < hits; i++) {
+                this.addMeter(element, amountPerTarget, { targetIndex: i, sourceId });
+            }
+        }
+
         // 累加元素计量；达到阈值时把激化效果排到下一拍执行。
-        addMeter(element, amount, sourceId = null) {
+        // options 支持三种调用模式：
+        //   addMeter(element, amount)                      → 全局计量（向后兼容）
+        //   addMeter(element, amount, { targetIndex })     → 指定目标的独立计量
+        //   addMeter(element, amount, { self: true })      → 自身独立计量
+        //   addMeter(element, amount, sourceId_string)     → 全局计量+来源id（向后兼容）
+        addMeter(element, amount, options = null) {
             if (!amount) return;
+            let sourceId = null;
+            let targetIndex = null;
+            let self = false;
+            // 兼容旧调用方式：第三个参数是 sourceId 字符串
+            if (typeof options === 'string') {
+                sourceId = options;
+            } else if (options && typeof options === 'object') {
+                sourceId = options.sourceId || null;
+                targetIndex = options.targetIndex;
+                self = options.self || false;
+            }
+
             let adjustedAmount = amount;
             if (element === "ice" && this.isFrostGloryTrueformActive(3)) {
                 const expiresAt = this.craftStone?.meterBuffExpiresAt || 0;
@@ -1499,30 +1534,91 @@
                 if (sourceId === "blazing-skyfire-trueform" && element === "fire") adjustedAmount *= 1 + (params.fireMeterBonus || 0);
                 if (sourceId === "verdant-life-trueform" && element === "wood") adjustedAmount *= 1 + (params.woodMeterBonus || 0);
             }
-            this.meters[element] += adjustedAmount;
-            const sourceName = this.resolveSourceName(sourceId);
-            const prefix = sourceName ? `${sourceName} ` : "";
-            this.addLog("meter", sourceId, `${prefix}${ELEMENT_LABELS[element]}值 +${Math.round(adjustedAmount)}（当前 ${Math.round(this.meters[element])}）`, {
-                element,
-                amount: Math.round(adjustedAmount),
-                total: Math.round(this.meters[element]),
+
+            // ===== 辅助函数：对单一激化池执行累加与阈值检查 =====
+            const processStore = (store, storeLabel, amplifyTargetIndex = null) => {
+                const before = store[element];
+                store[element] += adjustedAmount;
+                const after = store[element];
+                const sourceName = this.resolveSourceName(sourceId);
+                const prefix = sourceName ? `${sourceName} ` : "";
+                this.addLog("meter", sourceId, `${prefix}${ELEMENT_LABELS[element]}值 +${Math.round(adjustedAmount)}（${storeLabel}：${Math.round(before)} → ${Math.round(after)}）`, {
+                    element,
+                    amount: Math.round(adjustedAmount),
+                    before: Math.round(before),
+                    total: Math.round(after),
+                    store: storeLabel,
+                    sourceId: sourceId || null
+                });
+                const threshold = this.getElementThreshold(element);
+                if (!threshold) return;
+                while (store[element] >= threshold) {
+                    store[element] -= threshold;
+                    this.pendingAmplifyCounts[element] = (this.pendingAmplifyCounts[element] || 0) + 1;
+                    const captureStoreLabel = storeLabel;
+                    const captureTargetIndex = amplifyTargetIndex;
+                    this.scheduleEvent(this.time + TICK_SECONDS, () => {
+                        this.pendingAmplifyCounts[element] = Math.max(0, (this.pendingAmplifyCounts[element] || 0) - 1);
+                        this.amplifyTriggers[element] += 1;
+                        this.amplifyTimeline[element].push(Number(this.time.toFixed(1)));
+                        this.addLog("amplify", null, `${ELEMENT_LABELS[element]}激化触发（${captureStoreLabel}，第 ${this.amplifyTriggers[element]} 次）`, {
+                            element,
+                            index: this.amplifyTriggers[element],
+                            store: captureStoreLabel
+                        });
+                        this.triggerAmplify(element, "target", { targetIndex: captureTargetIndex });
+                    });
+                }
+            };
+
+            if (self) {
+                // 自身激化值（selfMeters）
+                processStore(this.selfMeters, "自身");
+            } else if (targetIndex !== null && targetIndex !== undefined && targetIndex >= 0 && targetIndex < this.targets.length) {
+                // 指定目标
+                processStore(this.targets[targetIndex].meters, `目标${targetIndex}`, targetIndex);
+                // wood-spirit 同步：指定单个目标时同步一次
+                if (element === "wood" && this.machineStoneMap.has("wood-spirit")) {
+                    this.syncWoodSpiritSelfMeter(adjustedAmount, sourceId);
+                }
+            } else {
+                // 未指定目标 → 分配给所有目标（每个目标获得完整 adjustedAmount）
+                for (let i = 0; i < this.targets.length; i++) {
+                    processStore(this.targets[i].meters, `目标${i}`, i);
+                }
+                // wood-spirit 同步：分配给所有目标时只同步一次（避免重复累加）
+                if (element === "wood" && this.machineStoneMap.has("wood-spirit")) {
+                    this.syncWoodSpiritSelfMeter(adjustedAmount, sourceId);
+                }
+            }
+        }
+
+        // 木引青灵自身池同步：将苍木值同步到 selfMeters.wood，达到阈值时触发自身池激化。
+        syncWoodSpiritSelfMeter(amount, sourceId = null) {
+            const selfBefore = this.selfMeters.wood;
+            this.selfMeters.wood += amount;
+            const selfAfter = this.selfMeters.wood;
+            this.addLog("meter", null, `${ELEMENT_LABELS.wood}值 +${Math.round(amount)}（自身：${Math.round(selfBefore)} → ${Math.round(selfAfter)}）`, {
+                element: "wood",
+                amount: Math.round(amount),
+                before: Math.round(selfBefore),
+                total: Math.round(selfAfter),
+                store: "自身",
                 sourceId: sourceId || null
             });
-            const threshold = this.getElementThreshold(element);
-            if (!threshold) return;
-            while (this.meters[element] >= threshold) {
-                this.meters[element] -= threshold;
-                this.pendingAmplifyCounts[element] = (this.pendingAmplifyCounts[element] || 0) + 1;
-                // 激化效果在下一拍入队，保持与旧实现相同的触发时机。
+            const selfThreshold = this.getElementThreshold("wood");
+            while (this.selfMeters.wood >= selfThreshold) {
+                this.selfMeters.wood -= selfThreshold;
+                this.pendingAmplifyCounts.wood = (this.pendingAmplifyCounts.wood || 0) + 1;
                 this.scheduleEvent(this.time + TICK_SECONDS, () => {
-                    this.pendingAmplifyCounts[element] = Math.max(0, (this.pendingAmplifyCounts[element] || 0) - 1);
-                    this.amplifyTriggers[element] += 1;
-                    this.amplifyTimeline[element].push(Number(this.time.toFixed(1)));
-                    this.addLog("amplify", null, `${ELEMENT_LABELS[element]}激化触发（第 ${this.amplifyTriggers[element]} 次）`, {
-                        element,
-                        index: this.amplifyTriggers[element]
+                    this.pendingAmplifyCounts.wood = Math.max(0, (this.pendingAmplifyCounts.wood || 0) - 1);
+                    this.selfAmplifyTriggers.wood += 1;
+                    this.addLog("amplify", null, `苍木激化触发（自身，第 ${this.selfAmplifyTriggers.wood} 次）`, {
+                        element: "wood",
+                        index: this.selfAmplifyTriggers.wood,
+                        store: "自身"
                     });
-                    this.triggerAmplify(element);
+                    this.triggerAmplify("wood", "self");
                 });
             }
         }
@@ -1670,7 +1766,7 @@
                         this.scheduleEvent(this.time + delay, () => {
                             this.addDamage(perSegmentDamage * this.targetCount * insight.multiplier, stone.id, "craft_stone");
                             if (this.isBlazingSkyfireTrueformActive()) {
-                                this.addMeter("fire", (stone.params.fireMeterPerSegment || 0) * this.targetCount, stone.selectedVariantId || stone.id);
+                                this.addMeter("fire", (stone.params.fireMeterPerSegment || 0), stone.selectedVariantId || stone.id);
                             }
                             if (flameBody && flameBody.rank >= 5) {
                                 this.triggerFlameBody(flameBody, 2, "machine_flame_body");
@@ -1761,7 +1857,7 @@
 
         triggerFireMeteor(stone, mechanic) {
             const params = stone.params;
-            this.addDamage((params.damage || 0) * this.targetCount, stone.id, mechanic);
+            this.addDamage((params.damage || 0), stone.id, mechanic);
             this.addMeter("fire", params.meter || 0, stone.id);
             if (stone.rank >= 3 && params.burnDamage) {
                 this.targets.forEach((target, targetIndex) => {
@@ -1778,7 +1874,7 @@
                         this.countMechanic("machine_fire_meteor_stacks", afterStacks);
                         this.addLog("buff", stone.id, `目标 1 天火陨星持续效果 ${beforeStacks} → ${afterStacks} 层`, {
                             buff: "fire_meteor",
-                            targetIndex,
+                            targetIndex: 0,
                             beforeStacks,
                             afterStacks
                         });
@@ -1838,7 +1934,7 @@
                 for (let i = 0; i < (params.stormHits || 11); i += 1) {
                     this.scheduleEvent(this.time + i * stormInterval, () => {
                         this.addDamage((params.stormDamage || 4513) * this.targetCount, stone.id, "machine_paper_storm");
-                        if (stone.rank >= 5) this.addMeter("wood", 80 * this.targetCount);
+                        if (stone.rank >= 5) this.addMeter("wood", 80);
                         this.applyEarthRiftFollowup();
                     });
                 }
@@ -2027,7 +2123,7 @@
         applyWoodDicePulseMeter() {
             const stone = this.machineStoneMap.get("wood-dice");
             if (!stone || stone.rank < 3) return;
-            this.addMeter("wood", 200 * this.targetCount);
+            this.addMeter("wood", 200);
         }
 
         consumeWoodDiceBonus(damage) {
@@ -2045,13 +2141,13 @@
             return damage * (1 + (stone.params.damageBonus || 0));
         }
 
-        triggerNineSkyThunder(stone) {
+        triggerNineSkyThunder(stone, targetIndex = null) {
             const params = stone.params;
             const bolts = (params.bolts || 2) + (stone.rank >= 3 ? 1 : 0) + (stone.rank >= 5 ? 1 : 0);
-            this.addDamage((params.damage || 0) * bolts * this.targetCount, stone.id, "machine_nine_sky_thunder");
+            this.addDamage((params.damage || 0) * bolts, stone.id, "machine_nine_sky_thunder");
             if (stone.rank >= 3) {
                 // 3/5 的神雷值按每道雷电 +100 结算，本真 3 再提高 100% 累积效率。
-                this.addMeter("thunder", 100 * bolts * this.getThunderMeterEfficiency(), stone.id);
+                this.addMeter("thunder", 100 * bolts * this.getThunderMeterEfficiency(), { targetIndex, sourceId: stone.id });
             }
             if (stone.rank >= 5 && this.targetCount > 1) {
                 this.addDamage((params.damage || 0) * bolts * (this.targetCount - 1), stone.id, "machine_nine_sky_thunder_copy");
@@ -2086,14 +2182,14 @@
             }
         }
 
-        settleThunderShock(stone, generation, reason = "expire") {
+        settleThunderShock(stone, generation, reason = "expire", targetIndex = null) {
             const state = this.thunderShockState;
             if (!state || !state.active || state.generation !== generation) return;
             state.active = false;
             if (stone.rank < 5) return;
             const params = stone.params;
             this.addDamage((params.burstDamage || 0) * this.targetCount, stone.id, "machine_thunder_shock_burst");
-            this.addMeter("thunder", 500 * this.targetCount * this.getThunderMeterEfficiency(), stone.id);
+            this.addMeter("thunder", 500 * this.getThunderMeterEfficiency(), stone.id);
             this.addLog("event", stone.id, reason === "refresh"
                 ? "神雷激化再次触发：旧静电震击提前结束并立即爆炸"
                 : "静电震击结束并发生爆炸", {
@@ -2103,11 +2199,11 @@
             });
         }
 
-        triggerThunderShock(stone) {
+        triggerThunderShock(stone, targetIndex = null) {
             const params = stone.params;
             // 再次触发神雷激化时，旧静电震击先结束；5/5 立即结算结束爆炸。
             if (this.thunderShockState?.active) {
-                this.settleThunderShock(stone, this.thunderShockState.generation, "refresh");
+                this.settleThunderShock(stone, this.thunderShockState.generation, "refresh", targetIndex);
             }
             // 静电震击寄生在神雷激化上；刷新后重新开始完整持续时间。
             const duration = params.duration || 30;
@@ -2133,11 +2229,12 @@
             });
         }
 
-        scheduleThunderAmplifyTicks() {
+        scheduleThunderAmplifyTicks(context = {}) {
+            const targetIndex = context.targetIndex;
             const shock = this.machineStoneMap.get("thunder-shock");
-            if (shock) this.triggerThunderShock(shock);
+            if (shock) this.triggerThunderShock(shock, targetIndex);
             const thunder = this.machineStoneMap.get("nine-sky-thunder");
-            if (thunder) this.triggerNineSkyThunder(thunder);
+            if (thunder) this.triggerNineSkyThunder(thunder, targetIndex);
         }
 
         getFrostCrystalSpikeStone() {
@@ -2209,9 +2306,9 @@
             const stone = this.machineStoneMap.get("cold-tide");
             if (!stone || !stone.pendingCharges) return false;
             stone.pendingCharges -= 1;
-            this.addDamage((stone.params.damage || 0) * this.targetCount, stone.id, "machine_cold_tide");
+            this.addDamage((stone.params.damage || 0), stone.id, "machine_cold_tide");
             if (stone.rank >= 3 && stone.params.meterAtRank3) {
-                this.addMeter("ice", stone.params.meterAtRank3 * this.targetCount);
+                this.addMeter("ice", stone.params.meterAtRank3);
             }
             return true;
         }
@@ -2244,7 +2341,7 @@
             const params = stone.params;
             const hits = stone.rank >= 3 ? 1 + (params.extraTicksAtRank3 || 1) : 1;
             for (let i = 0; i < hits; i += 1) {
-                this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_fire_tick");
+                this.addDamage((params.damage || 0), stone.id, "machine_fire_tick");
                 this.tryTriggerBurnheart("machine_fire_tick");
                 if (this.random() < 0.20) {
                     const scarletAnt = this.getCard(CARD_IDS.SCARLET_ANT);
@@ -2345,7 +2442,7 @@
                 }
                 if (eventType === EVENTS.ICE_AMPLIFY_FREEZE && stone.id === "frost-rain") {
                     const bonus = this.isFrostGloryTrueformActive(2) ? (params.insightBonusPerStack || 0) : 0;
-                    this.addDamage((params.damage || 0) * (1 + bonus) * this.targetCount, stone.id, "machine_frost_rain");
+                    this.addDamage((params.damage || 0) * (1 + bonus) / this.targetCount, stone.id, "machine_frost_rain");
                     if (stone.rank >= 5) {
                         this.grantInsight(params.insightStacks || 3, stone.id);
                     }
@@ -2365,7 +2462,7 @@
                     return;
                 }
                 if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "rotten-gale") {
-                    if (stone.rank >= 5) this.addMeter("wood", 10000 * Math.min(5, this.targetCount), stone.id);
+                    if (stone.rank >= 5) this.addMeter("wood", 10000, stone.id);
                     return;
                 }
                 if (eventType === EVENTS.CRAFT_STONE_CAST_END && stone.id === "wood-spirit") {
@@ -2377,10 +2474,10 @@
                     return;
                 }
                 if (eventType === EVENTS.ELEMENT_AMPLIFY && event.element === "ice" && stone.id === "frost-surge") {
-                    this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_ice_amplify");
+                    this.addDamage((params.damage || 0), stone.id, "machine_ice_amplify");
                     return;
                 }
-                if (eventType === EVENTS.ELEMENT_AMPLIFY && event.element === "wood" && stone.id === "wood-spirit") {
+                if (eventType === EVENTS.ELEMENT_AMPLIFY && event.element === "wood" && stone.id === "wood-spirit" && event.source === "self") {
                     if (this.time < (stone.nextTriggerAt || 0)) return;
                     stone.nextTriggerAt = this.time + (stone.params.internalCooldown || 9);
                     this.triggerWoodSpirit(stone, 1);
@@ -2424,7 +2521,7 @@
                             this.addDamage((params.damage || 0) * this.targetCount, stone.id, "machine_blazing_land");
                             this.tryTriggerBurnheart("machine_blazing_land");
                             if (stone.rank >= 3) {
-                                this.addMeter("fire", 1500 * this.targetCount, stone.id);
+                                this.addMeter("fire", 1500, stone.id);
                             }
                         });
                     }
@@ -2476,7 +2573,7 @@
                     return;
                 }
                 const count = eventType === EVENTS.ELEMENT_AMPLIFY && event.element === "fire" && stone.id === "fireburst" && stone.rank >= 5 ? 2 : 1;
-                this.addDamage(amount * this.targetCount * count, stone.id, "machine_link");
+                this.addDamage(amount * count, stone.id, "machine_link");
             });
         }
 
@@ -2550,10 +2647,10 @@
             if (this.woodAmplifyState) {
                 while (this.woodAmplifyState.nextTickAt <= this.time + 1e-9
                     && this.woodAmplifyState.nextTickAt <= this.woodAmplifyState.activeUntilAt + 1e-9) {
-                    this.addDamage(this.woodAmplifyState.damagePerTick, this.woodAmplifyState.damageHostId, "wood_amplify");
+                    this.addDamage(this.woodAmplifyState.damagePerTick * this.targetCount, this.woodAmplifyState.damageHostId, "wood_amplify");
                     this.woodAmplifyState.ticksDone += 1;
                     if (this.woodAmplifyState.ticksDone % this.woodAmplifyState.bloomEvery === 0) {
-                        this.addDamage(this.woodAmplifyState.bloomDamage, this.woodAmplifyState.damageHostId, "wood_bloom");
+                        this.addDamage(this.woodAmplifyState.bloomDamage * this.targetCount, this.woodAmplifyState.damageHostId, "wood_bloom");
                         this.notifyWoodBloom({ element: "wood" });
                     }
                     this.woodAmplifyState.nextTickAt += this.woodAmplifyState.interval;
@@ -2736,7 +2833,7 @@
             const stacks = target.fireMeteor.consumeTick(this.time);
             if (stacks <= 0) return;
             this.addDamage(stone.params.burnDamage * stacks, stone.id, "machine_fire_meteor_burn");
-            this.addMeter("fire", 200 * stacks);
+            this.addMeter("fire", 200 * stacks, { targetIndex });
             this.tryTriggerBurnheart("machine_fire_meteor_burn");
         }
 
@@ -2941,9 +3038,12 @@
         }
 
         // 触发对应元素的激化效果。激化伤害为内置逻辑，与丹青是否在编无关。
-        triggerAmplify(element) {
-            this.emit(EVENTS.ELEMENT_AMPLIFY, { element });
-            this.dispatchMachineStones(EVENTS.ELEMENT_AMPLIFY, { element });
+        // source: "target"（全局/目标计量触发）或 "self"（自身计量触发）。
+        // self 来源仅分发给机巧石（如木引青灵），不造成激化伤害。
+        triggerAmplify(element, source = "target", context = {}) {
+            this.emit(EVENTS.ELEMENT_AMPLIFY, { element, source });
+            this.dispatchMachineStones(EVENTS.ELEMENT_AMPLIFY, { element, source });
+            if (source === "self") return;
             if (element === "fire") {
                 if (this.isBlazingSkyfireTrueformActive()) {
                     const stone = this.craftStone;
@@ -2957,14 +3057,14 @@
                 this.scheduleFireAmplifyTicks();
                 return;
             }
-            this.applyAmplifyDamage(element);
+            this.applyAmplifyDamage(element, context);
             if (element === "thunder") {
-                this.scheduleThunderAmplifyTicks();
+                this.scheduleThunderAmplifyTicks(context);
             }
         }
 
         // 结算内置激化伤害。伤害统一归到内置激化来源，与丹青编成无关。
-        applyAmplifyDamage(element) {
+        applyAmplifyDamage(element, context = {}) {
             const config = AMPLIFY_DAMAGE[element];
             if (!config) return;
             const hostId = config.sourceId;
@@ -2978,7 +3078,7 @@
                 this.addDamage(config.initialDamage * damageMultiplier, hostId, "ice_amplify");
                 this.scheduleEvent(this.time + ICE_AMPLIFY_FINAL_DELAY, () => {
                     this.addDamage(config.finalDamage * damageMultiplier, hostId, "ice_amplify");
-                    this.notifyIceAmplifyFreeze({ element: "ice" });
+                    this.notifyIceAmplifyFreeze({ element: "ice", targetIndex: context.targetIndex });
                 });
                 return;
             }
@@ -3034,11 +3134,13 @@
         notifyIceAmplifyFreeze(event = {}) {
             // 凛霜寒涌 5/5：冻结效果对命中的敌人累加 3000 玄冰值。
             const freezeMeter = this.effects.ice.freezeMeterBonus;
-            if (this.isFrostGloryTrueformActive(3)) {
-                this.addMeter("ice", freezeMeter * this.targetCount, this.craftStone?.selectedVariantId || this.craftStone?.id);
-            } else if (freezeMeter > 0) {
-                this.addMeter("ice", freezeMeter * this.targetCount);
-            }
+            if (freezeMeter > 0) {
+                const opts = {};
+                if (event.targetIndex !== undefined) opts.targetIndex = event.targetIndex;
+                if (this.isFrostGloryTrueformActive(3)) {
+                    opts.sourceId = this.craftStone?.selectedVariantId || this.craftStone?.id;
+                }
+                this.addMeter("ice", freezeMeter, opts);
                 if (this.isFrostGloryTrueformActive(1)) {
                     const params = this.craftStone?.params || {};
                     const total = params.frostCrushDamage || 0;
@@ -3050,6 +3152,7 @@
                         }
                     }
                 }
+            }
             this.emit(EVENTS.ICE_AMPLIFY_FREEZE, event);
             this.dispatchMachineStones(EVENTS.ICE_AMPLIFY_FREEZE, event);
         }
@@ -3193,12 +3296,13 @@
                     byMechanic
                 },
                 meters: {
-                    fire: Math.round(this.meters.fire),
-                    ice: Math.round(this.meters.ice),
-                    wood: Math.round(this.meters.wood),
-                    thunder: Math.round(this.meters.thunder)
+                    fire: Math.round(this.targets.reduce((sum, t) => sum + t.meters.fire, 0)),
+                    ice: Math.round(this.targets.reduce((sum, t) => sum + t.meters.ice, 0)),
+                    wood: Math.round(this.targets.reduce((sum, t) => sum + t.meters.wood, 0)),
+                    thunder: Math.round(this.targets.reduce((sum, t) => sum + t.meters.thunder, 0))
                 },
                 amplifyTriggers: { ...this.amplifyTriggers },
+                selfAmplifyTriggers: { ...this.selfAmplifyTriggers },
                 amplifyTimeline: {
                     fire: this.amplifyTimeline.fire.slice(),
                     ice: this.amplifyTimeline.ice.slice(),
