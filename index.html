@@ -301,9 +301,6 @@
         #simIter {
             background-image: linear-gradient(#fbbf24, #fbbf24);
         }
-        #targetCount {
-            background-image: linear-gradient(#8b5cf6, #8b5cf6);
-        }
         input[type="range"]:not(.star-slider)::-webkit-slider-runnable-track {
             background: transparent;
             border: none;
@@ -323,10 +320,6 @@
         #simIter::-webkit-slider-thumb {
             border-color: #f59e0b;
             box-shadow: 0 2px 8px rgba(245, 158, 11, 0.22);
-        }
-        #targetCount::-webkit-slider-thumb {
-            border-color: #8b5cf6;
-            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.22);
         }
         input[type="range"] { width: 100%; accent-color: #6366f1; }
         .card-hover-panel {
@@ -953,10 +946,14 @@
                             <div class="dashboard-item">
                                 <div class="slider-tech-label !mb-1.5 flex items-center justify-between">
                                     <span class="text-[13px] font-black text-slate-400 uppercase">目标数量</span>
-                                    <span class="val-display !py-0.5 !px-1.5 !text-sm" style="color:#7c3aed;background:#f5f3ff;border-color:#ddd6fe"><span id="targetVal">1</span>个</span>
+                                    <span class="val-display !py-0.5 !px-1.5 !text-sm" style="color:#7c3aed;background:#f5f3ff;border-color:#ddd6fe"><span id="targetVal">1</span>目标</span>
                                 </div>
-                                <input type="range" id="targetCount" min="1" max="10" value="1" class="w-full">
-                                <input id="targetCountInput" type="number" min="1" max="10" value="1" class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-700">
+                                <div class="flex gap-2 mt-1">
+                                    <button id="targetBtn1" class="target-btn active" data-value="1" style="flex:1;padding:8px 0;border-radius:10px;border:2px solid #8b5cf6;background:#f5f3ff;color:#7c3aed;font-weight:900;font-size:14px;cursor:pointer;transition:all 0.15s;">单</button>
+                                    <button id="targetBtn2" class="target-btn" data-value="2" style="flex:1;padding:8px 0;border-radius:10px;border:2px solid #e2e8f0;background:white;color:#94a3b8;font-weight:900;font-size:14px;cursor:pointer;transition:all 0.15s;">双</button>
+                                    <button id="targetBtn3" class="target-btn" data-value="3" style="flex:1;padding:8px 0;border-radius:10px;border:2px solid #e2e8f0;background:white;color:#94a3b8;font-weight:900;font-size:14px;cursor:pointer;transition:all 0.15s;">三</button>
+                                </div>
+                                <input type="hidden" id="targetCount" value="1">
                             </div>
                             <div class="dashboard-item">
                                 <div class="slider-tech-label !mb-1.5 flex items-center justify-between">

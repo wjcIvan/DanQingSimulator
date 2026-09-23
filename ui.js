@@ -2055,15 +2055,28 @@
         const externalDpsVal = document.getElementById("externalDpsVal");
         const simTimeInput = document.getElementById("simTimeInput");
         const simIterInput = document.getElementById("simIterInput");
-        const targetCountInput = document.getElementById("targetCountInput");
+
+        const targetCount = document.getElementById("targetCount");
+        const targetBtns = [1, 2, 3].map(i => document.getElementById("targetBtn" + i));
+        const setTargetCount = (val) => {
+            targetCount.value = val;
+            targetVal.innerText = val;
+            targetBtns.forEach((btn, idx) => {
+                const v = idx + 1;
+                const active = v === val;
+                btn.className = "target-btn" + (active ? " active" : "");
+                btn.style.cssText = active
+                    ? "flex:1;padding:8px 0;border-radius:10px;border:2px solid #8b5cf6;background:#f5f3ff;color:#7c3aed;font-weight:900;font-size:14px;cursor:pointer;transition:all 0.15s;"
+                    : "flex:1;padding:8px 0;border-radius:10px;border:2px solid #e2e8f0;background:white;color:#94a3b8;font-weight:900;font-size:14px;cursor:pointer;transition:all 0.15s;";
+            });
+        };
+        targetBtns.forEach((btn) => {
+            btn.addEventListener("click", () => setTargetCount(parseInt(btn.dataset.value, 10)));
+        });
 
         const syncRangeLabels = () => {
             timeVal.innerText = simTime.value;
             iterVal.innerText = simIter.value;
-            targetVal.innerText = targetCount.value;
-            if (simTimeInput) simTimeInput.value = simTime.value;
-            if (simIterInput) simIterInput.value = simIter.value;
-            if (targetCountInput) targetCountInput.value = targetCount.value;
             externalDpsVal.innerText = externalSkillDpsInput.value || "0";
 
             const timePct = (simTime.value - 10) / (600 - 10) * 100;
@@ -2071,18 +2084,14 @@
 
             const iterPct = (simIter.value - 1) / (200 - 1) * 100;
             simIter.style.backgroundSize = `${iterPct}% 100%`;
-
-            const targetPct = (targetCount.value - 1) / (10 - 1) * 100;
-            targetCount.style.backgroundSize = `${targetPct}% 100%`;
         };
         syncRangeLabels();
+        setTargetCount(1);
         simTime.addEventListener("input", syncRangeLabels);
         simIter.addEventListener("input", syncRangeLabels);
-        targetCount.addEventListener("input", syncRangeLabels);
         externalSkillDpsInput.addEventListener("input", syncRangeLabels);
         if (simTimeInput) simTimeInput.addEventListener("input", () => { simTime.value = simTimeInput.value; syncRangeLabels(); });
         if (simIterInput) simIterInput.addEventListener("input", () => { simIter.value = simIterInput.value; syncRangeLabels(); });
-        if (targetCountInput) targetCountInput.addEventListener("input", () => { targetCount.value = targetCountInput.value; syncRangeLabels(); });
 
         document.querySelectorAll(".star-batch-btn").forEach(btn => {
             btn.addEventListener("click", () => {
