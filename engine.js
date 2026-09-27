@@ -2306,7 +2306,7 @@
             const stone = this.machineStoneMap.get("cold-tide");
             if (!stone || !stone.pendingCharges) return false;
             stone.pendingCharges -= 1;
-            this.addDamage((stone.params.damage || 0), stone.id, "machine_cold_tide");
+            this.addDamage((stone.params.damage || 0) * this.targetCount, stone.id, "machine_cold_tide");
             if (stone.rank >= 3 && stone.params.meterAtRank3) {
                 this.addMeter("ice", stone.params.meterAtRank3);
             }
