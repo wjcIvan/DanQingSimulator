@@ -1162,10 +1162,12 @@
             return this.hasCraftVariantActive("thunder-aegis-trueform", minLevel);
         }
 
+        // 授予洞察层数。洞察最高叠加 50 层。
         grantInsight(stacks, sourceId) {
             if (stacks <= 0) return;
             const before = this.insightStacks;
-            this.insightStacks += stacks;
+            if (before >= 50) return;
+            this.insightStacks = Math.min(50, this.insightStacks + stacks);
             this.addLog("buff", sourceId, `洞察 ${before} → ${this.insightStacks} 层`, {
                 buff: "insight",
                 beforeStacks: before,
@@ -1804,11 +1806,12 @@
                 : stone.nextCastAt + stone.cooldown - openingPrecast;
         }
 
-        // 授予洞察层数。洞察没有持续时间，只等下一次灵蕴技消耗。
+        // 授予洞察层数。洞察没有持续时间，只等下一次灵蕴技消耗。洞察最高叠加 50 层。
         grantInsight(stacks, sourceId) {
             if (stacks <= 0) return;
             const before = this.insightStacks;
-            this.insightStacks += stacks;
+            if (before >= 50) return;
+            this.insightStacks = Math.min(50, this.insightStacks + stacks);
             this.addLog("buff", sourceId, `洞察 ${before} → ${this.insightStacks} 层`, {
                 buff: "insight",
                 beforeStacks: before,
