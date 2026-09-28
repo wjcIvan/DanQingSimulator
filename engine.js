@@ -2149,9 +2149,6 @@
                 // 3/5 的神雷值按每道雷电 +100 结算，本真 3 再提高 100% 累积效率。
                 this.addMeter("thunder", 100 * bolts * this.getThunderMeterEfficiency(), { targetIndex, sourceId: stone.id });
             }
-            if (stone.rank >= 5 && this.targetCount > 1) {
-                this.addDamage((params.damage || 0) * bolts * (this.targetCount - 1), stone.id, "machine_nine_sky_thunder_copy");
-            }
         }
 
         triggerThunderSpearDot(stone, hits) {
