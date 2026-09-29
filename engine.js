@@ -734,11 +734,8 @@
             }
             if (!this.isBursting) return;
             if (engine.time < this.nextBurstHitAt || this.burstHitsDone >= this.params.burstHits) return;
-            // 齐昊每段发射一枚冰箭，至多2目标，可触发碎裂
-            const zuoGui = engine.getCard(CARD_IDS.ZUO_GUI);
-            const zuoBonus = zuoGui ? zuoGui.params.damageBonus : 0;
-            const damagePerArrow = this.params.stormDamage * (1 + zuoBonus) / this.params.burstHits;
-            engine.fireIceArrow(this, 1, damagePerArrow, "ice_storm", 2);
+            // 齐昊把一次风暴拆成多段 tick，保持与旧版完全一致的节奏。
+            engine.castIceStorm(this, 1 / this.params.burstHits, this.burstHitsDone === 0);
             this.burstHitsDone += 1;
             this.nextBurstHitAt += this.burstTickInterval;
             if (this.burstHitsDone >= this.params.burstHits) {
@@ -747,8 +744,7 @@
         }
 
         onIceArrowHit(_engine, event) {
-            if (event.card === this) return; // 自己的冰箭不缩减冷却
-            this.cooldownRemaining = Math.max(0, this.cooldownRemaining - this.params.cooldownReductionPerArrowHit);
+            this.cooldownRemaining = Math.max(0, this.cooldownRemaining - (this.params.cooldownReductionPerArrowHit * event.targetsHit));
         }
     }
 
